@@ -118,7 +118,10 @@ describe('rawRecordStore', () => {
 
     expect(store.getRawRecord('raw-1')?.processingOwner).toBe('generic-intelligence')
     expect(generic?.processingOwner).toBe('generic-intelligence')
-    expect(store.listUnprocessed().map((record) => record.rawRecordId)).toEqual(['raw-1', generic?.rawRecordId])
+    // 待办**最新在前**（2026-11-21）：以前是追加顺序，最旧的一批永远占着窗口头部。
+    expect(store.listUnprocessed().map((record) => record.rawRecordId)).toEqual([generic?.rawRecordId, 'raw-1'])
+    // 省略 limit 时返回全部（积压诊断要数全量）；给了 limit 只返回前 N 条。
+    expect(store.listUnprocessed(1).map((record) => record.rawRecordId)).toEqual([generic?.rawRecordId])
     expect(store.listByProcessingOwner('macro-calendar', 10)).toEqual([macro])
     expect(store.listSafeSummaries().map((summary) => summary.rawRecordId)).toEqual(['raw-1', generic?.rawRecordId])
     expect(store.listSafeSummaries().map((summary) => summary.rawRecordId)).not.toContain(macro?.rawRecordId)

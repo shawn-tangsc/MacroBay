@@ -397,11 +397,22 @@ export function createRawRecordStore(deps?: {
       if (next) persist()
       return next
     },
-    listUnprocessed(limit = 100) {
-      return [...records.values()]
+    /**
+     * 待办记录，**最新的排最前**，`limit` 省略时返回全部（诊断用）。
+     *
+     * 2026-11-21 事故：以前是追加顺序（最旧的在最前），队头那批永远排第一，里面一条每半小时
+     * 失败一次的记录就把后面 900 多条一起挡住。倒序之后最旧的一批不会再把窗口占住，
+     * 「哪一批先处理」由 `normalizationBatchSelection` 按实测规则决定。
+     */
+    listUnprocessed(limit?: number) {
+      const ordered = [...records.values()]
         .filter((record) => record.processingOwner === 'generic-intelligence')
         .filter((record) => record.processingState === 'received' || record.processingState === 'parsed')
-        .slice(0, limit)
+        .sort(
+          (left, right) =>
+            right.detectedAt.localeCompare(left.detectedAt) || left.rawRecordId.localeCompare(right.rawRecordId)
+        )
+      return limit === undefined ? ordered : ordered.slice(0, limit)
     },
     listByProcessingOwner(owner, limit = 100) {
       return [...records.values()]
