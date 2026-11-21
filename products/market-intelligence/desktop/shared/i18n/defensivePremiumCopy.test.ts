@@ -184,6 +184,24 @@ describe('fear & greed + downside premium card copy', () => {
     expect(pick(enLeaves, 'skew.direction.insufficient')).toContain(`Fewer than ${points} days`)
   })
 
+  const valueOf = (locale: 'zh-CN' | 'en-US', path: string): string =>
+    leaves(block(locale), '', []).find((leaf) => leaf.path === path)?.value ?? ''
+
+  it('names the skew half with its instrument and venue', () => {
+    // AC-32：行名要带 BTC 与 Deribit——只说「期权偏斜」，读者不知道这半条是哪个标的、哪家交易所。
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const name = valueOf(locale, 'skew.name')
+      expect(name, `${locale}: skew.name needs the instrument`).toContain('BTC')
+      expect(name, `${locale}: skew.name needs the venue`).toContain('Deribit')
+    }
+  })
+
+  it('states the source-day basis once, in the card-head popover', () => {
+    // AC-44：三处 ⓘ 不许说同一件事——日期口径只在卡头有一份，两个半条不再各说一遍。
+    expect(valueOf('zh-CN', 'titleInfo')).toContain('数据源日（UTC）')
+    expect(valueOf('en-US', 'titleInfo')).toMatch(/data source's day \(UTC\)/u)
+  })
+
   it('keeps the skew history row about readings, not calendar days', () => {
     // 这一行讲「偏斜自哪天开始记录、还差几个读数」（PRD :203 / 定稿 §5.3），不是「满一年分位」那件事。
     // 判据断在占位符与词上：since 必须带 {date}；remaining 必须同时带 {date} 与 {n}，

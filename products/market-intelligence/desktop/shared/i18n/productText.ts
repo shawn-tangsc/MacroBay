@@ -633,7 +633,7 @@ mi: miText['zh-CN'],
              */
             defensivePremium: {
               title: '恐惧与防跌溢价',
-              titleInfo: '把「恐惧与贪婪」和「BTC 期权的防跌溢价」放在一起读：一边是市场怕不怕，一边是买下跌保护贵不贵。它回答情绪落在哪一档、保费在往哪边动，以及两者合起来是什么局面——只表达组合，不给方向，也不给买卖点。两半口径不同：恐惧贪婪是全球加密情绪指数，防跌溢价来自 BTC、Deribit 单所的期权；两者不能相加，也不能互相印证；两半各自怎么读，看那一格自己的 ⓘ。',
+              titleInfo: '把「恐惧与贪婪」和「BTC 期权的防跌溢价」放在一起读：一边是市场怕不怕，一边是买下跌保护贵不贵。它回答情绪落在哪一档、保费在往哪边动，以及两者合起来是什么局面——只表达组合，不给方向，也不给买卖点。两半口径不同：恐惧贪婪是全球加密情绪指数，防跌溢价来自 BTC、Deribit 单所的期权；两者不能相加，也不能互相印证；两半各自怎么读，看那一格自己的 ⓘ。两半的日期都是数据源日（UTC）。',
               titleInfoLabel: '关于这张卡',
               window: '近 30 天',
               observedAt: '观测时间',
@@ -651,7 +651,7 @@ mi: miText['zh-CN'],
                 }
               },
               skew: {
-                name: '期权偏斜',
+                name: 'BTC 期权偏斜（Deribit）',
                 asOf: '截至',
                 unit: '百分点',
                 notConnected: '期权偏斜还没接入。',
@@ -2234,7 +2234,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             defensivePremium: {
               title: 'Fear & Greed and Downside Premium',
-              titleInfo: 'Read the Fear & Greed index together with the cost of downside protection from BTC options: one side is how afraid the market is, the other is how expensive it is to insure against a fall. It answers which band sentiment sits in, which way the premium is moving, and what the two together describe — the pairing only, with no direction and no trade signal. The two halves measure different things: Fear & Greed is a global crypto sentiment index, while the downside premium comes from BTC options on Deribit alone; they cannot be added together or used to confirm each other — how to read each half is in that half\'s own ⓘ.',
+              titleInfo: 'Read the Fear & Greed index together with the cost of downside protection from BTC options: one side is how afraid the market is, the other is how expensive it is to insure against a fall. It answers which band sentiment sits in, which way the premium is moving, and what the two together describe — the pairing only, with no direction and no trade signal. The two halves measure different things: Fear & Greed is a global crypto sentiment index, while the downside premium comes from BTC options on Deribit alone; they cannot be added together or used to confirm each other — how to read each half is in that half\'s own ⓘ. Dates on both halves are the data source\'s day (UTC).',
               titleInfoLabel: 'About this card',
               window: 'Last 30 days',
               observedAt: 'Observed at',
@@ -2252,7 +2252,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 }
               },
               skew: {
-                name: 'Options skew',
+                name: 'BTC options skew (Deribit)',
                 asOf: 'As of',
                 unit: 'percentage points',
                 notConnected: 'Options skew is not connected yet.',
