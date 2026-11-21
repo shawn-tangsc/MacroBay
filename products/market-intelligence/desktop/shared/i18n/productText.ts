@@ -664,6 +664,9 @@ mi: miText['zh-CN'],
                 },
                 direction: {
                   window: '近 5 天',
+                  steeper: '走阔',
+                  flatter: '收窄',
+                  flat: '基本没动',
                   insufficient: '偏斜还不够 5 天，不判方向。',
                   stale: '偏斜数据停在 {time}。',
                   discontinuous: '偏斜数据不连续，不判方向。'
@@ -2260,6 +2263,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 },
                 direction: {
                   window: 'Last 5 days',
+                  steeper: 'Steeper',
+                  flatter: 'Flatter',
+                  flat: 'Little changed',
                   insufficient: 'Fewer than 5 days of skew data; no direction.',
                   stale: 'Skew data stops at {time}.',
                   discontinuous: 'Skew data is not continuous; no direction.'

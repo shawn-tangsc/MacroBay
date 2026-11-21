@@ -11,13 +11,21 @@ import { productText } from './productText'
  * 2. **卡名冻结**——用户 2026-11-21 定名，改动即红（这是本卡唯一被钉死的原文）。
  * 3. **禁词**：任何值里不许出现 `交易日 / trading day / session`（读者会读成股票日历）、`代理 / proxy`
  *    （那是设置页的话，卡只说读不到与类别）、相对时间（`这次 / 今天 / 昨天 / 明天 / 稍后`——同一句要同时
- *    覆盖「这回读不到」和「从来没接上」），以及枚举值 `steeper / flatter / flat`（卡上只印「走阔 / 收窄 / 基本没动」）。
- * 4. **方向词只许出现在结论槽**：`verdict.*` 可以说走阔/收窄/基本没动；「方向未知」三句与卡头 ⓘ 里出现即红。
+ *    覆盖「这回读不到」和「从来没接上」），以及枚举值 `steeper / flatter / flat` 不许散在句子里——只许进方向位那三个键（第 4 条）。
+ * 4. **方向词只许出现在两个槽**：方向位（`skew.direction.steeper/flatter/flat`，数据正常时那半自己印一行）
+ *    与结论槽（`verdict.*`）可以说走阔/收窄/基本没动；「方向未知」三句、卡头 ⓘ、缺半句、整卡降级句里出现即红。
+ *    方向位是 2026-11-22 才合法化的槽（PRD AC-01/AC-19 要「方向位」），此前只许结论句有方向词。
  *
  * 不钉整句原文（文案会润色），只钉上面这些语义约束——润色改词不该让验收变红。
  */
 
 const BAND_PREFIX = ['pages', 'intelligence', 'portal', 'dashboard', 'defensivePremium'] as const
+
+/**
+ * 方向位：数据正常时右半自己印的那三个词。它们是唯一允许出现方向词的 `skew.direction.*` 键；
+ * 同一层的 `window / insufficient / stale / discontinuous` 是「方向未知」的话，仍不许带方向词。
+ */
+const DIRECTION_SLOT_PATHS = ['skew.direction.steeper', 'skew.direction.flatter', 'skew.direction.flat'] as const
 
 /** 界面上会看见的每一个键，缺一个就在这里红。 */
 const REQUIRED_PATHS = [
@@ -45,6 +53,9 @@ const REQUIRED_PATHS = [
   'skew.info.since',
   'skew.info.sourceDay',
   'skew.direction.window',
+  'skew.direction.steeper',
+  'skew.direction.flatter',
+  'skew.direction.flat',
   'skew.direction.insufficient',
   'skew.direction.stale',
   'skew.direction.discontinuous',
@@ -76,7 +87,13 @@ const REQUIRED_PATHS = [
   'degraded.skew'
 ] as const
 
-const BANNED = [
+type Banned = Readonly<{ pattern: RegExp; why: string; except?: readonly string[] }>
+
+/**
+ * 禁词表。`except` 是「这个词在这一处合法」的白名单——目前只有一格：方向位要印方向词本身，
+ * 其余任何键（含方向未知三句、结论句、卡头 ⓘ）出现方向词或枚举值仍然算红。
+ */
+const BANNED: readonly Banned[] = [
   { pattern: /交易日/u, why: '交易日会让读者以为是股票日历' },
   { pattern: /trading\s*day/iu, why: '同「交易日」' },
   { pattern: /session/iu, why: '同「交易日」' },
@@ -88,10 +105,18 @@ const BANNED = [
   { pattern: /明天/u, why: '不让读者以为是相对时间' },
   { pattern: /稍后/u, why: '不让读者以为是相对时间' },
   { pattern: /\bthis time\b/iu, why: '同上，英文侧' },
-  { pattern: /\b(?:steeper|flatter|flat)\b/u, why: '枚举值不许印到卡上' }
-] as const
+  { pattern: /\b(?:steeper|flatter|flat)\b/iu, why: '枚举值不许散在句子里，只许进方向位', except: DIRECTION_SLOT_PATHS }
+]
 
-const DIRECTION_WORDS = [/走阔/u, /收窄/u, /基本没动/u] as const
+/** 卡上说「往哪边动」的词：中文两侧（方向位、结论句）同一套，英文一侧见下。 */
+const DIRECTION_WORDS = [
+  /走阔/u,
+  /收窄/u,
+  /基本没动/u,
+  /\bwidening\b/iu,
+  /\bnarrowing\b/iu,
+  /\bbarely moved\b/iu
+] as const
 
 type Leaf = Readonly<{ path: string; value: string }>
 
@@ -143,6 +168,7 @@ describe('fear & greed + downside premium card copy', () => {
     const findings: string[] = []
     for (const leaf of [...zh, ...en]) {
       for (const banned of BANNED) {
+        if (banned.except?.includes(leaf.path)) continue
         if (banned.pattern.test(leaf.value)) findings.push(`${leaf.path}: ${banned.why}`)
       }
     }
@@ -162,13 +188,17 @@ describe('fear & greed + downside premium card copy', () => {
     expect(pick(enLeaves, 'skew.direction.insufficient')).toContain(`Fewer than ${points} days`)
   })
 
-  it('keeps direction words out of the direction-unknown sentences and the card-head popover', () => {
-    const guarded = [...zh, ...en].filter((leaf) =>
-      leaf.path.startsWith('skew.direction.') ||
-      leaf.path === 'titleInfo' ||
-      leaf.path.endsWith('.skewMissing') ||
-      leaf.path.endsWith('.fgMissing') ||
-      leaf.path.startsWith('degraded.')
+  it('keeps direction words out of the direction-unknown sentences, the card-head popover and the degraded lines', () => {
+    // 方向位（DIRECTION_SLOT_PATHS）是 2026-11-22 起唯一允许出现方向词的 skew.direction.* 键；
+    // 同一层其余四条是「方向未知」的话，说了方向就等于硬凑结论。
+    // verdict.* 与缺半句（.fgMissing）本来就是结论槽、允许方向词，不在守卫名单里。
+    const guarded = [...zh, ...en].filter(
+      (leaf) =>
+        (leaf.path.startsWith('skew.direction.') &&
+          !(DIRECTION_SLOT_PATHS as readonly string[]).includes(leaf.path)) ||
+        leaf.path === 'titleInfo' ||
+        leaf.path.endsWith('.skewMissing') ||
+        leaf.path.startsWith('degraded.')
     )
     expect(guarded.length).toBeGreaterThan(0)
     const findings: string[] = []
