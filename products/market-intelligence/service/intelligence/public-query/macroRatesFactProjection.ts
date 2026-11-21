@@ -104,7 +104,12 @@ export function projectMacroRates(
     if (reading) add(metric, reading.actual, unit, reading, suffix)
     // The day-over-day change the daily block prints beside the level, in basis points: a yield
     // difference is never stated as a percent, and it is rounded to the basis point the reader sees
-    // (`basisPointsText` in the panel) so the fact and the cell cannot state two different numbers.
+    // (`changeSet` / `buildUstRows` in `ustCurveModel`) so the fact and the cell cannot state two
+    // different numbers.
+    //
+    // 精度口径（用户 2026-11-22 确认，本版不改表里的精度）：表里四档变化按**整数 bp**——就是读者
+    // 看到的那一格；契约里的两条价差与图上起点归一按 **0.1 bp**。负号统一 `−`（U+2212），不混用
+    // ASCII 的 `-`，否则同一屏两种横线。改这三档任何一处，都要同时改这条注释与用例。
     if (reading && reading.previous !== undefined) add(`${metric}-change-1d`, basisPoints(reading.actual - reading.previous), 'bp', reading, `${suffix}-change-1d`)
   }
   const long = bySeries.get(TERM_SPREAD_LEGS.long)
