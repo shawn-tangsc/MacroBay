@@ -583,6 +583,49 @@ describe('intelligencePipeline', () => {
     expect(JSON.parse(item?.symbolsJson ?? '[]')).toContain('ETH')
   })
 
+  it('keeps one fear-greed point per day and lets the latest same-day pull win without rolling back', async () => {
+    const pipeline = createPipeline()
+    const pull = (days: Array<{ value: string; timestamp: string }>): string => JSON.stringify({ data: days })
+
+    await pipeline.collectSource({
+      sourceId: 'alternative-fear-greed',
+      runId: 'fg-1',
+      fixtureText: pull([
+        { value: '22', timestamp: '1795046400' },
+        { value: '31', timestamp: '1794960000' }
+      ])
+    })
+    await pipeline.normalizeRawRecords({ sourceId: 'alternative-fear-greed' })
+    expect(pipeline.listMetricEvents().map((event) => event.period)).toEqual(['2026-11-19', '2026-11-18'])
+    expect(pipeline.listRevisions()).toHaveLength(2)
+
+    // The source revises the 19th (22 -> 24) with a later release that same day: the point is
+    // replaced, not duplicated.
+    await pipeline.collectSource({
+      sourceId: 'alternative-fear-greed',
+      runId: 'fg-2',
+      fixtureText: pull([
+        { value: '24', timestamp: '1795089600' },
+        { value: '31', timestamp: '1794960000' }
+      ])
+    })
+    await pipeline.normalizeRawRecords({ sourceId: 'alternative-fear-greed' })
+    const revised = pipeline.listMetricEvents()
+    expect(revised.filter((event) => event.period === '2026-11-19')).toHaveLength(1)
+    expect(revised.find((event) => event.period === '2026-11-19')?.actual).toBe(24)
+    // Only the revised day earns a new revision: the untouched day's own hash decides, not the payload's.
+    expect(pipeline.listRevisions()).toHaveLength(3)
+
+    // A late payload carrying the earlier release of the same day must not undo the revision.
+    await pipeline.collectSource({
+      sourceId: 'alternative-fear-greed',
+      runId: 'fg-3',
+      fixtureText: pull([{ value: '22', timestamp: '1795046400' }])
+    })
+    await pipeline.normalizeRawRecords({ sourceId: 'alternative-fear-greed' })
+    expect(pipeline.listMetricEvents().find((event) => event.period === '2026-11-19')?.actual).toBe(24)
+  })
+
   it('stores layer breakdown on sentiment aggregates after impact assessment', async () => {
     const pipeline = createPipeline()
     await pipeline.collectSource({

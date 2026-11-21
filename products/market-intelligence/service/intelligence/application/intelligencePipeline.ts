@@ -826,7 +826,7 @@ function processNormalizedDraft(input: {
       canonicalDedupeKey: normalizedDraft.canonicalDedupeKey,
       title: normalizedDraft.title,
       summary: normalizedDraft.summary,
-      bodyHash: input.parsed.bodyHash,
+      bodyHash: input.draft.bodyHash ?? input.parsed.bodyHash,
       publishedAt: normalizedDraft.publishedAt,
       detectedAt: normalizedDraft.detectedAt
     },
@@ -946,7 +946,21 @@ function persistMetricEventFromDraft(input: {
     const draft = JSON.parse(input.draftJson) as MetricIntelligenceEventDraft
     const metricEventId = `metric-${input.itemId}-${draft.metricKey}`
     const existing = input.metricEvents.find((entry) => entry.metricEventId === metricEventId)
-    if (existing) return existing
+    if (existing) {
+      // Same day, new value: the source revised `period`. Take it only when the incoming release
+      // is not older than what we already hold — a late-arriving older payload must not undo a
+      // newer revision (PRD AC-18: one point per day, the latest release wins).
+      const incoming = Date.parse(draft.releaseTime)
+      const held = Date.parse(existing.releaseTime)
+      const notOlder = Number.isFinite(incoming) && (!Number.isFinite(held) || incoming >= held)
+      if (notOlder && existing.actual !== draft.actual) {
+        existing.actual = draft.actual
+        existing.releaseTime = draft.releaseTime
+        existing.rawValueJson = draft.rawValueJson
+        existing.surpriseDirection = draft.surpriseDirection
+      }
+      return existing
+    }
 
     const event: MetricIntelligenceEvent = {
       metricEventId,

@@ -200,7 +200,10 @@ function normalizeMetricDrafts(input: {
       dataDomain,
       eventFamily: 'metric-event',
       eventSubtype: metric.metricKind,
-      metricEventJson: JSON.stringify(metric)
+      metricEventJson: JSON.stringify(metric),
+      // One hash per day, not one for the payload: a 365-day backfill must not mark all 365 days
+      // as revised when a single day's value moves.
+      bodyHash: hashPayload(`${metric.metricKey}:${periodKey}:${String(metric.actual)}`)
     }
   })
 }
