@@ -211,6 +211,30 @@ describe('intelligencePipeline', () => {
     expect(pipeline.listSentimentAggregates().map((aggregate) => aggregate.aggregateId)).toEqual(['neighbor-only'])
   })
 
+  it('keeps normalizing after one record throws, so a bad record cannot starve the queue', async () => {
+    /* 2026-11-21 事故：`defillama-tvl` 每半小时抛一次 `missing TVL total`，而待办是按追加顺序取的，
+       它一直排在最前面——后面的新闻记录永远轮不到归一化，enrich/score 从 11-19 起再没触发过，
+       而每个采集任务都显示「成功」。一条坏记录只准记日志、留在待办里重试，不许挡住整队。 */
+    const rawRecordStore = createRawRecordStore()
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore
+    })
+    rawRecordStore.appendRawRecord({
+      sourceId: 'defillama-tvl', runId: 'run-bad', sourceDedupeKey: 'tvl-bad', payloadFormat: 'json',
+      payloadRefType: 'inline', payloadBody: '[]', payloadHash: 'hash-bad', parserVersion: 'fixture-v1'
+    })
+    await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-news', fixtureText: loadFixture('rss-sample.xml') })
+
+    const result = await pipeline.normalizeRawRecords({})
+
+    expect(result.failedCount).toBe(1)
+    expect(result.processedCount).toBe(2)
+    expect(result.queuedJobs).toContain('market-intelligence.enrichNewsDocuments')
+    // 坏的记录没有被吞掉：仍在待办里，下一轮还会再试（修好解析后自然就过了）。
+    expect(rawRecordStore.listUnprocessed().map((record) => record.sourceId)).toEqual(['defillama-tvl'])
+  })
+
   it('writes raw records before parsing and avoids duplicate items', async () => {
     const pipeline = createPipeline()
     const fixture = loadFixture('rss-sample.xml')

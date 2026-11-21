@@ -99,6 +99,10 @@ export type IntelligencePipeline = {
   collectSource: (input: { sourceId: string; runId: string; fixtureText?: string }) => Promise<SourceCollectionResult>
   normalizeRawRecords: (input: { sourceId?: string; limit?: number }) => Promise<{
     processedCount: number
+    /** 解析失败但**没有挡住队列**的记录数（一条坏记录继续留在待办里，下一轮重试）。 */
+    failedCount: number
+    /** 超过 24 小时还没归一化出来的新闻原始记录数（饿死诊断，见 `registerIntelligenceJobs`）。 */
+    staleNewsCount: number
     queuedJobs: string[]
     newItemIds: string[]
     /** Items older than the backfill age: created, but kept out of the translate/assess queues. */
@@ -460,6 +464,7 @@ export function createIntelligencePipeline(deps?: {
     async normalizeRawRecords({ sourceId, limit = 100 }) {
       const queuedJobs: string[] = []
       let processedCount = 0
+      let failedCount = 0
       let stateDirty = false
       const newItemIds: string[] = []
       const backfillItemIds: string[] = []
@@ -477,13 +482,32 @@ export function createIntelligencePipeline(deps?: {
         const profile = await profileStore.resolveProfile(rawRecord.sourceId)
         const { config } = resolveAndValidateRuntimeConfig({ definition, profile })
 
-        const parsed = adapter.parseRawRecord({
-          config,
-          rawRecord: {
-            ...rawRecord,
-            payloadBody: rawRecord.payloadBody
-          }
-        })
+        /**
+         * 一条记录解析失败**不许挡住整队**（2026-11-21 事故）。
+         *
+         * `defillama-tvl` 每半小时抛一次 `missing TVL total`，而队列是按追加顺序取的：它一直排在
+         * 最前面，后面的新闻记录永远轮不到归一化——enrich/score 从 11-19 起再没触发过，而每个
+         * 采集任务都显示「成功」。这里改为记一条结构化日志后继续；坏记录保持未处理，下一轮重试。
+         */
+        let parsed: ReturnType<typeof adapter.parseRawRecord>
+        try {
+          parsed = adapter.parseRawRecord({
+            config,
+            rawRecord: {
+              ...rawRecord,
+              payloadBody: rawRecord.payloadBody
+            }
+          })
+        } catch (error) {
+          failedCount += 1
+          console.log(JSON.stringify({
+            marker: 'MI_NORMALIZE_RECORD_FAILED',
+            sourceId: rawRecord.sourceId,
+            rawRecordId: rawRecord.rawRecordId,
+            message: (error instanceof Error ? error.message : String(error)).slice(0, 200)
+          }))
+          continue
+        }
         if (deps?.onMetricWindow && parsed.metricEvents?.length && rawRecord.payloadBody !== undefined) {
           try {
             deps.onMetricWindow({
@@ -591,7 +615,14 @@ export function createIntelligencePipeline(deps?: {
         await publishEventsAfterPersist({ newItemIds: [...newItemIds] })
       }
 
-      return { processedCount, queuedJobs: [...queuedJobs], newItemIds, backfillItemIds }
+      // 饿死诊断：新原始记录进来、却超过一天没有归一化出来的新闻条目——这次就是它被静默盖住的。
+      const nowMs = Date.now()
+      const staleNewsCount = rawRecordStore
+        .listUnprocessed()
+        .filter((record) => (NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(record.sourceId))
+        .filter((record) => nowMs - Date.parse(record.detectedAt) > 24 * 60 * 60 * 1_000)
+        .length
+      return { processedCount, failedCount, staleNewsCount, queuedJobs: [...queuedJobs], newItemIds, backfillItemIds }
     },
 
     async assessChangedItems({ itemIds }) {

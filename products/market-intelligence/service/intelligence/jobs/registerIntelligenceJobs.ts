@@ -121,7 +121,13 @@ export function registerIntelligenceJobs(
       ...(result.backfillItemIds.length > 0 ? { backfillItemIds: result.backfillItemIds } : {}),
       ...(input.firstCollection ? { firstCollection: true } : {})
     })
-    await context.log({ level: 'info', message: 'Normalized pending raw records.' })
+    // 三种情况各说各的（2026-11-21）：跑完了 / 有记录解析失败但没挡住队列 / 有新闻条目超过一天
+    // 还没归一化出来。最后一种正是这次被静默盖住的事故——采集全绿、新闻却是两天前的。
+    const level = result.failedCount > 0 || result.staleNewsCount > 0 ? 'warn' : 'info'
+    await context.log({
+      level,
+      message: `Normalized pending raw records: ${result.processedCount} processed, ${result.failedCount} failed, ${result.staleNewsCount} news pending over 24h.`
+    })
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_TRANSLATE_ITEMS_JOB, async (payload, context) => {
