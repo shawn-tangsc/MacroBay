@@ -38,6 +38,7 @@ import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory
 
 import './cryptoDashboard.css'
 import { CrossAssetObservationPanel } from '../../features/industry/cross-asset/CrossAssetObservationPanel'
+import { UstYieldCurveSection } from '../../features/industry/ust-curve/UstYieldCurveSection'
 import type { CrossAssetEventLine } from '../../features/industry/cross-asset/crossAssetEventLines'
 import { useMacroMarketSnapshot } from '../../features/industry/cross-asset/useMacroMarketSnapshot'
 import { useMacroRatesSnapshot } from '../../features/industry/cross-asset/useMacroRatesSnapshot'
@@ -272,7 +273,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   })
   // The two rate rows read FRED's official daily closes through their own door: a daily reading cannot
   // ride the fifteen-minute macro snapshot without being repainted as if it were intraday.
-  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !anyReadable(['quotes', 'ust10y']) })
+  // 紧张的是「同一份快照多读一次」，不是「多开一条读路径」：刷新换 token，表与图一起重读。
+  const [ratesRefreshToken, setRatesRefreshToken] = useState(0)
+  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !anyReadable(['quotes', 'ust10y']), refreshToken: ratesRefreshToken })
   // The policy row reads one assembled object: the meeting date, the official facts and the odds
   // history are joined in the main process, so this dashboard never builds a second opinion.
   /**
@@ -423,6 +426,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           onEnableData: () => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', firstDisabledQuotesCell[1]) })
         })}
         text={crossAssetText} /> : null}
+      <UstYieldCurveSection view={macroRatesView} settled={readsReady} enabled={anyReadable(['quotes', 'ust10y'])}
+        resolveText={resolveProductKey} timeZone={timeZone} locale={locale}
+        refresh={() => setRatesRefreshToken((token) => token + 1)}
+        onEnable={() => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', 'ust10y') })} />
       {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源没有启用」+ 去启用；
           读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}
       {readsReady ? (() => {

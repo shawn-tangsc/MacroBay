@@ -18,7 +18,13 @@ export type MacroRatesViewState = 'loading' | 'ready' | 'unavailable'
  * Reads the daily rates snapshot for the 市场状态 table. No client, a failed call and an
  * `unavailable` answer all land on the same empty view, which the table renders as 未接入.
  */
-export function useMacroRatesSnapshot({ client, disabled = false }: { client?: MacroRatesSnapshotClient; /** 读者把 10Y 那一格关掉时为 true：不读、停在加载态。 */ disabled?: boolean }): {
+export function useMacroRatesSnapshot({ client, disabled = false, refreshToken = 0 }: {
+  client?: MacroRatesSnapshotClient
+  /** 读者把 10Y 那一格关掉时为 true：不读、停在加载态。 */
+  disabled?: boolean
+  /** 刷新按钮：换一个值就重读同一份快照（表与图一起），不新开第二条读路径。 */
+  refreshToken?: number
+}): {
   snapshot: MacroRatesSnapshotView | undefined
   state: MacroRatesViewState
 } {
@@ -61,6 +67,6 @@ export function useMacroRatesSnapshot({ client, disabled = false }: { client?: M
     }
     void poll()
     return () => { active = false; clearTimeout(timer) }
-  }, [client, disabled])
+  }, [client, disabled, refreshToken])
   return { snapshot, state }
 }
