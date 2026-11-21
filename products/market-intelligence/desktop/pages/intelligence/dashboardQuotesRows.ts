@@ -1,9 +1,14 @@
 import { cellOffLabel } from './dashboardCellOff'
 import type { CellReadDecision } from './dashboardCellEnabled'
 
-/** 市场状态表的行 → 这一行读的是哪一格（`quotes` 模块下）。顺序即行序。 */
+/**
+ * 市场状态表的行 → 这一行读的是哪一格（`quotes` 模块下）。顺序即行序。
+ *
+ * 美债 10Y 与实际利率那两格（`ust10y`）不在这里：它们已经由「国债收益率 · 日频」卡负责
+ * （用户 2026-11-22 定），这一屏同一条数据不留两份行状态。
+ */
 export const QUOTES_ROW_CELL_KEYS = {
-  index: 'ndx', btc: 'btc', eth: 'eth', dxy: 'usd', gold: 'gold', us10y: 'ust10y', realRate: 'ust10y'
+  index: 'ndx', btc: 'btc', eth: 'eth', dxy: 'usd', gold: 'gold'
 } as const
 
 export type QuotesRowId = keyof typeof QUOTES_ROW_CELL_KEYS

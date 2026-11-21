@@ -16,7 +16,7 @@ const shape = (readings: MacroMarketSnapshotReading[]): string[] =>
 
 describe('cross-asset status rows', () => {
   it('reads the macro drivers first, then the assets they move', () => {
-    expect(crossAssetStatusRows.map(row => row.id)).toEqual(['dxy', 'gold', 'us10y', 'realRate', 'index', 'btc', 'eth'])
+    expect(crossAssetStatusRows.map(row => row.id)).toEqual(['dxy', 'gold', 'index', 'btc', 'eth'])
   })
 
   it('names the macro series that may fill a row, best candidate first', () => {
@@ -27,42 +27,36 @@ describe('cross-asset status rows', () => {
 
   it('promotes the dollar row from either candidate, and never from another symbol', () => {
     expect(shape([reading('dxy-real'), reading('xau-usd')])).toEqual([
-      'dxy:connected', 'gold:connected', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
+      'dxy:connected', 'gold:connected', 'index:connected', 'btc:connected', 'eth:connected'
     ])
     expect(shape([reading('dxy-synthetic')])[0]).toBe('dxy:connected')
   })
 
   it('promotes the dollar and gold rows only when their series has a reading', () => {
     expect(shape([reading('dxy-synthetic'), reading('xau-usd')])).toEqual([
-      'dxy:connected', 'gold:connected', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
+      'dxy:connected', 'gold:connected', 'index:connected', 'btc:connected', 'eth:connected'
     ])
     expect(shape([reading('dxy-synthetic')])).toEqual([
-      'dxy:connected', 'gold:planned', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
+      'dxy:connected', 'gold:planned', 'index:connected', 'btc:connected', 'eth:connected'
     ])
     // A series the table does not show cannot promote either row back into a figure.
     expect(shape([reading('usd-cnh'), reading('usdt-usd')])).toEqual([
-      'dxy:planned', 'gold:planned', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
+      'dxy:planned', 'gold:planned', 'index:connected', 'btc:connected', 'eth:connected'
     ])
   })
 
   it('says 加载中 — not 未接入 — for a macro row whose read has not settled yet', () => {
-    // 用户 11-02 那句「先闪一下获取失败再出数据」的同类：macro / rates 还没结算时，四行会先落回注册表的
+    // 用户 11-02 那句「先闪一下获取失败再出数据」的同类：macro 还没结算时，两行会先落回注册表的
     // `planned`（未接入），读完再变「已接入」——先给结论、再改结论。未结算就应当是加载态。
-    const pendingBoth = (pending: { macro: boolean; rates: boolean }): string[] =>
-      resolveCrossAssetStatusRows([], [], pending).map(row => `${row.id}:${row.state}`)
-    expect(pendingBoth({ macro: true, rates: true })).toEqual([
-      'dxy:loading', 'gold:loading', 'us10y:loading', 'realRate:loading', 'index:connected', 'btc:connected', 'eth:connected'
-    ])
-    // 只有那一路没结算才给加载态；已经读完、确实没有 → 仍然是「未接入」。
-    expect(pendingBoth({ macro: true, rates: false })).toEqual([
-      'dxy:loading', 'gold:loading', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
-    ])
+    const pending = (macro: boolean): string[] =>
+      resolveCrossAssetStatusRows([], { macro }).map(row => `${row.id}:${row.state}`)
+    expect(pending(true)).toEqual(['dxy:loading', 'gold:loading', 'index:connected', 'btc:connected', 'eth:connected'])
+    // 已经读完、确实没有 → 仍然是「未接入」。
+    expect(pending(false)).toEqual(['dxy:planned', 'gold:planned', 'index:connected', 'btc:connected', 'eth:connected'])
     // 读数已经到了就是 connected：加载态不许盖掉已经拿到的东西。
-    expect(resolveCrossAssetStatusRows([reading('dxy-synthetic')], [], { macro: true, rates: true })[0]).toEqual({ id: 'dxy', state: 'connected' })
-    // 没传 pending 的旧调用点行为不变（没有第五个参数的默认语义被偷偷改掉）。
-    expect(shape([])).toEqual([
-      'dxy:planned', 'gold:planned', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
-    ])
+    expect(resolveCrossAssetStatusRows([reading('dxy-synthetic')], { macro: true })[0]).toEqual({ id: 'dxy', state: 'connected' })
+    // 没传 pending 的调用点行为不变（默认语义没有被偷偷改掉）。
+    expect(shape([])).toEqual(['dxy:planned', 'gold:planned', 'index:connected', 'btc:connected', 'eth:connected'])
   })
 
   it('renders the unsettled row as a waiting cell, never as the 未接入 sentence', () => {
@@ -72,30 +66,16 @@ describe('cross-asset status rows', () => {
     expect(markup).toContain(text.loading)
   })
 
-  it('promotes the two rate rows only from their own daily series', () => {
-    const rates = (...seriesIds: string[]): string[] =>
-      resolveCrossAssetStatusRows([], seriesIds.map(seriesId => ({ seriesId }))).map(row => `${row.id}:${row.state}`)
-
-    expect(rates('DGS10', 'DFII10')).toEqual([
-      'dxy:planned', 'gold:planned', 'us10y:connected', 'realRate:connected', 'index:connected', 'btc:connected', 'eth:connected'
-    ])
-    expect(rates('DGS10')).toEqual([
-      'dxy:planned', 'gold:planned', 'us10y:connected', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
-    ])
-    // The 2Y and the breakeven are context, not readings for either row.
-    expect(rates('DGS2', 'T10YIE')).toEqual([
-      'dxy:planned', 'gold:planned', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
-    ])
-    // A dollar series never fills a rate row, and the default call stays the no-data list.
-    expect(rates('dxy-synthetic')).toEqual([
-      'dxy:planned', 'gold:planned', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
-    ])
-    expect(shape([reading('dxy-synthetic')])).toEqual(resolveCrossAssetStatusRows([reading('dxy-synthetic')]).map(row => `${row.id}:${row.state}`))
+  it('no longer carries the two rate rows: they belong to the daily Treasury card', () => {
+    // 用户 2026-11-22：既然下面有专门的日频卡片，市场状态里那两行就删掉。这条守卫钉住「没有第三处
+    // 把已经搬走的数据读回来」：注册表里没有这两个 id，日频序列也推不出一行来。
+    const ids = resolveCrossAssetStatusRows([reading('DGS10'), reading('DFII10')]).map(row => row.id)
+    expect(ids).toEqual(['dxy', 'gold', 'index', 'btc', 'eth'])
   })
 
   it('reproduces the no-data list exactly when the snapshot is empty or unavailable', () => {
     expect(resolveCrossAssetStatusRows([])).toEqual(crossAssetStatusRows)
-    expect(plannedCrossAssetStatusIds).toEqual(['dxy', 'gold', 'us10y', 'realRate'])
+    expect(plannedCrossAssetStatusIds).toEqual(['dxy', 'gold'])
     expect(crossAssetStatusRows.filter(row => row.state === 'connected').map(row => row.id)).toEqual(['index', 'btc', 'eth'])
   })
 

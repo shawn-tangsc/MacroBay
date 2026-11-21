@@ -191,38 +191,9 @@
    carried by `data-live-state` rather than by the wording alone. */
 .mi-cross-asset__status-table tbody th .mi-cross-asset__live { display: inline-block; margin-left: 3px; padding: 0 3px; border: 1px solid var(--mi-cross-asset-line); border-radius: 3px; color: var(--muted); font-size: 8.5px; font-style: normal; font-weight: 500; vertical-align: 1px; white-space: nowrap; }
 .mi-cross-asset__status-table tbody th .mi-cross-asset__live[data-live-state='live'] { color: var(--mi-dashboard-positive); border-color: var(--mi-dashboard-positive); }
-/* Section label and divider: the daily block states its own frequency rather than inheriting the
-   window headings above it. */
-.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section th { text-align: left; font-weight: 500; color: var(--muted); font-size: 9.5px; padding-top: 6px; border-top: 1px solid var(--mi-cross-asset-line); }
-/* The block's rhythm rides on the same line as its heading, as a hint behind an icon: one gap keeps
-   the 22px trigger from reading as part of the 9.5px word beside it (reader, 2026-11-06), and the
-   icon sits on the text's baseline rather than lifting the row's other cells. */
-/* 标题与 ⓘ 在同一行：容器是 inline-flex，图标 `flex: none` 不许被压缩、也不许被挤到下一行。
-   之前它们是两个块级兄弟，窄一点 icon 就掉到第二行，还因为脱离行内流画出默认按钮的方框
-   （读者 2026-11-08 截图）。 */
-.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section-heading {
-  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-}
-.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section-hint {
-  flex: none; margin-left: 0;
-}
-
-/* The daily cell carries two different statements: the move over the day, and the context that makes it
-   readable (term spread, inflation expectation). Run together on one line they read as a single
-   sentence; stacked, the change is the answer and the context is beneath it. */
-.mi-cross-asset__status-table tbody td.mi-cross-asset__daily { white-space: normal; }
-.mi-cross-asset__status-table tbody td.mi-cross-asset__daily > strong { display: block; white-space: nowrap; }
-.mi-cross-asset__status-table tbody td.mi-cross-asset__daily small { display: block; margin-top: 1px; opacity: .8; }
-
 .mi-cross-asset__not-connected { text-align: left !important; white-space: normal !important; color: var(--muted); }
 .mi-cross-asset__not-connected span { font-size: 12px; }
 .mi-cross-asset__not-connected small { display: block; font-size: 9.5px; opacity: .75; }
-/* The rate rows answer with one merged daily cell instead of four intraday windows. It carries no new
-   look — the same type scale, the same `data-direction` colouring the window cells use — it only lets
-   the optional 期限利差/通胀预期 line break beneath the figure it belongs to instead of running on. */
-.mi-cross-asset__status-table td.mi-cross-asset__daily { white-space: normal; }
-.mi-cross-asset__daily small { display: block; color: var(--muted); font-size: 9px; font-weight: 400; }
-
 /* The reading line (design 142 §6, the reader's choice B1): one footnote spanning the panel under the
    chart, not a card. A single rule above it and 6px of padding keep it reading as an annotation of the
    chart rather than as a block competing with the analysis beside the panel. Below a 1200px container it

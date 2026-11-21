@@ -65,7 +65,8 @@ export function livePriceText(price: string): string {
 }
 
 export type Text = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
-export type MacroDriverId = 'dxy' | 'gold' | 'us10y' | 'realRate'
+/** 市场状态表里的宏观驱动行：美债 10Y 与实际利率已搬进「国债收益率 · 日频」卡（2026-11-22）。 */
+export type MacroDriverId = 'dxy' | 'gold'
 export type RowMetrics = Readonly<Record<CrossAssetWindow, CrossAssetMetric>>
 export function priceOf(snapshot: CrossAssetSnapshot | undefined, asset: CrossAssetId): string {
   const quote = snapshot?.quotes?.[asset]

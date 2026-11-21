@@ -42,9 +42,9 @@ export const QUOTES_STATUS_ROW_CELLS: Readonly<Record<CrossAssetStatusId, readon
   btc: [dashboardCellId('quotes', 'btc')],
   eth: [dashboardCellId('quotes', 'eth')],
   dxy: [dashboardCellId('quotes', 'usd'), dashboardCellId('quotes', 'usd-fallback')],
-  gold: [dashboardCellId('quotes', 'gold'), dashboardCellId('quotes', 'gold-fallback')],
-  us10y: [dashboardCellId('quotes', 'ust10y')],
-  realRate: [dashboardCellId('quotes', 'ust10y')]
+  gold: [dashboardCellId('quotes', 'gold'), dashboardCellId('quotes', 'gold-fallback')]
+  // 美债 10Y 与实际利率的两行已搬进「国债收益率 · 日频」卡（用户 2026-11-22 定）；
+  // 那一格的开关仍然管那张卡，由下面的 `macroRates` 直接读同一格。
 })
 
 /**
@@ -155,7 +155,8 @@ export function resolveDashboardReadGates(cells: Readonly<Record<string, boolean
     // 图表与三行同读一份跨资产快照：三格都关掉才停这一路。
     crossAsset: rowEnabled('index') || rowEnabled('btc') || rowEnabled('eth'),
     macroMarket: rowEnabled('dxy') || rowEnabled('gold'),
-    macroRates: rowEnabled('us10y'),
+    // 国债收益率那张卡读的还是同一格（`quotes/ust10y`）：行的位置没了，格的开关没变。
+    macroRates: isCellEnabled(cells, dashboardCellId('quotes', 'ust10y')),
     fearGreed: isCellEnabled(cells, dashboardCellId('fear-greed', 'index')),
     capital: isAnyCellEnabled(cells, [dashboardCellId('capital', 'stablecoin'), dashboardCellId('capital', 'etf')]),
     positioning: isAnyCellEnabled(cells, [dashboardCellId('positioning', 'oi'), dashboardCellId('positioning', 'funding')]),

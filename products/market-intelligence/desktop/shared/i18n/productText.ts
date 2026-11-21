@@ -548,26 +548,10 @@ mi: miText['zh-CN'],
               lastClosedBar: '最后一根已收盘 K 线',
               proxyMarketState: '代币化代理 24/7 交易',
               statusTitle: '市场状态', statusColumns: { asset: '资产', latest: '最新', '15m': '15m', '1h': '1h', '24h': '24h', '7d': '7d' },
-              assetLabels: { dxy: '美元 DXY', gold: '黄金 XAU', us10y: '美债 10Y', realRate: '实际利率' },
+              assetLabels: { dxy: '美元 DXY', gold: '黄金 XAU' },
+              statusReads: { dxy: '美元↑ 对加密逆风', gold: '与 BTC 同跌 = 贴现率驱动', index: '风险偏好', btc: '双重属性：风险 + 流动性', eth: '跟随 BTC，弹性更大' },
               syntheticTag: '合成', syntheticCaveat: '该美元指数由 ICE 篮子货币按公布权重合成，不是官方 ICE DXY 指数。',
               notConnected: '未接入', notConnectedHint: '尚未接入数据源，接入后自动显示',
-              dailyFrequency: '日频', bpUnit: 'bp',
-              // One observation per trading day, so the four intraday windows are one cell whose date
-              // is the day FRED actually published — never "now".
-              dailyChangeWithDate: '日频 {change}（截至 {date}）',
-              // 区块自己的节奏：官方日频每交易日发布一次，没发布新收盘前这行不会变——读者
-              // 看到一行两天不动时会以为坏了，所以节奏写在区块表头上，不塞进数值格。
-              dailyCadence: '每交易日发布一次；未发布新收盘前不变',
-              dailyChangeUnknownWithDate: '日频 —（截至 {date}）',
-              termSpread: '期限利差',
-              // 通胀预期是自己一条序列，可以比这两行早一天（2026-10-15 就是），所以永远带自己的观察日。
-              inflationExpectationWithDate: '通胀预期 {value}%（截至 {date}）',
-              // 同一句话里本来就并列的两段（同一张表相邻两个读数）合成一个键：` · ` 是句子的一部分，
-              // 不是调用点拼出来的结构。只有一段时各走单段键，不为少一行硬合。
-              dailySpreadAndInflation: '期限利差 {spread} · 通胀预期 {inflation}%（截至 {date}）',
-              dailySpreadOnly: '期限利差 {spread}',
-              dailyMixedDates: '两条日频序列观察日不一致，不计算差值',
-              dailyCaveat: '官方日频收盘，仅反映交易日收盘水平，不解释盘中波动。',
               // 跨市场判读（设计 142）。文案一律读者语言：剧本名是口语短名，解释是"钱在做什么"，
               // 数字只在"不像"里出现一次，且带上是哪条腿没走成——只给名字的结论读者已经有了。
               reading: {
@@ -611,7 +595,6 @@ mi: miText['zh-CN'],
               },
               /* 行名旁那颗 ⓘ 的可访问名：这一行的说明句只在它的浮层里。 */
               rowHint: '{name}：这一行的说明',
-              statusReads: { dxy: '美元↑ 对加密逆风', gold: '与 BTC 同跌 = 贴现率驱动', us10y: '名义资金成本', realRate: '与 BTC 关系最直接', index: '风险偏好', btc: '双重属性：风险 + 流动性', eth: '跟随 BTC，弹性更大' },
               btcIndex: 'BTC − 纳斯达克 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: '样本', coverage: '历史覆盖',
               states: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', limited: '资源受限', unavailable: '不可用', missing: '无数据' },
               liveStateLabels: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', unavailable: '实时不可用' },
@@ -2208,25 +2191,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               lastClosedBar: 'Last closed bar',
               proxyMarketState: 'Tokenised proxy trades 24/7',
               statusTitle: 'Market status', statusColumns: { asset: 'Asset', latest: 'Latest', '15m': '15m', '1h': '1h', '24h': '24h', '7d': '7d' },
-              assetLabels: { dxy: 'Dollar DXY', gold: 'Gold XAU', us10y: 'US 10Y', realRate: 'Real rate' },
+              assetLabels: { dxy: 'Dollar DXY', gold: 'Gold XAU' },
+              statusReads: { dxy: 'A rising dollar is a crypto headwind', gold: 'Falling with BTC = discount-rate driven', index: 'Risk appetite', btc: 'Two natures: risk and liquidity', eth: 'Follows BTC with more beta' },
               syntheticTag: 'Synthetic', syntheticCaveat: 'This dollar index is synthesised from the ICE basket with published weights; it is not the official ICE DXY.',
               notConnected: 'Not connected', notConnectedHint: 'No data source admitted yet; it appears here once connected',
-              dailyFrequency: 'Daily', bpUnit: 'bp',
-              dailyChangeWithDate: 'Daily {change} (as of {date})',
-              // The block's own rhythm, next to its heading rather than inside a figure cell: an
-              // official daily close arrives once per trading day, so a row that has not moved is
-              // waiting for the source, not stuck.
-              dailyCadence: 'published once per trading day; unchanged until the next close',
-              dailyChangeUnknownWithDate: 'Daily — (as of {date})',
-              termSpread: 'Term spread',
-              // The expectation is its own series and can be a day ahead of these rows; the date
-              // therefore travels with the value instead of being inherited from the row.
-              inflationExpectationWithDate: 'Inflation expectation {value}% (as of {date})',
-              // Two readings of the same table that belong in one sentence; ` · ` is part of the copy.
-              dailySpreadAndInflation: 'Term spread {spread} · Inflation expectation {inflation}% (as of {date})',
-              dailySpreadOnly: 'Term spread {spread}',
-              dailyMixedDates: 'Two daily series disagree on the observation date; no difference stated',
-              dailyCaveat: 'Official daily close: the level of a trading day, and no explanation of intraday moves.',
               // The cross-market reading (design 142), in the same plain words as the Chinese copy.
               reading: {
                 title: 'How to read',
@@ -2263,7 +2231,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 }
               },
               rowHint: '{name}: about this row',
-              statusReads: { dxy: 'A rising dollar is a crypto headwind', gold: 'Falling with BTC = discount-rate driven', us10y: 'Nominal cost of money', realRate: 'The most direct link to BTC', index: 'Risk appetite', btc: 'Two natures: risk and liquidity', eth: 'Follows BTC with more beta' },
               btcIndex: 'BTC − Nasdaq 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: 'Samples', coverage: 'History coverage',
               states: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', limited: 'Resource limited', unavailable: 'Unavailable', missing: 'No data' },
               liveStateLabels: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', unavailable: 'Live unavailable' },

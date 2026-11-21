@@ -413,8 +413,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         crossAssetReadingEnabled={anyReadable(['quotes', 'ndx'], ['quotes', 'btc'], ['quotes', 'eth'])}
         macroSnapshot={macroView.snapshot}
         macroState={macroView.state}
-        rates={macroRatesView.snapshot}
-        ratesState={macroRatesView.state}
         // The panel reads the same calendar this dashboard already reads, rather than reaching for a
         // second client of its own: one month query per window, one source of truth for the events.
         calendar={client}

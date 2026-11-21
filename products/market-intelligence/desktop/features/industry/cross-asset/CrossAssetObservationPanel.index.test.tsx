@@ -51,7 +51,7 @@ async function render(input: Readonly<{
   nowMs: number; bySymbol: Record<string, readonly unknown[]>; feed: CrossAssetIndexFeedState
   liveState?: CrossAssetLiveState; range?: '1h' | '24h'
   /** 读者在设置里关掉的格（行 id）；不给就是全都没关。 */
-  hideStatusRows?: readonly ('index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate')[]
+  hideStatusRows?: readonly ('index' | 'btc' | 'eth' | 'dxy' | 'gold')[]
   /** 每行的三态；配合 `cellStateLabels` 才生效。 */
   rowStates?: Partial<Record<'index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate', 'disabled' | 'unreadable'>>
   /** 源状态表沿用了上一次成功的读数时的短标注。 */
@@ -290,10 +290,10 @@ describe('cross-asset chart with only some lines usable', () => {
 describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
   const allUnreadable = {
     index: 'unreadable' as const, btc: 'unreadable' as const, eth: 'unreadable' as const,
-    dxy: 'unreadable' as const, gold: 'unreadable' as const, us10y: 'unreadable' as const, realRate: 'unreadable' as const
+    dxy: 'unreadable' as const, gold: 'unreadable' as const
   }
 
-  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold', 'us10y', 'realRate'] as const
+  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold'] as const
   /** 标题右边那颗「补数据」按钮（同屏只许有一处）。 */
   const titleAction = (host: HTMLElement): HTMLButtonElement | undefined =>
     [...host.querySelectorAll<HTMLButtonElement>('.mi-cross-asset__quote-heading button')]
@@ -306,7 +306,7 @@ describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
   it('whole table unreadable: the table keeps its rows and headers, one retry in the title, no state block', async () => {
     const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: allUnreadable })
     try {
-      // 不再是「一整块提示吃掉半张卡」：七行行位都在，每个行自己说自己的状态。
+      // 不再是「一整块提示吃掉半张卡」：五行行位都在，每个行自己说自己的状态。
       expect(page.host.querySelectorAll('tr[data-status-row]')).toHaveLength(ALL_ROWS.length)
       for (const id of ALL_ROWS) {
         expect(page.host.querySelector(`tr[data-status-row="${id}"] .mi-source-state[data-state="unreadable"]`)).not.toBeNull()
@@ -348,7 +348,7 @@ describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
 })
 
 describe('标题右边那颗按钮：这一张卡唯一的「补数据」入口（用户 2026-11-11）', () => {
-  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold', 'us10y', 'realRate'] as const
+  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold'] as const
   const allActions = (host: HTMLElement): string[] =>
     [...host.querySelectorAll('button')]
       .map(button => button.textContent ?? '')
@@ -577,8 +577,8 @@ describe('通道不可用时结构要留（用户 2026-11-11）', () => {
       expect(Number(stateCell.getAttribute('colspan'))).toBe(1 + 1 + 4)
       expect(stateCell.querySelector('.mi-source-state[data-state="unreadable"]')).not.toBeNull()
       // 行位仍在（每一行都画得出名字）。
-      expect(table.querySelectorAll('tr[data-status-row]')).toHaveLength(7)
-      // 表里不再有**动作**按钮（日频表头那颗 ⓘ 是说明，不算动作）：这一张卡的动作只剩标题行那一颗。
+      expect(table.querySelectorAll('tr[data-status-row]')).toHaveLength(5)
+      // 表里不再有**动作**按钮：这一张卡的动作只剩标题行那一颗。
       const tableActions = [...table.querySelectorAll('button')]
         .map(button => button.textContent ?? '')
         .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
@@ -624,7 +624,7 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
 
     const allUnreadable = {
       index: 'unreadable' as const, btc: 'unreadable' as const, eth: 'unreadable' as const,
-      dxy: 'unreadable' as const, gold: 'unreadable' as const, us10y: 'unreadable' as const, realRate: 'unreadable' as const
+      dxy: 'unreadable' as const, gold: 'unreadable' as const
     }
     const empty = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: allUnreadable })
     const none = structure(empty.host)
