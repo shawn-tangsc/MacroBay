@@ -62,8 +62,11 @@ describe('国债收益率卡的样式边界', () => {
     // 没有 margin 会直接贴上去。面板在场时两条 margin 折叠，仍是 16px。
     const root = block('.mi-ust')
     expect(root).toContain('margin-top: 16px;')
-    expect(root).not.toContain('border-top')
-    expect(root).not.toContain('padding-top')
+    // 判据必须是「根块里没有 border / padding 这一类属性」，不能只钉 `border-top`：把线写成
+    // `border-block`（正是上面那张面板的写法）就能绕过旧断言——界面设计 2026-11-22 用变异测过这一点。
+    // 根块现在一个 border / padding 都没有（间距只有 margin），收紧不会误伤。
+    expect(root).not.toMatch(/\bborder/)
+    expect(root).not.toMatch(/\bpadding/)
   })
 
   it('keeps every length inside the spacing scale and leaves no dead selector', () => {
