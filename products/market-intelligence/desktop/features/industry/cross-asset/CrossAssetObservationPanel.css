@@ -131,14 +131,27 @@
 .mi-cross-asset__tooltip span { display: flex; align-items: center; gap: 6px; padding-block: 3px; }
 .mi-cross-asset__tooltip b { margin-left: auto; }
 /* CrossAssetLayoutPolicy thresholds from 123; custom properties cannot be used in container conditions. */
+/*
+ * 这一行的高度下限：删掉「日频」段（段头 + 两行）之后表矮了，而右栏那张图的高度**跟着表走**
+ * （`[data-cross-asset-region="chart"]` 是 `height: 100%`，图框 `flex: 1` 只有一块地板），
+ * 所以不给下限，旁边「同起点收益率」就会被压扁（用户 2026-11-22 原话）。
+ *
+ * 数字是**量出来的**，不是拍的：静态夹具（真实 CSS + 照 `CryptoIntelligenceDashboard` 的 DOM 摆的表与
+ * 图框，无头 Chrome 渲染，没起应用也没连 CDP）量到删块前这一行在容器 1280 时 327px、900 时 340px
+ * （320 档下日频格那句说明折成两行、把行撑高了），删块后都掉到 231px，图框随之从 230 / 243 掉到 134。
+ * 这里取 330 / 342，留 2–3px 余量：宁可高一点也不让它变矮。表那栏是 `flex: 1`，会自己把余量平均分到
+ * 每一行——矮掉的只是行数，高度不掉。
+ *
+ * 窄于 800 是单栏：旁边没有那张图，不写规则。
+ */
 @container mi-cross-asset (min-width: 800px) {
-  .mi-cross-asset__body { grid-template-columns: var(--mi-cross-asset-quote-medium) minmax(0, 1fr); }
+  .mi-cross-asset__body { grid-template-columns: var(--mi-cross-asset-quote-medium) minmax(0, 1fr); min-height: 342px; }
   /* Taller by default here, but the height is the row's: this is a floor, not a ceiling. */
   .mi-cross-asset__chart-frame { min-height: var(--mi-cross-asset-chart-height-wide); }
 }
 @container mi-cross-asset (min-width: 1200px) {
   /* Two columns: the 跨市场观察 aside is temporarily unrendered, so there is no third track. */
-  .mi-cross-asset__body { grid-template-columns: minmax(0, var(--mi-cross-asset-quote-wide)) minmax(0, 1fr); }
+  .mi-cross-asset__body { grid-template-columns: minmax(0, var(--mi-cross-asset-quote-wide)) minmax(0, 1fr); min-height: 330px; }
   .mi-cross-asset__quote { border-right: 1px solid var(--mi-cross-asset-line); padding-right: var(--mi-cross-asset-gap); }
 }
 

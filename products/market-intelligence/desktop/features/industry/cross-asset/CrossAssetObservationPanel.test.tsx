@@ -461,6 +461,15 @@ describe('cross-asset observation workspace', () => {
     expect(css).not.toContain('border-top-style: dotted')
     expect(css).toContain('minmax(0, var(--mi-cross-asset-quote-wide))')
     expect(css).toContain('box-sizing: border-box')
+    // 删掉「日频」段之后这一行的高度下限（用户 2026-11-22：别把旁边那张图压扁）。数字是量出来的：
+    // 静态夹具在容器 1280 量到删块前 327、900 量到 340（320 档下那句说明折两行），删块后都掉到 231，
+    // 图框跟着 230/243 → 134。两个下限钉在这里，谁往下调都会红；往下调就等于把图压扁。
+    const wide = css.match(/@container mi-cross-asset \(min-width: 1200px\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
+    const medium = css.match(/@container mi-cross-asset \(min-width: 800px\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
+    expect(medium).toMatch(/\.mi-cross-asset__body \{[^}]*min-height: 342px/)
+    expect(wide).toMatch(/\.mi-cross-asset__body \{[^}]*min-height: 330px/)
+    // 单栏（<800）没有旁边那张图，不给下限：不写规则。
+    expect(css).not.toMatch(/@container mi-cross-asset \(min-width: 720px\)/)
   })
 
   it('withholds the reading lines without deleting the copy they are written from', async () => {
