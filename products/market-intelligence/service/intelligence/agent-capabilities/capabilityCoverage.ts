@@ -189,6 +189,14 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.queryRelatedEvents': exposed('query_related_events'),
   'intelligence.querySentimentSeries': exposed('query_sentiment_series'),
   'intelligence.querySentimentSnapshot': exposed('query_sentiment_snapshot'),
+  /**
+   * 情绪卡的「恐惧贪婪 + 期权偏斜」那两段是**卡片投影**：入参是 asOf/时区/窗口，返回的是算好分位、
+   * 方向、文案槽的卡片 section，服务对象是界面而不是 Agent。只读没有错，但能力目录里**没有**对应
+   * 读能力，硬挂到 `query_sentiment_snapshot` 上是假指路（那条能力调的是另一个路由、另一种输出）。
+   * 所以按 `internal-view` 归类，与 `intelligenceSources.getPageState` 同一口径。
+   * 若将来要把它交给 Agent，得先加一条真能力（路由 → 规范读数 → handler），不是改这一行。
+   */
+  'intelligence.querySentimentOptionsCard': excluded('internal-view'),
   'intelligence.retryItemAssessment': exposed('operate_intelligence_source'),
 
   'intelligenceSources.getHealth': exposed('get_source_detail'),
