@@ -388,3 +388,28 @@ it('keeps a long name, its value and the distance in the same plaque', async () 
   expect(node.textContent).toContain('3.12%')
   expect(node.textContent).toContain('4 天后')
 })
+
+/**
+ * 牌上时间的视觉定稿（界面设计候选 A，用户 2026-11：「时间不够醒目」）。
+ *
+ * 真因是对比度不达标（`--muted` 在牌底上 3.82:1，小字 AA 线 4.5），不是字号——
+ * 所以只换颜色与字重：距离 `--text` + 650（9.50:1），值降一档 `--text-secondary` + 500（6.29:1）。
+ * 不加新字号档、不染 `--accent`（它已经给了「现在」和环上高光）、不动几何。
+ */
+it('makes the distance the heaviest mark on the plaque, and keeps the value a step quieter', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const when = /\.mi-clock__node-when\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(when, '距离必须是牌上最亮的：--text').toContain('color: var(--text)')
+  expect(when, '距离必须是牌上最重的：650').toContain('font-weight: 650')
+  const value = /\.mi-clock__node b\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(value, '值降一档但仍过 AA').toContain('color: var(--text-secondary)')
+  expect(value).toContain('font-weight: 500')
+  expect(/\.mi-clock__node-meta\s*\{([^}]*)\}/u.exec(css)?.[1] ?? '').toContain('gap: 6px')
+})
+
+it('keeps the distance on the only allowed size step, and never in the accent colour', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const when = /\.mi-clock__node-when\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(when, '11px 是这张卡唯一可用档，不许新造字号档').toContain('font-size: var(--font-meta)')
+  expect(when, '--accent 已用于「现在」与环上高光，第三处强调等于没有强调').not.toContain('--accent')
+})
