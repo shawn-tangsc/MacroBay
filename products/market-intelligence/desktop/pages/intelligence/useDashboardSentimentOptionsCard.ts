@@ -32,6 +32,10 @@ export function useDashboardSentimentOptionsCard({ client, now, timeZone, disabl
 }> {
   const [state, setState] = useState<DashboardSentimentOptionsState>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  /** 同一时间只允许一路在飞；在飞期间来的重读只记一笔，落地后补一次。 */
+  const [dirtyTick, setDirtyTick] = useState(0)
+  const inFlight = useRef(false)
+  const dirty = useRef(false)
   const [mountInput] = useState(() => ({ client, now }))
   const revisionRef = useRef<number | undefined>(revision)
   const lastResult = useRef<SentimentOptionsCardResult | undefined>(undefined)
@@ -48,6 +52,12 @@ export function useDashboardSentimentOptionsCard({ client, now, timeZone, disabl
       setState({ state: 'unavailable' })
       return () => { active = false }
     }
+    if (inFlight.current) {
+      dirty.current = true
+      return () => { active = false }
+    }
+    inFlight.current = true
+    dirty.current = false
     void withQueryDeadline(mountInput.client.query({ asOf, timeZone, windowDays: 30 })).then((result) => {
       if (!active) return
       lastResult.current = result
@@ -55,10 +65,17 @@ export function useDashboardSentimentOptionsCard({ client, now, timeZone, disabl
     }).catch(() => {
       if (!active) return
       const held = lastResult.current
+      // 后台重读失败保留旧读数；不置 loading，也不自动重试——下一次由读者或事件触发。
       setState(quiet && held ? { state: 'available', result: held } : { state: 'unavailable' })
+    }).finally(() => {
+      inFlight.current = false
+      if (dirty.current) {
+        dirty.current = false
+        setDirtyTick(tick => tick + 1)
+      }
     })
     return () => { active = false }
-  }, [mountInput, attempt, disabled, revision, timeZone])
+  }, [mountInput, attempt, dirtyTick, disabled, revision, timeZone])
 
   return { state, reload }
 }

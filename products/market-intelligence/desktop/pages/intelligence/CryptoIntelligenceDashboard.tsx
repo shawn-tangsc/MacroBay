@@ -59,6 +59,7 @@ import { DashboardMacroRow } from './DashboardMacroRow'
 import { SentimentOptionsCard } from '../../features/industry/market-sentiment/SentimentOptionsCard'
 import { defensivePremiumCardText } from '../../features/industry/market-sentiment/defensivePremiumCardText'
 import { useDashboardSentimentOptionsCard } from './useDashboardSentimentOptionsCard'
+import { useCoalescedRevision } from './useCoalescedRevision'
 import { intelligenceSentimentOptionsCardClient, type IntelligenceSentimentOptionsCardClient } from '../../shared/ipc/intelligenceSentimentOptionsCardClient'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { usePolicyPathReading } from './usePolicyPathReading'
@@ -129,6 +130,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    * 那层换算在发射端按来源注册表做。
    */
   const dataRevision = useDataChangeRevision({ panel: 'dashboard' })
+  /** 只有这张卡吃的合并 revision：5 秒合并、30 秒上限、隐藏不发、回前台补一次；共用源不动。 */
+  const cardRevision = useCoalescedRevision(dataRevision)
   const readGates = resolveDashboardReadGates(cellState.cells)
   /** 启用表读完之前一处都不读：否则关掉的格在首帧仍会发一次请求。 */
   const readsReady = cellState.ready
@@ -195,7 +198,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    */
   const sentimentOptions = useDashboardSentimentOptionsCard({
     client: sentimentOptionsClient ?? intelligenceSentimentOptionsCardClient,
-    now, timeZone, disabled: !readsReady, revision: dataRevision
+    now, timeZone, disabled: !readsReady, revision: cardRevision
   })
   // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
   const [fundingReloadKey, setFundingReloadKey] = useState(0)

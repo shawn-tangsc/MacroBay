@@ -62,6 +62,9 @@ function emptyCard(input: { asOf: string; timeZone?: string }) {
   }
 }
 
+/** 卡的读口吃合并后的 revision：事件之后要过 5 秒安静窗口才真的重读一次。 */
+async function advanceCard(): Promise<void> { await act(async () => { await vi.advanceTimersByTimeAsync(5000) }) }
+
 async function flush(): Promise<void> {
   await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 }
@@ -153,16 +156,19 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     expect(cardBefore).not.toBeNull()
 
     await deliverDataChanged({ panels: ['dashboard'], sources: ['alternative-fear-greed', 'binance-futures'] })
+    const immediate = counts()
+    // 其它读口当场重读；卡吃的是合并后的 revision，安静窗口没到之前一次都不发。
+    expect(immediate.fundingRate).toBe(before.fundingRate + 1)
+    expect(immediate.openInterest).toBe(before.openInterest + 1)
+    expect(immediate.divergence).toBe(before.divergence + 1)
+    expect(immediate.capital).toBe(before.capital + 1)
+    expect(immediate.policyPath).toBe(before.policyPath + 1)
+    expect(immediate.sentimentOptions).toBe(before.sentimentOptions)
 
-    const after = counts()
-    expect(after.sentimentOptions).toBe(before.sentimentOptions + 1)
-    expect(after.fundingRate).toBe(before.fundingRate + 1)
-    expect(after.openInterest).toBe(before.openInterest + 1)
-    expect(after.divergence).toBe(before.divergence + 1)
-    expect(after.capital).toBe(before.capital + 1)
-    expect(after.policyPath).toBe(before.policyPath + 1)
+    await advanceCard()
+    expect(counts().sentimentOptions).toBe(immediate.sentimentOptions + 1)
     // 日历月不是 `dashboard` 面板：这一条不许把它一起带走。
-    expect(after.calendar).toBe(before.calendar)
+    expect(counts().calendar).toBe(before.calendar)
     // 重读不是重挂载：同一个 DOM 节点还在原处（换掉订阅那一行就会红）。
     expect(container.querySelector('.mi-crypto-dashboard__sentiment')).toBe(cardBefore)
   })
@@ -215,8 +221,10 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     const before = counts()
 
     await deliverDataChanged({ panels: ['dashboard'], sources: ['fred-rates-liquidity'] })
+    await advanceCard()
     const once = counts()
     expect(once.openInterest).toBe(before.openInterest + 1)
+    expect(once.sentimentOptions).toBe(before.sentimentOptions + 1)
 
     // 同一次投递发两遍：读口只重读一轮（两遍算同一个 revision），不发起两路并发。
     await act(async () => {
@@ -224,6 +232,7 @@ describe('看板按「采集写了库」重读自己的读口', () => {
       delivered.forEach(listener => listener({ panels: ['dashboard'], sources: ['fred-rates-liquidity'] }))
     })
     await flush()
+    await advanceCard()
 
     expect(counts().openInterest).toBe(once.openInterest + 1)
     expect(counts().sentimentOptions).toBe(once.sentimentOptions + 1)
@@ -279,6 +288,7 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     await flush()
 
     await act(async () => { delivered.forEach(listener => listener({ panels: ['dashboard'], sources: ['binance-futures'] })) })
+    await advanceCard()
     // 重读在飞：行/卡不许退回「加载中」（这一条正是「不清空、不置 loading」的判据）。
     expect(funding).toHaveBeenCalledTimes(2)
     expect(query.sentimentOptions).toHaveBeenCalledTimes(2)

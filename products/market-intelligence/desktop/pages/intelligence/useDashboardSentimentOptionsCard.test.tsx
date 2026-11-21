@@ -77,12 +77,46 @@ describe('useDashboardSentimentOptionsCard', () => {
     const page = await renderHook(query, initialNow)
     await flush()
     const replacementNow = vi.fn(() => new Date('2026-09-01T00:00:00.000Z'))
-    await act(async () => page.root.render(createElement(Harness, { client: { query }, now: replacementNow })))
+    await act(async () => page.root.render(createElement(Harness, { client: { query }, now: replacementNow, revision: 0 })))
     await flush()
 
     expect(initialNow).toHaveBeenCalledTimes(1)
     expect(replacementNow).not.toHaveBeenCalled()
     expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps one request in flight and re-reads exactly once after it settles', async () => {
+    let resolve!: (value: unknown) => void
+    const query = vi.fn(() => new Promise((done) => { resolve = done }))
+    const page = await renderHook(query, () => new Date(asOf))
+    expect(query).toHaveBeenCalledTimes(1)
+
+    // 首帧还在飞，这时来两条「数据变了」：并发度仍是 1，不多发。
+    await act(async () => page.root.render(createElement(Harness, { client: { query }, now: () => new Date(asOf), revision: 1 })))
+    await act(async () => page.root.render(createElement(Harness, { client: { query }, now: () => new Date(asOf), revision: 2 })))
+    expect(query).toHaveBeenCalledTimes(1)
+
+    await act(async () => { resolve(card({ score: 22, bucket: 'fear' })); await Promise.resolve() })
+    await flush()
+    // 挂起落地后只补一次，不按事件条数累加。
+    expect(query).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the last reading when a background re-read fails, without loading or retrying', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce(card({ score: 22, bucket: 'fear' }))
+      .mockRejectedValueOnce(new Error('request failed'))
+    const page = await renderHook(query, () => new Date(asOf))
+    await flush()
+    expect(page.state()).toBe('available')
+
+    await act(async () => page.root.render(createElement(Harness, { client: { query }, now: () => new Date(asOf), revision: 1 })))
+    await flush()
+    expect(page.state()).toBe('available')
+    expect(query).toHaveBeenCalledTimes(2)
+    // 不自动重试：再给一轮时间，调用次数不变。
+    await flush()
+    expect(query).toHaveBeenCalledTimes(2)
   })
 
   it('fails closed when the client throws', async () => {
@@ -108,21 +142,23 @@ async function renderHook(
   query: (input: { asOf: string; timeZone: string; windowDays: number }) => Promise<unknown>,
   now: () => Date,
   onReady?: (reload: () => void) => void,
-  disabled = false
+  disabled = false,
+  revision = 0
 ) {
   const container = document.createElement('div'); document.body.append(container)
   const localRoot = createRoot(container); root = localRoot
-  await act(async () => localRoot.render(createElement(Harness, { client: { query }, now, onReady, disabled })))
+  await act(async () => localRoot.render(createElement(Harness, { client: { query }, now, onReady, disabled, revision })))
   return { root: localRoot, container, state: () => container.querySelector('output')!.dataset.state! }
 }
 
-function Harness({ client, now, onReady, disabled = false }: {
+function Harness({ client, now, onReady, disabled = false, revision }: {
   client: { query: (input: { asOf: string; timeZone: string; windowDays: number }) => Promise<unknown> }
   now: () => Date
   onReady?: (reload: () => void) => void
   disabled?: boolean
+  revision?: number
 }) {
-  const { state, reload } = useDashboardSentimentOptionsCard({ client: client as never, now, timeZone, disabled })
+  const { state, reload } = useDashboardSentimentOptionsCard({ client: client as never, now, timeZone, disabled, revision })
   onReady?.(reload)
   return createElement('output', { 'data-state': state.state })
 }
