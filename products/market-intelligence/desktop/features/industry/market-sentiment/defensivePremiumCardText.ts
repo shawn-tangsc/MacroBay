@@ -11,9 +11,25 @@ export type DefensivePremiumCardText = {
   titleInfoLabel: string
   observedAt: string
   provenance: string
-  fearGreed: { name: string; axis: string; asOf: string; buckets: Record<FearGreedSnapshotBucket, string> }
+  fearGreed: {
+    name: string
+    axis: string
+    asOf: string
+    buckets: Record<FearGreedSnapshotBucket, string>
+    infoLabel: string
+    info: { volatility: string; percentile: string; percentileInsufficient: string; sourceDay: string }
+  }
   gaugeMarkers: { fear: string; neutral: string; greed: string }
-  skew: { name: string; notConnected: string }
+  skew: {
+    name: string
+    notConnected: string
+    infoLabel: string
+    info: { definition: string; relative: string; since: string; sourceDay: string }
+    asOf: string
+    unit: string
+    direction: { insufficient: string; stale: string; discontinuous: string }
+  }
+  chart: { fearGreedAria: string; skewAria: string }
   action: { refresh: string; enable: string; viewSource: string }
   loading: string
   empty: string
@@ -25,8 +41,23 @@ type Source = {
     titleInfoLabel: string
     observedAt: string
     provenance: string
-    fearGreed: { name: string; axis: string; asOf: string }
-    skew: { name: string; notConnected: string }
+    fearGreed: {
+      name: string
+      axis: string
+      asOf: string
+      infoLabel: string
+      info: { volatility: string; percentile: string; percentileInsufficient: string; sourceDay: string }
+    }
+    skew: {
+      name: string
+      notConnected: string
+      infoLabel: string
+      asOf: string
+      unit: string
+      info: { definition: string; relative: string; since: string; sourceDay: string }
+      direction: { insufficient: string; stale: string; discontinuous: string }
+    }
+    chart: { fearGreedAria: string; skewAria: string }
     action: { refresh: string; enable: string; viewSource: string }
   }
   /** 两个半条和旧情绪卡共用同一批字：读数的「截至」与档位名只该有一份。 */
@@ -44,10 +75,13 @@ export function defensivePremiumCardText(text: Source): DefensivePremiumCardText
       name: text.defensivePremium.fearGreed.name,
       axis: text.defensivePremium.fearGreed.axis,
       asOf: text.defensivePremium.fearGreed.asOf,
-      buckets: text.fearGreed.buckets
+      buckets: text.fearGreed.buckets,
+      infoLabel: text.defensivePremium.fearGreed.infoLabel,
+      info: text.defensivePremium.fearGreed.info
     },
     gaugeMarkers: text.sentiment.gaugeMarkers,
     skew: text.defensivePremium.skew,
+    chart: text.defensivePremium.chart,
     action: text.defensivePremium.action,
     loading: text.fearGreed.loading,
     empty: text.fearGreed.empty

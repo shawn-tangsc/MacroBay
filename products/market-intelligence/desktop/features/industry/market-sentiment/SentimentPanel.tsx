@@ -40,7 +40,7 @@ type Text = {
   }
 }
 
-export function SentimentPanel({ fearGreedState, text, onRetry, cellOff }: Readonly<{
+export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTitle, titleId }: Readonly<{
   fearGreedState: DashboardFearGreedState
   text: Text
   onRetry: () => void
@@ -49,6 +49,9 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff }: Reado
    * 关掉一格时这一次根本不会去读，状态会停在等待态，按读数画就会画成一个转圈。
    */
   cellOff?: SourceCellOff
+  /** 合并卡里半条已经有自己的标题，这里就不再画第二行同名标题；`titleId` 把 section 的标签接过去。 */
+  showTitle?: boolean
+  titleId?: string
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const dataText = useProductTextKey() as (key: string) => string
@@ -77,7 +80,8 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff }: Reado
     : undefined
   const Icon = row?.icon
 
-  return <section className="mi-crypto-dashboard__sentiment" aria-labelledby="mi-sentiment-heading"><h2 id="mi-sentiment-heading">{text.sentiment.title}</h2>
+  const headingId = titleId ?? 'mi-sentiment-heading'
+  return <section className="mi-crypto-dashboard__sentiment" aria-labelledby={headingId}>{showTitle === false ? null : <h2 id={headingId}>{text.sentiment.title}</h2>}
     <div className="mi-crypto-dashboard__sentiment-gauge" data-sentiment-gauge>
       {reading
         // The readout disc sits on the pivot and is painted after the needle, so the score can

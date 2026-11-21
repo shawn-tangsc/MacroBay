@@ -155,6 +155,16 @@
 .mi-defensive-premium__score { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-defensive-premium__verdict { margin: 0; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-defensive-premium__provenance { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
+.mi-defensive-premium__half-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mi-defensive-premium__source-action { justify-self: start; }
+.mi-defensive-premium__direction { margin: 0; color: var(--mi-dashboard-caution); font-size: var(--font-body); line-height: var(--line-body); }
+/* 两条线各一张图；轴的刻度与日期用 meta 档，不另写像素。 */
+.mi-defensive-premium__chart { display: grid; gap: 2px; min-width: 0; margin: 0; }
+.mi-defensive-premium__chart-axis { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
+.mi-defensive-premium__grid line { stroke: var(--mi-dashboard-line); stroke-width: 1; }
+.mi-defensive-premium__line { stroke: var(--mi-dashboard-lime); stroke-width: 1.5; }
+.mi-defensive-premium__dot { fill: var(--mi-dashboard-lime); }
+.mi-defensive-premium__tick text { fill: var(--mi-dashboard-muted); font-size: var(--font-meta); }
 .mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0 8px; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }

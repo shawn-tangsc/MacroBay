@@ -1276,7 +1276,8 @@ describe('host wiring: cells switched off and sources judged', () => {
     })
     await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
     const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
-    expect(card.querySelector('h2')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.name)
+    // 卡里半条自带 h3 标题，仪表不再画自己的 h2。
+    expect(card.closest('[data-half="fear-greed"]')?.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.name)
     // 图还在（弧线、刻度、三个标签），指针与读数圆盘不在——它们指向一个不存在的分数。
     expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment').length).toBeGreaterThan(0)
     expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
@@ -1323,6 +1324,25 @@ describe('host wiring: cells switched off and sources judged', () => {
   })
 })
 
+/** 源日标签：只看日期，不引入时区。 */
+function dayBefore(day: string, offset: number): string {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) - offset * 86_400_000).toISOString().slice(0, 10)
+}
+
+function fgPoints(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    day: dayBefore('2026-08-04', index), observedAt: `${dayBefore('2026-08-04', index)}T00:00:00.000Z`,
+    score: 40 + index, bucket: 'neutral' as const
+  }))
+}
+
+function skewPoints(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    day: dayBefore('2026-08-04', index), observedAt: `${dayBefore('2026-08-04', index)}T00:00:00.000Z`,
+    riskReversal: 1.2 + index / 10
+  }))
+}
+
 describe('the defensive premium band', () => {
   const dashboardText = productText['zh-CN'].pages.intelligence.portal.dashboard
 
@@ -1335,20 +1355,20 @@ describe('the defensive premium band', () => {
       fearGreed: {
         state: 'available' as const, score: 22, bucket: 'extreme-fear' as const,
         observedAt: '2026-08-04T10:00:00.000Z', latestDay: '2026-08-04', daysAgo: 1,
-        stale: false, seriesStart: '2025-08-05', points: []
+        stale: false, seriesStart: '2025-08-05', points: fgPoints(30)
       },
       optionSkew: { state: 'not-connected' as const }
     })
   }
 
-  async function renderBand(): Promise<HTMLElement> {
+  async function renderBand(client: unknown = notConnectedSkew): Promise<HTMLElement> {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
-      sentimentOptionsClient: notConnectedSkew,
+      sentimentOptionsClient: client,
       crossAssetClient: {
         acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
         renew: async () => ({ state: 'active' as const }),
@@ -1389,7 +1409,31 @@ describe('the defensive premium band', () => {
     const skew = band.querySelector('.mi-defensive-premium__half[data-half="skew"]')!
     expect(skew.textContent).toContain(dashboardText.defensivePremium.skew.notConnected)
     expect(skew.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.data.temporarilyUnavailable)
-    expect([...skew.querySelectorAll('button')].map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
+    // 「查看来源」是卡级动作、在标题行；行内只剩那颗说明用的 ⓘ（无文字）。
+    expect([...skew.querySelectorAll('button')].map(button => button.textContent)).toEqual([''])
+    expect([...band.querySelectorAll('.mi-defensive-premium__header button')].map(button => button.textContent))
+      .toContain(dashboardText.defensivePremium.action.viewSource)
+
+    // 左半画出 30 天走势，用自己的纵轴与可访问描述；偏斜未接入时那半不画线。
+    const fearGreedChart = band.querySelector('[data-chart-line="fear-greed"]')!
+    expect(fearGreedChart).not.toBeNull()
+    const figure = fearGreedChart.closest('figure')!
+    expect(figure.querySelector('svg')?.getAttribute('aria-label')).toBe(dashboardText.defensivePremium.chart.fearGreedAria)
+    expect(figure.querySelector('.mi-defensive-premium__chart-axis')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.axis)
+    expect(band.querySelector('[data-chart-line="skew"]')).toBeNull()
+    // 两条线不共用一张图：左半一张 figure，右半未接入时没有图。
+    expect(band.querySelectorAll('figure')).toHaveLength(1)
+
+    // 三颗 ⓘ 各说各的：卡头、左半、右半的读屏名互不相同（AC-44）。
+    const halfInfoLabels = [...band.querySelectorAll('.mi-defensive-premium__half-head button[aria-label]')]
+      .map(button => button.getAttribute('aria-label'))
+    expect(halfInfoLabels).toEqual([
+      dashboardText.defensivePremium.fearGreed.infoLabel,
+      dashboardText.defensivePremium.skew.infoLabel
+    ])
+    const cardInfoLabel = band.querySelector('.mi-defensive-premium__header button[aria-label]')?.getAttribute('aria-label')
+    expect(cardInfoLabel).toBe(dashboardText.defensivePremium.titleInfoLabel)
+    expect(new Set([cardInfoLabel, ...halfInfoLabels]).size).toBe(3)
 
     // 结论在图下、跨全宽，按「恐惧档 + 偏斜缺失」查表，不在组件里拼句子。
     const verdict = band.querySelector('[data-verdict]')!
@@ -1398,6 +1442,63 @@ describe('the defensive premium band', () => {
     // 样式：带是整行一条，两半等分且可收缩（窄到哪里都不会把内容挤成负宽）。
     expect(cssBlock(styles, '.mi-crypto-dashboard__defensive-premium-row {')).not.toContain('grid-template-columns')
     expect(cssBlock(styles, '.mi-defensive-premium__halves {')).toContain('repeat(2, minmax(0, 1fr))')
+  })
+
+  function fearGreedSection(count = 30) {
+    return {
+      state: 'available' as const, score: 22, bucket: 'extreme-fear' as const,
+      observedAt: '2026-08-04T00:00:00.000Z', latestDay: '2026-08-04', daysAgo: 1,
+      stale: false, seriesStart: '2025-08-05', points: fgPoints(count)
+    }
+  }
+
+  function skewClient(direction: unknown, count = 30) {
+    return { query: async (input: { asOf: string; timeZone: string }) => ({
+      asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+      fearGreed: { state: 'available' as const, score: 22, bucket: 'extreme-fear' as const, observedAt: '2026-08-04T00:00:00.000Z', latestDay: '2026-08-04', daysAgo: 1, stale: false, seriesStart: '2025-08-05', points: fgPoints(30) },
+      optionSkew: {
+        state: 'available' as const,
+        latest: { riskReversal: 1.8, observedAt: '2026-08-04T00:00:00.000Z', tenorDays: 30 as const, putIv25: 60, callIv25: 58.2, expiries: ['2026-09-04', '2026-10-04'] as const },
+        direction, observedAt: '2026-08-04T00:00:00.000Z', latestDay: '2026-08-04', daysAgo: 1,
+        stale: false, seriesStart: '2026-07-06', points: skewPoints(count)
+      }
+    }) }
+  }
+
+  it.each([
+    ['insufficient', { kind: 'unknown', reason: 'insufficient' }],
+    ['stale', { kind: 'unknown', reason: 'stale' }],
+    ['discontinuous', { kind: 'unknown', reason: 'discontinuous' }]
+  ] as const)('draws the skew line on its own axis and names why the direction is %s', async (reason, direction) => {
+    const container = await renderBand(skewClient(direction))
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const skewLine = band.querySelector('[data-chart-line="skew"]')!
+    expect(skewLine).not.toBeNull()
+    const skewFigure = skewLine.closest('figure')!
+    expect(skewFigure.querySelector('svg')?.getAttribute('aria-label')).toBe(dashboardText.defensivePremium.chart.skewAria)
+    // 自己那根轴与单位：指数 0–100 与百分点不共用一张图。
+    expect(skewFigure.querySelector('.mi-defensive-premium__chart-axis')?.textContent)
+      .toContain(dashboardText.defensivePremium.skew.unit)
+    expect(band.querySelectorAll('figure')).toHaveLength(2)
+
+    const sentence = band.querySelector('[data-skew-direction]')!
+    expect(sentence.getAttribute('data-skew-direction')).toBe(reason)
+    const expected = reason === 'insufficient'
+      ? dashboardText.defensivePremium.skew.direction.insufficient
+      : reason === 'discontinuous'
+        ? dashboardText.defensivePremium.skew.direction.discontinuous
+        : dashboardText.defensivePremium.skew.direction.stale.replace('{time}', '2026-08-04')
+    expect(sentence.textContent).toBe(expected)
+    // 方向未知时结论也跟着降级，不硬凑一个组合句。
+    expect(band.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
+  })
+
+  it.each([1, 29, 30])('covers the %i-day edge of the skew window without inventing points', async (count) => {
+    const container = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, count))
+    const line = container.querySelector('[data-chart-line="skew"]')!
+    const drawn = (line.getAttribute('points')?.match(/L/g) ?? []).length + 1
+    expect(drawn).toBe(count)
+    expect(container.querySelectorAll('[data-chart-line="skew"] ~ circle')).toHaveLength(1)
   })
 })
 
