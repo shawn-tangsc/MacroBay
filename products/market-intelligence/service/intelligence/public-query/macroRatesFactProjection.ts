@@ -87,6 +87,13 @@ export function projectMacroRates(
   }
   // The four series the block reads, in its order: the 10-year headline, its real counterpart, and
   // the two legs of the extras. A series the store cannot answer contributes nothing at all.
+  //
+  // **The curve's other tenors are deliberately absent.** The snapshot carries 3M/5Y/30Y and a
+  // 10Y−3M spread so the panel can draw the curve; they are additions to the *reading contract*, not
+  // new analysis facts. Whether the model should cite them is a separate decision (currently
+  // `exclude`: the four above plus 10Y−2Y already answer "what is the rate environment", and adding
+  // more changes the prompt budget and the wording). A future candidate, not an omission — do not
+  // "complete the list" here without that decision.
   for (const [seriesId, metric, unit, suffix] of [
     [macroRatesSnapshotPublicPolicy.series.us10y, MACRO_RATES_FACT_METRICS.us10y, 'percent', 'level'],
     [macroRatesSnapshotPublicPolicy.series.realRate, MACRO_RATES_FACT_METRICS.realRate, 'percent', 'level'],
