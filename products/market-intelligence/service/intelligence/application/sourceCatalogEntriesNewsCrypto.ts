@@ -477,8 +477,12 @@ const catalogEntries: IntelligenceSourceCatalogEntry[] = [
     dataDomain: 'asset-market',
     reliabilityTier: 'exchange-api',
     eventFamily: 'metric-event',
-    readiness: 'planned',
-    readinessNote: '待接入：需要先解决代理（本机直连不通），再定到期与 delta 口径。',
+    readiness: 'live',
+    readinessNote: '代理可达时按一小时一轮采 BTC 期权链、算 30 天 25Δ 风险反转；直连不通，需要代理。',
+    /* 采集归产品自有作业（`optionSkewRuntime`），没有通用「立即运行」入口：拨开开关的那一刻会先跑一轮，
+       之后的节奏是 60 分钟。声明成 product 才能让跨表审计与 `provider.runNow: 'none'` 对上。 */
+    collectionOwner: 'product',
+    supportsRunNow: false,
     supportedImpactScopes: ['symbol', 'watchlist'],
     adapterConfig: { baseUrl: 'https://www.deribit.com/api/v2/public' }
   })

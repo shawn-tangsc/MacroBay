@@ -22,6 +22,9 @@ export const agentRegistry: readonly AgentDefinition[] = [
     activation: 'available',
     groups: [
       { groupId: 'fear-greed', agentId: 'crypto', tier: 'required', sourceIds: ['alternative-fear-greed'] },
+      /* 看板合并卡的右半（BTC 期权偏斜）。分组只为满足「面板源必须在 agent 里」这条判据，
+         给最弱一档 `optional`；分析快照不读它（`marketAnalysisContextQuery` 0 处引用）。 */
+      { groupId: 'options-skew', agentId: 'crypto', tier: 'optional', sourceIds: ['deribit-options'] },
       { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', cryptoEtfSourcePolicy.sourceId, '0xrouter-aggregate-provider', 'realmarketapi-market', 'twelve-data-market'] },
       { groupId: 'funding-rate', agentId: 'crypto', tier: 'required', sourceIds: ['binance-futures-positioning'] },
       {

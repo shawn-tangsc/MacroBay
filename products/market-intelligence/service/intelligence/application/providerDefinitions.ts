@@ -161,15 +161,19 @@ export const providerDefinitions: readonly ProviderDefinition[] = [
       sourceId: 'deribit-options',
       summaryKey: 'settings.intelligenceSources.sourceSummary.deribit-options',
       displayName: 'Deribit options',
-      // 待接入期不给用途：`panels` 由 `purposes` 派生，声明 dashboard 会让它出现在面板源清单里，
-      // 而它既不在任何 agent 分组、也打不开开关（`providerRegistry.test.ts` 的 panel⊆agent 判据）。
-      // 接入那笔改成 `['dashboard']` 并按需加 agent 分组（见 178 文档 §3.9 / §8 第 17 项）。
-      purposes: [],
-      visibility: 'pending',
-      readiness: 'planned',
+      // 看板合并卡的右半真有读数来自它，所以它是看板面板源；采集归产品自有作业（一小时一轮、随开关排期），
+      // 不走通用采集作业，也**不进** `dashboardSourceSurfacePolicy` 那两张表（否则会被按 10 分钟一轮的
+      // 通用探针当适配器探，报 No adapter）。与 `policy-path-market` 同一形态。
+      //
+      // 面板源必须在 agent 分组里（`providerRegistry.test.ts` 的 panel⊆agent 判据），所以 `options-skew`
+      // 分组只给最弱一档 `optional`。**分析快照不读它**：冻结的 `marketAnalysisContextQuery` 里 0 处引用
+      // `deribit-options`，产出不变——分组只是把「谁可以用」写清楚（02 设计稿有据）。
+      purposes: ['dashboard'],
+      visibility: 'visible',
+      readiness: 'live',
       collection: 'none',
       requiresProxy: true,
-      capabilities: { runNow: 'none', testConnection: false },
+      capabilities: { runNow: 'none', testConnection: true },
       adapterRef: 'deribit-options'
     })]
   }),

@@ -139,7 +139,8 @@ describe('provider registry contract', () => {
   })
 
   it('derives the crypto card group count instead of hardcoding it', () => {
-    expect(countAgentGroups('crypto')).toBe(7)
+    // 8 = 原来 7 组 + 2026-11-22 给合并卡右半开的 `options-skew`（最弱一档 `optional`）。
+    expect(countAgentGroups('crypto')).toBe(8)
     expect(countAgentGroups('stocks')).toBe(0)
     expect(countAgentGroups('futures')).toBe(0)
   })

@@ -70,6 +70,8 @@ import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRu
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
 import { getPlatformFetch } from '@platform/network/platformFetch'
+
+import { wireOptionSkew } from './intelligence/option-skew/optionSkewWiring'
 import { allSources } from './intelligence/application/providerRegistry'
 import { syncOfficialStandardRows } from './intelligence/macro-calendar/marketCalendarOfficialSourceRows'
 import { createStandardMonthPageReader } from './intelligence/macro-calendar/marketCalendarStandardMonthPage'
@@ -264,6 +266,19 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   intelligenceModule.setPolicyPathQuery(policyPathQueryService)
   policyPathRuntime.start()
   sourceEnableListeners.set('policy-path-market', () => { void policyPathRuntime.sync() })
+  // 期权偏斜（合并卡右半）：采集归产品自有作业（一小时一轮），开关一拨就排期/撤期；
+  // 探针同时接给「数据源 → Deribit 期权 → 测试连接」，失败如实报「需要代理」。
+  const optionSkewWiring = wireOptionSkew({
+    jobRuntime: deps.jobRuntime,
+    platformFetch,
+    dataDir: getIntelligenceProductDataDir(),
+    isEnabled: async () => (await intelligenceModule.sourceProfileStore.resolveProfile('deribit-options')).enabled,
+    onReady: (parts) => {
+      intelligenceModule.publicQueryService.setOptionSkewReader(() => parts.readSnapshot())
+      intelligenceModule.sourcesService.setOptionSkewProbe(() => parts.probe())
+    }
+  })
+  sourceEnableListeners.set('deribit-options', () => optionSkewWiring.sync({ collectNow: true }))
   const {
     crossAssetConfiguration, crossAssetStore, crossAssetRuntime, crossAssetIndexRuntime, crossAssetQuery
   } = wireCrossAsset({ register, deps, intelligenceModule, productDataDir: getIntelligenceProductDataDir() })

@@ -332,8 +332,19 @@ export function createIntelligenceSourcesService(deps: {
     })
   }
 
+  /**
+   * 期权偏斜采集器的探针：`bootstrap` 在装配完采集运行时后绑定（它要读源 profile 的开关）。
+   * 没绑定时「测试连接」如实报不可用——绝不拿通用探针去探一个产品自有作业的源（会报 No adapter）。
+   */
+  let optionSkewProbe: (() => Promise<Readonly<{ state: 'available' } | { state: 'unavailable'; failureCode: string }>>) | undefined
+
   return {
     initializeRuntime,
+
+    /** 采集运行时装配完之后调它；传 `undefined` 表示没有采集器（测试连接如实说不可用）。 */
+    setOptionSkewProbe(probe: typeof optionSkewProbe) {
+      optionSkewProbe = probe
+    },
 
     listDefinitions(): SafeIntelligenceSourceDefinition[] {
       return listIntelligenceSourceDefinitions()
@@ -548,6 +559,17 @@ export function createIntelligenceSourcesService(deps: {
           sourceId: input.sourceId,
           ...outcome
         } satisfies SafeCredentialProviderConnectionResult)
+      }
+      if (definition.sourceId === 'deribit-options') {
+        /* 一次 `get_index_price` 就够判代理通不通；拉全链当探针会白烧两三百个请求。 */
+        const outcome = optionSkewProbe ? await optionSkewProbe() : undefined
+        const ok = outcome?.state === 'available'
+        return sanitizeSafeView({
+          sourceId: input.sourceId,
+          ok,
+          message: ok ? 'Connection verified.' : 'Connection unavailable.',
+          testedAt: new Date().toISOString()
+        } satisfies SafeConnectionTestResult)
       }
       if (definition.sourceId === 'defillama-stablecoins') {
         const result = await deps.capitalConditions?.probe()

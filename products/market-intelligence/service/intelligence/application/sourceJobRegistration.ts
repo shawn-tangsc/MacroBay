@@ -1,3 +1,4 @@
+import { OPTION_SKEW_COLLECT_JOB_ID } from '../option-skew/optionSkewJobId'
 import { intelligenceCollectJobId } from './sourceRuntimeOrchestrator'
 
 type JobAwareSource = {
@@ -24,6 +25,14 @@ const zeroXRouterFeedKeys: Readonly<Record<string, string>> = {
   'macro-calendar-0xrouter-central-bank-activities': 'central-bank-activities'
 }
 
+/**
+ * 产品自有作业的 id：这些源**没有**通用采集作业，状态不许按 `collect:<sourceId>` 猜。
+ * `deribit-options` 的采集归 `optionSkewRuntime`（一小时一轮、随开关排期）。
+ */
+const productOwnedJobIds: Readonly<Record<string, readonly string[]>> = {
+  'deribit-options': [OPTION_SKEW_COLLECT_JOB_ID]
+}
+
 /** Sources whose automatic collection is owned by the job runtime. */
 export function needsSourceJob(source: JobAwareSource): boolean {
   return source.collection === 'adapter'
@@ -37,6 +46,8 @@ export function needsSourceJob(source: JobAwareSource): boolean {
  * for polling sources; calendar feeds have their own per-feed definitions.
  */
 export function sourceJobIds(source: JobAwareSource): readonly string[] {
+  const owned = productOwnedJobIds[source.sourceId]
+  if (owned) return owned
   const ids = [intelligenceCollectJobId(source.sourceId)]
   const feedKey = zeroXRouterFeedKeys[source.sourceId]
   if (feedKey) ids.push(`market-intelligence.refreshMarketCalendar.automatic.${feedKey}`)
