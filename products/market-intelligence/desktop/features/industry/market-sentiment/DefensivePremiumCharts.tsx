@@ -63,8 +63,10 @@ export function SkewChart({ points, ariaLabel, axisLabel, unit }: Readonly<{
  * 加载态的空图框：与真图同一 viewBox、同一 `width: 100%`，所以高度由同一套布局算出来，
  * 不写死任何像素；不画线、不画值——它只占位，不让换态把卡压塌。
  */
-export function ChartPlaceholder(): React.ReactElement {
+export function ChartPlaceholder({ axisLabel }: Readonly<{ axisLabel: string }>): React.ReactElement {
   return <figure className="mi-defensive-premium__chart" data-chart-placeholder aria-hidden="true">
+    {/* 与真图同一条轴说明：少了它，加载态比正常态矮一行。 */}
+    <figcaption className="mi-defensive-premium__chart-axis">{axisLabel}</figcaption>
     <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto" />
   </figure>
 }

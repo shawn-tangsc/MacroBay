@@ -1272,7 +1272,12 @@ describe('host wiring: cells switched off and sources judged', () => {
   it('cell off: the sentiment card keeps its figure, drops the needle, and offers one enable action', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'fear-greed:index': false }, {
-      sentimentOptionsClient: sentimentOptionsClient(readableSentiment as never), onManageSource
+      sentimentOptionsClient: { query: async (input: { asOf: string; timeZone: string }) => ({
+        asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+        fearGreed: { state: 'available' as const, score: 22, bucket: 'fear' as const, observedAt: '2026-08-04T00:00:00.000Z', latestDay: '2026-08-04', daysAgo: 1, stale: false, seriesStart: '2025-08-05', points: fgPoints(30) },
+        optionSkew: { state: 'unavailable' as const, failureCode: 'option-skew-query-unavailable' as const }
+      }) },
+      onManageSource
     })
     await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
     const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
@@ -1290,10 +1295,26 @@ describe('host wiring: cells switched off and sources judged', () => {
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
     const enable = band.querySelector('.mi-defensive-premium__source-action') as HTMLButtonElement
     expect(enable.textContent).toBe(dataText.enableSources)
+    // 一颗动作：标题行除 ⓘ 外只有它（AC-31）。
+    const headerActions = [...band.querySelectorAll('.mi-defensive-premium__header button')]
+      .filter(button => button.getAttribute('aria-label') !== dashboardText.defensivePremium.titleInfoLabel)
+    expect(headerActions).toHaveLength(1)
     expect(card.textContent).not.toContain('22')
     expect(card.querySelector('.state-view')).toBeNull()
+    // 关掉的那一半不画曲线，旧的也不画。
+    expect(band.querySelector('[data-chart-line="fear-greed"]')).toBeNull()
+    expect(band.querySelector('[data-half="fear-greed"] figure')).toBeNull()
     await act(async () => enable.click())
     expect(onManageSource).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows exactly one header action when the half is off and the other is not connected', async () => {
+    const container = await renderCells({ 'fear-greed:index': false }, {})
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const actions = [...band.querySelectorAll('.mi-defensive-premium__header button')]
+      .filter(button => button.getAttribute('aria-label') !== dashboardText.defensivePremium.titleInfoLabel)
+    // 未接入优先于被关掉：只出「查看来源」，不再同时出刷新或去启用。
+    expect(actions.map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
   })
 
   it('read failure: one row under the figure says temporarily unreadable, with one retry', async () => {

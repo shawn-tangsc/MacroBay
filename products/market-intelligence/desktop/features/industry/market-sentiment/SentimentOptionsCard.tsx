@@ -47,9 +47,14 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
     : bothEmpty ? 'empty' : undefined
   // 未接入时那颗卡级动作是「查看来源」；但如果恐惧贪婪那半读失败了，重试仍要留在标题行——
   // 否则一条链路失败、另一条还没接入时，读者没有重试入口（AC-31）。
-  const showRefresh = wholeCardState === undefined
-    && (skew?.state !== 'not-connected' || fearGreed?.state === 'unavailable')
-  const showViewSource = wholeCardState === undefined && skew?.state === 'not-connected'
+  // 一颗动作，按定稿 §4.3⑤ 的优先级：未接入 > 被关掉 > 刷新。只有一种情况例外——恐惧贪婪那半
+  // 读失败而偏斜还没接入时，刷新要留着，否则读者没有重试入口（AC-31）。
+  const notConnected = skew?.state === 'not-connected'
+  const fearGreedFailed = fearGreed?.state === 'unavailable'
+  const showViewSource = wholeCardState === undefined && notConnected
+  const showEnable = wholeCardState === undefined && !notConnected && cellOff !== undefined
+  // 未接入时那颗是「查看来源」；但若恐惧贪婪这半同时读失败，重试必须留一颗，否则读者没有入口。
+  const showRefresh = wholeCardState === undefined && (notConnected ? fearGreedFailed : !showEnable)
   const verdictKey = result && wholeCardState === undefined ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
 
@@ -65,8 +70,9 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
       {showRefresh ? <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="sm" variant="plain"
         onSelect={onRefresh} disabled={state.state === 'loading'} className="mi-defensive-premium__refresh" /> : null}
       {/* 这一格被读者关掉时，「去启用」也只在标题行；行内不再放按钮（AC-31）。 */}
-      {cellOff === undefined || wholeCardState !== undefined ? null
-        : <Button size="small" onClick={cellOff.onOpenSources} className="mi-defensive-premium__source-action">{text.action.enable}</Button>}
+      {showEnable && cellOff !== undefined
+        ? <Button size="small" onClick={cellOff.onOpenSources} className="mi-defensive-premium__source-action">{text.action.enable}</Button>
+        : null}
       <span className="mi-defensive-premium__window">{dataText(`${TEXT_PREFIX}.window`)}</span>
       {showViewSource ? <Button size="small" onClick={onViewSource} className="mi-defensive-premium__source-action">
         {text.action.viewSource}
@@ -107,8 +113,9 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             <span>{fillLabelParams(text.stale.stopsAt, { date: fearGreed.latestDay })}</span>
           </p>
           : null}
-        {state.state === 'loading' ? <ChartPlaceholder /> : null}
-        {fearGreed?.state === 'available' && fearGreed.points.length > 0
+        {state.state === 'loading' && cellOff === undefined ? <ChartPlaceholder axisLabel={text.fearGreed.axis} /> : null}
+        {/* 这一格被关掉时不出任何曲线（旧读数也不画）：AC-15 与定稿 §5 行 10。 */}
+        {cellOff === undefined && fearGreed?.state === 'available' && fearGreed.points.length > 0
           ? <FearGreedChart points={fearGreed.points} axisLabel={text.fearGreed.axis}
             ariaLabel={chartAria({
               ariaLabel: text.chart.fearGreedAria, summary: text.chart.fearGreedSummary,
@@ -133,9 +140,9 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
         {skew === undefined && state.state === 'loading' ? <>
           <LoadingState label={text.loading} minHeight={24} />
           {/* 与正常态同构的占位：分数行、截至行、图框、方向行；空行不带文字也不画值。 */}
-          <p className="mi-defensive-premium__score" aria-hidden="true">&nbsp;</p>
+          <p className="mi-defensive-premium__score" aria-hidden="true"><strong>&nbsp;</strong> <span>&nbsp;</span></p>
           <p className="mi-defensive-premium__asof" aria-hidden="true">&nbsp;</p>
-          <ChartPlaceholder />
+          <ChartPlaceholder axisLabel={`${text.skew.name}（${text.skew.unit}）`} />
           <p className="mi-defensive-premium__direction" aria-hidden="true">&nbsp;</p>
         </>
           : skew?.state === 'not-connected' ? <p className="mi-defensive-premium__state">{text.skew.notConnected}</p>
@@ -173,6 +180,11 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
       </div>
     </div>}
 
+    {state.state === 'loading' ? <>
+      {/* 结论与来源行还没内容，但位置先按正常态留出来：换态时卡底不跳。 */}
+      <p className="mi-defensive-premium__verdict" aria-hidden="true">&nbsp;</p>
+      <p className="mi-defensive-premium__provenance" aria-hidden="true">&nbsp;</p>
+    </> : null}
     {verdictKey && !wholeCardState ? <p className="mi-defensive-premium__verdict" data-verdict>{dataText(verdictKey)}</p> : null}
     {result ? <p className="mi-defensive-premium__provenance">{text.provenance}</p> : null}
   </section>

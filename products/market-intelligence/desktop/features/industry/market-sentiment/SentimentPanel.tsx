@@ -105,6 +105,9 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTit
           // 走到这里的只剩「还在读」：弧线与刻度照画，指针和圆盘不画——换态时卡不许塌形。
           : <>
             <GaugeFigure />
+            {/* 与正常态同构的占位：档位词与「截至」两行先留出来，换态时仪表不缩。 */}
+            <span aria-hidden="true" data-gauge-bucket-text="neutral">&nbsp;</span>
+            <small aria-hidden="true">&nbsp;</small>
             <p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>
             <LoadingState label={text.fearGreed.loading} minHeight={24} />
           </>}
