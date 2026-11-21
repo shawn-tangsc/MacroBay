@@ -3,6 +3,7 @@ import { StatusPill } from '@platform/ui/components/status-pill'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import { SettingsInfo } from '../settingsInfo'
 import { healthStateBadge } from './sourceHealthTone'
+import { staleReasonLines } from './staleReasonLines'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes, sourceRowView } from './sourceSettingRows'
 import type { ProviderDetailLabels } from './ProviderDetail'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
@@ -96,6 +97,10 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
       : needsJob(source) ? [source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered] : [])
   ]
   const proxyPart = labels.badges.proxy
+  /* 采集**产出**状态（用户 2026-11-21）。单独一行、在 meta 下方：这里说的是「有没有条目」，
+     药丸说的是「采集连不连得上」，两件事都在这一行上，但谁也不许替谁说。两句可能同时为真，
+     所以是列表而不是一句话（句子与插值都在 `staleReasonLines` 里，有用例）。 */
+  const staleLines = staleReasonLines(source, resolveText)
   /* 这一行是**列表行**，不是设置行：复制列是 `div`、标签是 `strong`（原来就是这样）。
      所以它自己写这两层，不改通用设置行的形状。三列：内容 / 高级 / 开关。 */
   return <div
@@ -126,6 +131,11 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
           </span>)}
         </span>}
     </div>
+    {staleLines.length === 0
+      ? null
+      : <span className="source-provider-detail__row-stale">
+        {staleLines.map((line) => <span key={line}>{line}</span>)}
+      </span>}
     {/* 标准表**写库**失败（用户 2026-11-19）：与「没采到」是两件事，**只进 ⓘ**——行上不加警告色，
         也不把来源标成故障（`healthState` 仍只说采集）。没有失败/还没写过/读不到三种情况不出这一颗。 */}
     {props.source.writeFailure === undefined

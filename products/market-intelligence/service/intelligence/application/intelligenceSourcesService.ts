@@ -259,6 +259,12 @@ export function createIntelligenceSourcesService(deps: {
     // 健康读数**只对能读的源读**（目录源），不因为上面扩大了 profile 覆盖面就跟着扩。
     const healthViewById: Record<string, SourceHealthView> = {}
     const healthById: Record<string, Readonly<{ runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'; consecutiveFailures: number }>> = {}
+    /* 产出状态与健康读数**同一次读**：`readHealth` 已经带回来了（`staleReasons` / `staleMeasurements`），
+       这里只摘出这两个字段，不再为它读第二遍管线。缺字段 = 没有可报的病，就不进这张表。 */
+    const staleById: Record<string, Readonly<{
+      staleReasons?: SourceHealthView['staleReasons']
+      staleMeasurements?: SourceHealthView['staleMeasurements']
+    }>> = {}
     const credentialStatusById: Record<string, Readonly<{ hasCredential: boolean; maskedPreview?: string; lastValidatedAt?: string }>> = {}
     for (const definition of catalogDefinitions) {
       const profile = profileById[definition.sourceId]
@@ -269,6 +275,11 @@ export function createIntelligenceSourcesService(deps: {
         runtimeStatus: health.runtimeStatus,
         consecutiveFailures: health.consecutiveFailures
       }
+      const stale = {
+        ...(health.staleReasons === undefined ? {} : { staleReasons: health.staleReasons }),
+        ...(health.staleMeasurements === undefined ? {} : { staleMeasurements: health.staleMeasurements })
+      }
+      if (Object.keys(stale).length > 0) staleById[definition.sourceId] = stale
       if (sourceSupportsCredentials(definition.authMode)) {
         credentialStatusById[definition.sourceId] = await buildCredentialStatus(definition.sourceId, profile.credentialRef)
       }
@@ -288,6 +299,7 @@ export function createIntelligenceSourcesService(deps: {
           : { writeFailureById: writeFailureView.failures, writeFailureStateById: writeFailureStateMap(writeFailureView) }),
         jobRegisteredById: jobRegistration(),
         credentialStatusById,
+        staleById,
         ...(filter.panelId === undefined ? {} : { panelId: filter.panelId }),
         ...(filter.sourceId === undefined ? {} : { sourceId: filter.sourceId })
       })

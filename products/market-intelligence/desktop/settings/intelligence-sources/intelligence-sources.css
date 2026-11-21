@@ -1153,6 +1153,24 @@
   white-space: nowrap;
 }
 
+/*
+ * 采集**产出**状态（用户 2026-11-21：健康那一行要把这两个状态显示出来）。整行宽、排在名字与
+ * meta 之下——`grid-column: 1 / -1` 让它落到第二行，栅格列数不变，行尾状态文字与 ⓘ 的位置
+ * 一个都不动（写库失败那颗 ⓘ 也仍在它自己那一列）。
+ *
+ * 颜色不染状态色：药丸才是状态色，这里是一句说明。两句话同时为真时上下各一行，不合并。
+ * 字号/行高都走既有 token（`--font-meta` / `--line-meta`），没有新档。
+ */
+.source-provider-detail__row-stale {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 2px;
+  color: var(--text-secondary);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+  overflow-wrap: anywhere;
+}
+
 .source-provider-detail__main {
   display: flex;
   flex: 1;

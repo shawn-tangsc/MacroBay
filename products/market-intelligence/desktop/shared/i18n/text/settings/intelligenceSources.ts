@@ -550,7 +550,6 @@ export const intelligenceSourcesText = {
     'no-output': '这个源已经 {hours} 小时没有新内容了',
     'normalize-failing': '这个源连续 {count} 次解析失败，抓到了但没变成条目',
   },
-  staleReasonAria: '采集产出状态：{reason}',
   /**
    * 「核心指标」那组配置的文案（用户 2026-11-14）。
    *
@@ -1224,7 +1223,6 @@ export const intelligenceSourcesText = {
     'no-output': 'This source has produced nothing new for {hours} hours',
     'normalize-failing': 'This source failed to parse {count} times in a row: items were fetched but never became entries',
   },
-  staleReasonAria: 'Collection output state: {reason}',
   coreIndicators: {
     title: 'Core indicators',
     metrics: { cpiYoy: 'CPI (YoY)', coreCpiYoy: 'Core CPI (YoY)', nonfarmPayrolls: 'Nonfarm payrolls', corePceYoy: 'Core PCE (YoY)' },
