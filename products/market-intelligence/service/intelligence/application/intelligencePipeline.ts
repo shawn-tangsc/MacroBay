@@ -35,6 +35,8 @@ import { getIntelligenceSourceDefinition, isDefillamaStablecoinRetiredPath } fro
 import { createRawRecordStore } from './rawRecordStore'
 import { parseRecordForNormalization } from './normalizeRecordParsing'
 import { countStaleNewsRecords } from './normalizeQueueDiagnostics'
+import { buildPipelineHealthSnapshot } from './pipelineHealth'
+import { mergeNormalizeStreak, normalizeStreakUpdate, preserveNormalizeStreak } from './sourceStaleness'
 import { resolveRevision } from './revisionResolver'
 import { createSourceProfileStore, createInMemoryProfileStorage } from './sourceProfileStore'
 import { resolveAndValidateRuntimeConfig } from './sourceRuntimeConfig'
@@ -77,20 +79,8 @@ import {
 import type { ClassifiedSourceEvent } from './sourceClassifiers/sourceClassifierTypes'
 import { notifySourceIssueForSource, type SourceIssueNotifier } from './sourceIssueNotifier'
 
-export type IntelligencePipelineHealth = {
-  sourceId: string
-  runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'
-  lastSuccessAt?: string
-  lastFailureAt?: string
-  consecutiveFailures: number
-  lastRunSummary?: string
-  checkpointPreview?: string
-  parserVersion?: string
-  lastPublishedAt?: string
-  cursor?: string
-  supportsHistoricalBackfill?: boolean
-  collectionGap?: boolean
-}
+export type { IntelligencePipelineHealth } from './pipelineHealth'
+import type { IntelligencePipelineHealth } from './pipelineHealth'
 
 import { collectSourceOnce, type SourceCollectionResult } from './sourceCollectionRun'
 
@@ -249,32 +239,12 @@ export function createIntelligencePipeline(deps?: {
   }
 
   function buildHealthSnapshot(sourceId: string): IntelligencePipelineHealth | undefined {
-    if (isDefillamaStablecoinRetiredPath(sourceId)) return undefined
-    const state = runtimeStateStore.get('product', 'market-intelligence', sourceId)
-    if (!state) return undefined
-    const definition = getIntelligenceSourceDefinition(sourceId)
-    const checkpoint = state.checkpoint as
-      | {
-          parserVersion?: string
-          lastPublishedAt?: string
-          cursor?: string
-        }
-      | undefined
-    const isStreamSource = definition?.executionMode === 'websocket'
-    return {
+    return buildPipelineHealthSnapshot({
       sourceId,
-      runtimeStatus: state.status === 'failed' ? 'failed' : state.consecutiveFailures > 0 ? 'degraded' : 'healthy',
-      lastSuccessAt: state.lastSuccessAt,
-      lastFailureAt: state.lastFailureAt,
-      consecutiveFailures: state.consecutiveFailures,
-      lastRunSummary: state.cursorPreview,
-      checkpointPreview: state.cursorPreview,
-      parserVersion: checkpoint?.parserVersion,
-      lastPublishedAt: checkpoint?.lastPublishedAt,
-      cursor: checkpoint?.cursor,
-      supportsHistoricalBackfill: !isStreamSource,
-      collectionGap: isStreamSource
-    }
+      runtimeStateStore,
+      definition: getIntelligenceSourceDefinition(sourceId),
+      isRetired: isDefillamaStablecoinRetiredPath
+    })
   }
 
   function persistState(): Promise<void> {
@@ -320,7 +290,16 @@ export function createIntelligencePipeline(deps?: {
     checkpoint?: Record<string, unknown>,
     summary?: string
   ): Promise<void> {
-    runtimeStateStore.recordSuccess('product', 'market-intelligence', sourceId, checkpoint, summary)
+    // 采集成功会整份换掉 checkpoint；归一化连续失败是另一条线的状态，不能因此被清零。
+    const previousCheckpoint = runtimeStateStore.get('product', 'market-intelligence', sourceId)
+      ?.checkpoint as Record<string, unknown> | undefined
+    runtimeStateStore.recordSuccess(
+      'product',
+      'market-intelligence',
+      sourceId,
+      preserveNormalizeStreak(checkpoint, previousCheckpoint),
+      summary
+    )
     await recordRuntimeHealthRevision(sourceId)
     await publishEventsAfterPersist({ sourceIds: [sourceId] })
     await notifySourceIssueForSource({ notifier: deps?.sourceIssueNotifier, sourceId, health: buildHealthSnapshot(sourceId), adapterConfig: getIntelligenceSourceDefinition(sourceId)?.adapterConfig })
@@ -468,6 +447,8 @@ export function createIntelligencePipeline(deps?: {
       let processedCount = 0
       let failedCount = 0
       let stateDirty = false
+      // 按源记「解析失败 / 解析成功」：`normalize-failing` 判据读的是同源连续失败，不是全局失败数。
+      const normalizeStats = new Map<string, { failed: number; parsed: number }>()
       const newItemIds: string[] = []
       const backfillItemIds: string[] = []
       const pending = rawRecordStore
@@ -484,6 +465,9 @@ export function createIntelligencePipeline(deps?: {
         const profile = await profileStore.resolveProfile(rawRecord.sourceId)
         const { config } = resolveAndValidateRuntimeConfig({ definition, profile })
 
+        const stats = normalizeStats.get(rawRecord.sourceId) ?? { failed: 0, parsed: 0 }
+        normalizeStats.set(rawRecord.sourceId, stats)
+
         const recordParse = parseRecordForNormalization({
           rawRecord,
           adapter,
@@ -491,8 +475,9 @@ export function createIntelligencePipeline(deps?: {
           readPayloadBody: (record) => rawRecordStore.readPayloadBody(record),
           ...(deps?.onMetricWindow ? { onMetricWindow: deps.onMetricWindow } : {})
         })
-        if (recordParse.state === 'failed') { failedCount += 1; continue }
+        if (recordParse.state === 'failed') { failedCount += 1; stats.failed += 1; continue }
         const { parsed, payloadBody } = recordParse
+        stats.parsed += 1
         rawRecordStore.markParsed(rawRecord.rawRecordId)
 
         const drafts = adapter.normalizeParsedItems
@@ -584,6 +569,22 @@ export function createIntelligencePipeline(deps?: {
       if (stateDirty) {
         await persistState()
         await publishEventsAfterPersist({ newItemIds: [...newItemIds] })
+      }
+      // 同源连续失败要跨轮存活：只在这一轮归一化过的源上合并，别碰没轮到的源。
+      const nowIso = new Date().toISOString()
+      for (const [statSourceId, stats] of normalizeStats) {
+        const existing = runtimeStateStore.get('product', 'market-intelligence', statSourceId)
+        if (!existing) continue
+        const checkpoint = existing.checkpoint as Record<string, unknown> | undefined
+        runtimeStateStore.upsert({
+          owner: 'product',
+          productId: 'market-intelligence',
+          resourceId: statSourceId,
+          checkpoint: mergeNormalizeStreak(
+            checkpoint,
+            normalizeStreakUpdate({ checkpoint, failed: stats.failed, processed: stats.parsed, nowIso })
+          )
+        })
       }
 
       // 饿死诊断：新原始记录进来、却超过一天没有归一化出来的新闻条目——这次就是它被静默盖住的。

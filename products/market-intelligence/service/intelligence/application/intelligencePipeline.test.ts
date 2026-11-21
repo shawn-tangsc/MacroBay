@@ -235,6 +235,40 @@ describe('intelligencePipeline', () => {
     expect(rawRecordStore.listUnprocessed().map((record) => record.sourceId)).toEqual(['defillama-tvl'])
   })
 
+  it('persists a source normalize failure streak across rounds and collection successes', async () => {
+    /* `normalize-failing` 判据读的是同源连续失败。采集成功会整份换 checkpoint；如果这里不把
+       streak 带过去，每 30 分钟一次成功就把它清零，判据永远不可能成立。 */
+    const rawRecordStore = createRawRecordStore({ readPayload: () => ({ state: 'missing' as const }) })
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore,
+      runtimeStateSnapshot: [runtimeState({ resourceId: 'sec-rss' })]
+    })
+    rawRecordStore.appendRawRecord({
+      sourceId: 'sec-rss', runId: 'run-gone', sourceDedupeKey: 'sec-gone', payloadFormat: 'rss-item',
+      payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash', parserVersion: 'rss-v1'
+    })
+
+    for (let round = 0; round < 3; round += 1) {
+      await pipeline.normalizeRawRecords({ sourceId: 'sec-rss' })
+    }
+
+    const checkpointOf = () =>
+      pipeline.listRuntimeStates().find((state) => state.resourceId === 'sec-rss')?.checkpoint as
+        | Record<string, unknown>
+        | undefined
+    expect(checkpointOf()?.normalizeFailureStreak).toBe(3)
+    expect(checkpointOf()?.firstNormalizeFailureAt).toEqual(expect.any(String))
+    const firstFailureAt = checkpointOf()?.firstNormalizeFailureAt
+
+    await pipeline.collectSource({ sourceId: 'sec-rss', runId: 'run-ok', fixtureText: loadFixture('rss-sample.xml') })
+
+    expect(checkpointOf()?.normalizeFailureStreak).toBe(3)
+    expect(checkpointOf()?.firstNormalizeFailureAt).toBe(firstFailureAt)
+    // 新 checkpoint 确实写进去了（不是保留旧整份），只是归一化字段被带过来。
+    expect(checkpointOf()?.parserVersion).toEqual(expect.any(String))
+  })
+
   it('reads externalized payloads back before parsing, so file-ref records normalize (2026-11-21)', async () => {
     /* 原文外置后正文只在内容寻址文件里。读路径以前把 `payloadBody`（undefined）直接交给适配器，
        三个源以「解析失败」收场：`No RSS items found` / `HTML parser not implemented` /
