@@ -184,12 +184,18 @@ export function changeSet(window: readonly UstWindowPoint[], previous: number | 
 
 export type UstCurveSeries = Readonly<{ id: UstTenorId; labelKey: string; values: readonly (number | null)[] }>
 
+/**
+ * 归一模式的基准。**页脚只有一格**，所以基准要么是「所有画出来的线都有值的最早一天」（共同基准），
+ * 要么老实说「各线自首个观测日」——只报某一条线的首日，页脚写的就是假话（界面设计 2026-11-22 不签字的第 6 条）。
+ */
+export type UstCurveBaseline = Readonly<{ kind: 'common'; period: string }> | Readonly<{ kind: 'per-line' }>
+
 export type UstCurveView = Readonly<{
-  /** 横轴：这几条线在这个窗口里出现过的全部交易日（并集，升序）。 */
+  /** 横轴：这几条线在这个窗口里出现过的全部交易日（并集，升序）；归一模式从共同基准那天起。 */
   days: readonly string[]
   series: readonly UstCurveSeries[]
-  /** 归一模式的基准日（第一条可用线的窗口首日）；水平模式为 undefined。 */
-  basePeriod?: string
+  /** 归一模式的基准；水平模式为 undefined。 */
+  baseline?: UstCurveBaseline
 }>
 
 /**
@@ -205,24 +211,42 @@ export function buildUstCurve(input: Readonly<{ rows: readonly UstRow[]; range: 
     windows.set(tenor.id, row.availability.window.slice(-points))
   }
 
-  const days = [...new Set([...windows.values()].flatMap((window) => window.map((point) => point.period)))].sort()
-  const series: UstCurveSeries[] = []
-  let basePeriod: string | undefined
+  const allDays = [...new Set([...windows.values()].flatMap((window) => window.map((point) => point.period)))].sort()
+  const aligned: { id: UstTenorId; labelKey: string; levels: (number | null)[] }[] = []
   for (const tenor of ustTenors) {
     const window = windows.get(tenor.id)
     if (!window) continue
     const byPeriod = new Map(window.map((point) => [point.period, point.value] as const))
-    const levels = days.map((day) => byPeriod.get(day) ?? null)
-    const base = levels.find((level): level is number => level !== undefined && level !== null)
-    if (base === undefined) continue
-    basePeriod ??= window[0]?.period
-    series.push(Object.freeze({
-      id: tenor.id,
-      labelKey: tenor.labelKey,
-      values: Object.freeze(levels.map((level) => level === null ? null : (input.mode === 'normalized' ? roundBp((level - base) * 100) : level)))
-    }))
+    const levels = allDays.map((day) => byPeriod.get(day) ?? null)
+    if (!levels.some((level) => level !== null)) continue
+    aligned.push({ id: tenor.id, labelKey: tenor.labelKey, levels })
   }
-  return Object.freeze({ days: Object.freeze(days), series: Object.freeze(series), ...(basePeriod === undefined ? {} : { basePeriod }) })
+
+  if (input.mode === 'level') {
+    return Object.freeze({
+      days: Object.freeze(allDays),
+      series: Object.freeze(aligned.map((entry) => Object.freeze({
+        id: entry.id, labelKey: entry.labelKey, values: Object.freeze(entry.levels)
+      })))
+    })
+  }
+
+  // 共同基准：所有画出来的线都有值的最早一天。拿不出来才退到各线自首点（那时页脚换一句话）。
+  const commonIndex = allDays.findIndex((_, index) => aligned.every((entry) => entry.levels[index] !== null && entry.levels[index] !== undefined))
+  const days = commonIndex >= 0 ? allDays.slice(commonIndex) : allDays
+  const series = aligned.map((entry) => {
+    const from = commonIndex >= 0 ? commonIndex : 0
+    const base = commonIndex >= 0 ? entry.levels[commonIndex]! : entry.levels.find((level): level is number => level !== null)!
+    return Object.freeze({
+      id: entry.id,
+      labelKey: entry.labelKey,
+      values: Object.freeze(entry.levels.slice(from).map((level) => level === null ? null : roundBp((level - base) * 100)))
+    })
+  })
+  const baseline: UstCurveBaseline = commonIndex >= 0
+    ? Object.freeze({ kind: 'common' as const, period: allDays[commonIndex]! })
+    : Object.freeze({ kind: 'per-line' as const })
+  return Object.freeze({ days: Object.freeze(days), series: Object.freeze(series), baseline })
 }
 
 function roundBp(value: number): number {

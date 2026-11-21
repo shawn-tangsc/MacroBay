@@ -72,7 +72,6 @@
 .mi-ust__control-label { color: var(--mi-cross-asset-muted); font-size: var(--font-meta); white-space: nowrap; }
 .mi-ust__frame { position: relative; flex: 1 1 auto; min-height: 200px; min-width: 0; }
 .mi-ust__svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; }
-.mi-ust__svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mi-ust__grid { stroke: var(--mi-cross-asset-line); stroke-width: 1; }
 .mi-ust__zero { stroke: var(--border-strong); stroke-width: 1; }
 .mi-ust__line { fill: none; stroke: var(--ust-color); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }

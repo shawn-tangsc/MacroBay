@@ -147,7 +147,10 @@ describe('ust curve model: windows and footer dates', () => {
       expect(curve.series).toHaveLength(5)
       expect(curve.days).toHaveLength(points)
       // 1 年窗口的第一点＝表里 1 年列的基准那一天（同一份窗口，不差一天）。
-      expect(curve.basePeriod).toBe(curve.days[0])
+      const full = window(300, () => 4.3)
+      expect(curve.days[0]).toBe(full[full.length - points]!.period)
+      // 水平模式没有基准：那是归一才有的口径。
+      expect(curve.baseline).toBeUndefined()
     }
   })
 
@@ -158,15 +161,56 @@ describe('ust curve model: windows and footer dates', () => {
     expect(curve.series.map((entry) => entry.id)).toEqual(['3m', '2y', '5y', '10y', '30y'])
   })
 
-  it('normalizes from each line\'s own first point, in basis points, and never mixes a level into it', () => {
+  it('normalizes from the earliest day every drawn line has a value, in basis points', () => {
     const rows = buildUstRows({ snapshot: fiveTenors })
     const normalized = buildUstCurve({ rows, range: '1m', mode: 'normalized' })
     const ten = normalized.series.find((entry) => entry.id === '10y')!
 
+    expect(normalized.baseline).toEqual({ kind: 'common', period: normalized.days[0] })
     expect(ten.values[0]).toBe(0)
     // 每点 +0.01 个百分点，末点相对首点是 21bp（四舍五入到 0.1bp）。
     expect(ten.values.at(-1)).toBe(21)
     expect(normalized.days).toHaveLength(22)
+  })
+
+  it('starts the normalized curve at the common base, never at one line\'s earlier first day', () => {
+    // 10Y 的历史比 3M 短：两条线的窗口尾端同一天，首日不同。
+    const shortTen = snapshot({
+      readings: [
+        reading(series.us3m, { window: window(120, () => 4.3) }),
+        reading(series.us10y, { window: window(40, (index) => 4 + index / 100, '2026-06-01') })
+      ]
+    })
+    const rows = buildUstRows({ snapshot: shortTen })
+    const normalized = buildUstCurve({ rows, range: '3m', mode: 'normalized' })
+    const base = window(40, () => 4, '2026-06-01')[0]!.period
+
+    // 基准日＝所有画出来的线都有值的最早一天；页脚只有一格，写别的日期就是在说谎。
+    expect(normalized.baseline).toEqual({ kind: 'common', period: base })
+    // 五条线都从这天起画：横轴不再包含 10Y 还没有数据的那些日子。
+    expect(normalized.days[0]).toBe(base)
+    for (const line of normalized.series) expect(line.values[0]).toBe(0)
+    const ten = normalized.series.find((entry) => entry.id === '10y')!
+    expect(ten.values.at(-1)).toBe(39) // 每点 +0.01 个百分点 → 39bp
+  })
+
+  it('falls back to each line\'s own first day only when the lines share no day at all', () => {
+    const split = snapshot({
+      readings: [
+        reading(series.us3m, { window: window(30, () => 4.3, '2026-01-02') }),
+        reading(series.us10y, { window: window(30, (index) => 4 + index / 100, '2026-06-01') })
+      ]
+    })
+    const normalized = buildUstCurve({ rows: buildUstRows({ snapshot: split }), range: '1m', mode: 'normalized' })
+
+    expect(normalized.baseline).toEqual({ kind: 'per-line' })
+    const three = normalized.series.find((entry) => entry.id === '3m')!
+    const ten = normalized.series.find((entry) => entry.id === '10y')!
+    // 各自从自己的首点归零；中间没有它的那些日子仍是空档，不是 0。
+    expect(three.values[0]).toBe(0)
+    expect(three.values[22]).toBeNull()
+    expect(ten.values[21]).toBeNull()
+    expect(ten.values[22]).toBe(0)
   })
 
   it('reports one observation date only when every drawn series agrees, otherwise the sorted range', () => {

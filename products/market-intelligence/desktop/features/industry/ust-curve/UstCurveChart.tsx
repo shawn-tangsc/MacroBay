@@ -57,13 +57,15 @@ export function UstCurveChart({ view, mode, ariaLabel, format }: UstCurveChartPr
   const day = hover === undefined ? undefined : view.days[hover]
 
   return <div className="mi-ust__frame" ref={frameRef}>
+    {/* 图交给读屏就是**一张图**（`role="img"` + 一句可访问名）：数据在旁边的表里，键盘焦点不该被塞进
+        一个只有视觉反馈的区域。原来这里是 `role="group"` + `tabIndex`，方向键只动一个没有 role、
+        也不是 live 的浮层——对读屏来说是空的。 */}
     <svg
       className="mi-ust__svg"
       viewBox={`0 0 ${Math.max(1, box.width)} ${Math.max(1, box.height)}`}
       width={box.width}
       height={box.height}
-      tabIndex={0}
-      role="group"
+      role="img"
       aria-label={ariaLabel}
       onMouseMove={(event) => {
         if (box.width === 0) return
@@ -72,17 +74,7 @@ export function UstCurveChart({ view, mode, ariaLabel, format }: UstCurveChartPr
         const ratio = Math.max(0, Math.min(1, local / Math.max(1, geometry.plotWidth)))
         setHover(Math.round(ratio * Math.max(0, view.days.length - 1)))
       }}
-      onMouseLeave={() => setHover(undefined)}
-      onFocus={() => setHover(Math.max(0, view.days.length - 1))}
-      onBlur={() => setHover(undefined)}
-      onKeyDown={(event) => {
-        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-        event.preventDefault()
-        const last = Math.max(0, view.days.length - 1)
-        const from = hover ?? last
-        setHover(event.key === 'Home' ? 0 : event.key === 'End' ? last
-          : Math.max(0, Math.min(last, from + (event.key === 'ArrowLeft' ? -1 : 1))))
-      }}>
+      onMouseLeave={() => setHover(undefined)}>
       {geometry.ticks.map((tick) => <g key={`tick-${tick.value}`}>
         <line className="mi-ust__grid" x1={geometry.plotLeft} x2={geometry.plotRight} y1={tick.y} y2={tick.y} />
         <text className="mi-ust__axis" x={GUTTER_LEFT - 8} y={tick.y + 3} textAnchor="end">{tick.label}</text>

@@ -13,8 +13,9 @@ import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import type { MacroRatesSnapshotView } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import { UstCurveChart } from './UstCurveChart'
 import {
-  buildUstCurve, buildUstRows, ustChangeWindows, ustCurveRanges, ustLatestPeriod, ustObservationDates, ustTenors,
-  type UstChangeWindow, type UstCurveMode, type UstCurveRange, type UstRow
+  buildUstCurve, buildUstRows, ustChangeWindows, ustCurveRanges, ustHasAnyReading, ustHasCurveLines,
+  ustLatestPeriod, ustObservationDates, ustTenors,
+  type UstChangeWindow, type UstCurveBaseline, type UstCurveMode, type UstCurveRange, type UstRow
 } from './ustCurveModel'
 import './ustYieldCurve.css'
 
@@ -92,7 +93,7 @@ export function UstYieldCurveCard({
       resolveText={resolveText}
       action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />, true)
   }
-  if (!rows.some((row) => row.availability.state === 'values')) {
+  if (!ustHasAnyReading(rows)) {
     // 七条序列一条都没有：整卡空态，不画一张九行都写「未接入」的表（那只是噪音）。
     return section(<StateView state="empty" reasonCode="not-yet" resolveText={resolveText} />, true)
   }
@@ -125,7 +126,7 @@ export function UstYieldCurveCard({
             resolveText={resolveText} />
         </span>
       </div>
-      {curve.series.length === 0
+      {!ustHasCurveLines(curve)
         // 五个期限全缺、但表里还有数（实际利率/通胀补偿）：只替换图这一块，表照留。
         ? <StateView state="empty" reasonCode="not-yet" resolveText={resolveText} />
         : <UstCurveChart
@@ -208,7 +209,7 @@ function GapCells({ gap, copy }: Readonly<{ gap: Readonly<{ kind: 'leg-missing';
 function UstFooter({ rows, mode, curve, copy, zone }: Readonly<{
   rows: readonly UstRow[]
   mode: UstCurveMode
-  curve: Readonly<{ basePeriod?: string }>
+  curve: Readonly<{ baseline?: UstCurveBaseline }>
   copy: (key: string) => string
   zone: string
 }>): ReactElement {
@@ -217,8 +218,11 @@ function UstFooter({ rows, mode, curve, copy, zone }: Readonly<{
     ? copy('templates.footRange').replace('{from}', dates[0] ?? '').replace('{to}', (dates.at(-1) ?? '').slice(5))
     : copy('templates.footObserved').replace('{date}', dates[0] ?? '')
   const parts = [observed, copy('footLag'), copy('footSource'), copy('templates.footZone').replace('{zone}', zone)]
-  if (mode === 'normalized' && curve.basePeriod !== undefined) {
-    parts.push(copy('templates.footBase').replace('{date}', curve.basePeriod))
+  if (mode === 'normalized' && curve.baseline !== undefined) {
+    // 页脚只有一格：共同基准就写那一天；拿不出共同日才说「各线自首个观测日」。
+    parts.push(curve.baseline.kind === 'common'
+      ? copy('templates.footBase').replace('{date}', curve.baseline.period)
+      : copy('templates.footBasePerLine'))
   }
   return <p className="mi-ust__foot">
     {parts.map((part, index) => <span key={`${part}-${index}`}>

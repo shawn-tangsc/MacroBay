@@ -11,6 +11,15 @@ import { UstYieldCurveCard } from './UstYieldCurveCard'
 const series = macroRatesSnapshotPublicPolicy.series
 const copy = (key: string): string => resolveProductTextKey('zh-CN', key)
 const t = (key: string): string => copy(`pages.intelligence.portal.dashboard.ustCurve.${key}`)
+/**
+ * 取一句**已经在表里**的文案。未知键解析成空串，直接 `toContain(t(...))` 会退化成
+ * `toContain('')`——永远绿。所以先钉「这句存在」，再比内容。
+ */
+const sentence = (key: string): string => {
+  const value = t(key)
+  expect(value, `${key} 必须在文案表里`).not.toBe('')
+  return value
+}
 
 function window(count: number, valueAt: (index: number) => number, start = '2026-01-02') {
   const days: string[] = []
@@ -113,9 +122,12 @@ describe('国债收益率卡', () => {
   })
 
   it('leaves a spread empty with the reason in its accessible name', () => {
-    const { host, unmount } = mount({ snapshot: fullSnapshot({ readings: [reading(series.us10y), reading(series.us2y)] }) })
+    // 10Y 在 1 月那一批交易日，2Y 在 5 月那一批：两条腿都在，但两段窗口没有共同的交易日。
+    const { host, unmount } = mount({
+      snapshot: fullSnapshot({ readings: [reading(series.us10y), reading(series.us2y, window(30, () => 4.1, '2026-05-01'))] })
+    })
     const rowFor = (name: string) => cells(host, 'tbody tr').find((row) => text(row.querySelector('th')) === name)!
-    // 10Y−2Y：两条腿都在、但没有共同交易日 → 日期不一致。
+    // 10Y−2Y：没有共同的交易日 → 日期不一致。
     const spread2y = cells(rowFor('10Y−2Y'), 'td[aria-label]')
     expect(spread2y.length).toBe(5)
     expect(spread2y[0]?.getAttribute('aria-label')).toBe(t('dashLegsDiffer'))
@@ -163,6 +175,52 @@ describe('国债收益率卡', () => {
     unmount()
   })
 
+  it('hands the chart to a screen reader as one image, not as a keyboard trap', () => {
+    const { host, unmount } = mount()
+    const svg = host.querySelector('svg.mi-ust__svg')!
+    // 数据就在旁边的表里；键盘用户不该被塞进一个只有视觉反馈的陷阱。
+    expect(svg.getAttribute('role')).toBe('img')
+    expect(svg.hasAttribute('tabindex')).toBe(false)
+    expect(svg.getAttribute('aria-label')).toBe(t('ariaLevel'))
+    unmount()
+  })
+
+  it('names the common baseline in the footer, never one line\'s earlier first day', () => {
+    // 10Y 只有 6 月以来的数据，其余四条从 1 月就有、窗口尾端同在 6 月：归一基准只能是 6 月那一天。
+    const late = reading(series.us10y, window(40, (index) => 4 + index / 100, '2026-06-01'))
+    const long = (seriesId: string) => reading(seriesId, window(120, () => 4.4))
+    const { host, unmount } = mount({
+      snapshot: fullSnapshot({
+        readings: [long(series.us3m), long(series.us2y), long(series.us5y), long(series.us30y), late,
+          reading(series.real10y), reading(series.breakeven10y)]
+      })
+    })
+    const normalized = cells(host, '.segmented__item').find((item) => text(item) === t('mode.normalized'))
+    act(() => { normalized!.click() })
+
+    const foot = text(host.querySelector('.mi-ust__foot'))
+    const base = sentence('templates.footBase')
+    expect(foot).toContain(base.replace('{date}', late.window[0]!.period))
+    // 只有一句基准：页脚报两条线就是让读者自己猜哪一个才是曲线的起点。
+    const stem = base.slice(0, base.indexOf('{date}'))
+    expect(foot.split(stem)).toHaveLength(2)
+    unmount()
+  })
+
+  it('says each line is normalized from its own first observation only when no day is shared', () => {
+    const { host, unmount } = mount({
+      snapshot: fullSnapshot({
+        readings: [reading(series.us3m), reading(series.us10y, window(30, () => 4, '2026-05-01'))]
+      })
+    })
+    const normalized = cells(host, '.segmented__item').find((item) => text(item) === t('mode.normalized'))
+    act(() => { normalized!.click() })
+
+    const foot = text(host.querySelector('.mi-ust__foot'))
+    expect(foot).toContain(sentence('templates.footBasePerLine'))
+    unmount()
+  })
+
   it('switches the curve window without touching a single table cell', () => {
     const { host, unmount } = mount()
     const before = text(host.querySelector('tbody'))
@@ -200,6 +258,19 @@ describe('国债收益率卡', () => {
     expect(refresh).toBeTruthy()
     act(() => { refresh!.click() })
     expect(onRefresh).toHaveBeenCalledTimes(1)
+    unmount()
+  })
+
+  it('replaces only the chart with an empty state when the five tenors are missing but a decomposition is not', () => {
+    // 规格第 13 张：五个期限全缺、实际利率还有数 → 表照留（那一行有数），只把图那一块换成空态。
+    const { host, unmount } = mount({ snapshot: fullSnapshot({ readings: [reading(series.real10y)] }) })
+    const table = host.querySelector('.mi-ust__table')
+    expect(table).not.toBeNull()
+    expect(text(table)).toContain('10Y 实际利率')
+    // 整卡没有空态：这不是「没有数据」，只是曲线缺腿。
+    expect(host.querySelector('.mi-ust__body > [data-state="empty"]')).toBeNull()
+    expect(host.querySelector('.mi-ust__chart-col [data-state="empty"]')).not.toBeNull()
+    expect(host.querySelector('svg.mi-ust__svg')).toBeNull()
     unmount()
   })
 })

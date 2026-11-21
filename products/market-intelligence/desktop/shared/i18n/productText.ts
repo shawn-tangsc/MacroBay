@@ -452,7 +452,7 @@ mi: miText['zh-CN'],
              */
             ustCurve: {
               title: '国债收益率 · 日频',
-              info: 'FRED 日收盘，每个交易日一个值；最后一个点就是观测日，不画到今天。起点归一按基点算，不用涨跌幅：4.5% → 5.0% 是 +50bp，不是 +11%。名义 10Y = 实际利率 + 通胀补偿，这两行只做分解，不进曲线。价差要两条腿同一天都有收盘；实际利率与通胀补偿各是一条序列，日期可能差一天，那时三行不能直接相加。',
+              info: 'FRED 日收盘，最后一个点就是观测日，不画到今天。起点归一按基点算：4.5% → 5.0% 是 +50bp，不是 +11%。10Y 实际利率 + 10Y 通胀补偿 = 10Y，这两行只做分解、不进曲线；价差要两条腿同一天都有收盘，缺一天就留空。',
               tableAria: '国债收益率读数',
               colName: '指标',
               colLatest: '最新',
@@ -489,7 +489,8 @@ mi: miText['zh-CN'],
                 footObserved: '观测日 {date}',
                 footRange: '观测日 {from} 至 {to}',
                 footZone: '时区 {zone}',
-                footBase: '曲线归一自 {date}'
+                footBase: '曲线归一自 {date}',
+                footBasePerLine: '各线自首个观测日归一'
               }
             },
             crossAsset: {
@@ -2122,7 +2123,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             ustCurve: {
               title: 'Treasury yields · daily',
-              info: 'FRED daily close: one value per trading day. The last point is the observation date — it never draws up to today. The normalized view is in basis points, never a percent change: 4.5% → 5.0% is +50bp, not +11%. Nominal 10Y = real yield + breakeven; those two rows are the decomposition only and are not drawn. A spread needs both legs on the same trading day; the real yield and the breakeven are separate series and may be a day apart, and then the three rows cannot be added up.',
+              info: 'FRED daily close: the last point is the observation date, never drawn up to today. Normalization is in basis points: 4.5% → 5.0% is +50bp, not +11%. Nominal 10Y = real yield + breakeven, and those two rows are the decomposition only, not drawn; a spread needs both legs on the same trading day, and a missing day stays blank.',
               tableAria: 'Treasury yield readings',
               colName: 'Series',
               colLatest: 'Latest',
@@ -2159,7 +2160,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 footObserved: 'Observed {date}',
                 footRange: 'Observed {from} to {to}',
                 footZone: 'Time zone {zone}',
-                footBase: 'Curve normalized from {date}'
+                footBase: 'Curve normalized from {date}',
+                footBasePerLine: 'Each line normalized from its own first observation'
               }
             },
             crossAsset: {
