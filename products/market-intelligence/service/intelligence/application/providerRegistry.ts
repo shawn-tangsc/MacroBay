@@ -311,6 +311,28 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     sources: [src({ sourceId: 'alternative-fear-greed', summaryKey: 'settings.intelligenceSources.sourceSummary.alternative-fear-greed', displayName: 'Fear & Greed Index', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'alternative-fear-greed' })]
   }),
   provider({
+    providerId: 'deribit',
+    displayName: 'Deribit',
+    category: 'crypto',
+    credential: 'none',
+    website: 'https://www.deribit.com',
+    sources: [src({
+      sourceId: 'deribit-options',
+      summaryKey: 'settings.intelligenceSources.sourceSummary.deribit-options',
+      displayName: 'Deribit options',
+      // 待接入期不给用途：`panels` 由 `purposes` 派生，声明 dashboard 会让它出现在面板源清单里，
+      // 而它既不在任何 agent 分组、也打不开开关（`providerRegistry.test.ts` 的 panel⊆agent 判据）。
+      // 接入那笔改成 `['dashboard']` 并按需加 agent 分组（见 178 文档 §3.9 / §8 第 17 项）。
+      purposes: [],
+      visibility: 'pending',
+      readiness: 'planned',
+      collection: 'none',
+      requiresProxy: true,
+      capabilities: { runNow: 'none', testConnection: false },
+      adapterRef: 'deribit-options'
+    })]
+  }),
+  provider({
     providerId: 'coindesk',
     displayName: 'CoinDesk',
     category: 'crypto',

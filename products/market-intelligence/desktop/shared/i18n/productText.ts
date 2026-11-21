@@ -624,6 +624,86 @@ mi: miText['zh-CN'],
               manageSettings: '管理恐惧与贪婪设置',
               buckets: { 'extreme-fear': '极度恐惧', fear: '恐惧', neutral: '中性', greed: '贪婪', 'extreme-greed': '极度贪婪' }
             },
+            /**
+             * 恐惧与防跌溢价卡。键名由界面定稿冻结；`titleInfo` / `titleInfoLabel` 是界面键表里的
+             * `title.info` / `title.infoLabel`——`title` 已被卡名占用，TS 里不能再当对象父键，
+             * 见 docs-private/.../178-*.md §6.2 的说明。
+             */
+            defensivePremium: {
+              title: '恐惧与防跌溢价',
+              titleInfo: '把「恐惧与贪婪」和「BTC 期权的防跌溢价」放在一起读：一边是市场怕不怕，一边是买下跌保护贵不贵。它回答情绪落在哪一档、保费在往哪边动，以及两者合起来是什么局面——只表达组合，不给方向，也不给买卖点。两半口径不同：恐惧贪婪是全球加密情绪指数，防跌溢价来自 BTC、Deribit 单所的期权；两者不能相加，也不能互相印证；两半各自怎么读，看那一格自己的 ⓘ。',
+              titleInfoLabel: '关于这张卡',
+              window: '近 30 天',
+              observedAt: '观测时间',
+              provenance: '来源：Alternative.me · Deribit',
+              fearGreed: {
+                name: '恐惧与贪婪',
+                axis: '指数 0–100',
+                asOf: '截至',
+                infoLabel: '关于恐惧贪婪',
+                info: {
+                  volatility: '恐惧贪婪指数本身包含波动率因子：它和隐含波动率同涨时，不能当成两个独立证据。',
+                  percentile: '过去一年排在第 {percentile}%',
+                  percentileInsufficient: '历史不足，暂不给分位',
+                  sourceDay: '日期为数据源日（UTC）'
+                }
+              },
+              skew: {
+                name: '期权偏斜',
+                asOf: '截至',
+                unit: '百分点',
+                notConnected: '期权偏斜还没接入。',
+                info: {
+                  definition: '30 天 25Δ 风险反转：25Δ 看跌 IV − 25Δ 看涨 IV',
+                  relative: '隐含波动率的绝对值没有意义，要和它自己的历史比；线往上只说明比过去贵。',
+                  since: '偏斜是接入后才开始攒的，更早那段留白',
+                  sourceDay: '日期为数据源日（UTC）'
+                },
+                direction: {
+                  window: '近 5 天',
+                  insufficient: '偏斜还不够 5 天，不判方向。',
+                  stale: '偏斜数据停在 {time}。',
+                  discontinuous: '偏斜数据不连续，不判方向。'
+                }
+              },
+              history: { since: '起始日', remaining: '还差 {days} 天满一年' },
+              chart: {
+                fearGreedAria: '恐惧贪婪指数走势图：横轴是日期，纵轴是 0 到 100 的指数值',
+                skewAria: '25Δ 风险反转走势图：横轴是日期，纵轴是百分点'
+              },
+              stale: { pill: '偏旧' },
+              action: { refresh: '刷新', enable: '去启用', viewSource: '查看来源' },
+              verdict: {
+                asOfSuffix: '（截至 {date}）',
+                fear: {
+                  steeper: '情绪在恐惧档，防跌保费在走阔。',
+                  flatter: '情绪在恐惧档，防跌保费在收窄。',
+                  flat: '情绪在恐惧档，防跌保费基本没动。',
+                  skewMissing: '情绪在恐惧档，偏斜这半没有可用的方向。'
+                },
+                greed: {
+                  steeper: '情绪在贪婪档，防跌保费在走阔。',
+                  flatter: '情绪在贪婪档，防跌保费在收窄。',
+                  flat: '情绪在贪婪档，防跌保费基本没动。',
+                  skewMissing: '情绪在贪婪档，偏斜这半没有可用的方向。'
+                },
+                neutral: {
+                  steeper: '情绪在中性档，防跌保费在走阔。',
+                  flatter: '情绪在中性档，防跌保费在收窄。',
+                  flat: '情绪在中性档，防跌保费基本没动。',
+                  skewMissing: '情绪在中性档，偏斜这半没有可用的方向。'
+                },
+                fgMissing: {
+                  steeper: '偏斜在走阔，恐惧贪婪这半没有可用的读数。',
+                  flatter: '偏斜在收窄，恐惧贪婪这半没有可用的读数。',
+                  flat: '偏斜基本没动，恐惧贪婪这半没有可用的读数。'
+                }
+              },
+              degraded: {
+                fearGreed: '恐惧贪婪这半读不到，这句结论给不出组合。',
+                skew: '偏斜这半读不到，这句结论给不出组合。'
+              }
+            },
             positioning: {
               title: '永续持仓与资金费率',
               pairTitle: '永续持仓与资金费率 · Binance USDT 永续',
@@ -2142,6 +2222,81 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               sourceStates: { loading: 'Loading', available: 'Index read', stale: 'Index is old · as of {time}', empty: 'No observation', unavailable: 'Index could not be read' },
               manageSettings: 'Manage Fear & Greed settings',
               buckets: { 'extreme-fear': 'Extreme fear', fear: 'Fear', neutral: 'Neutral', greed: 'Greed', 'extreme-greed': 'Extreme greed' }
+            },
+            defensivePremium: {
+              title: 'Fear & Greed and Downside Premium',
+              titleInfo: 'Read the Fear & Greed index together with the cost of downside protection from BTC options: one side is how afraid the market is, the other is how expensive it is to insure against a fall. It answers which band sentiment sits in, which way the premium is moving, and what the two together describe — the pairing only, with no direction and no trade signal. The two halves measure different things: Fear & Greed is a global crypto sentiment index, while the downside premium comes from BTC options on Deribit alone; they cannot be added together or used to confirm each other — how to read each half is in that half\'s own ⓘ.',
+              titleInfoLabel: 'About this card',
+              window: 'Last 30 days',
+              observedAt: 'Observed at',
+              provenance: 'Sources: Alternative.me · Deribit',
+              fearGreed: {
+                name: 'Fear & Greed',
+                axis: 'Index 0–100',
+                asOf: 'As of',
+                infoLabel: 'About the Fear & Greed reading',
+                info: {
+                  volatility: 'The Fear & Greed index already contains a volatility factor: when it and implied volatility rise together, that is one piece of evidence, not two.',
+                  percentile: '{percentile}th percentile over the past year',
+                  percentileInsufficient: 'Not enough history yet; no percentile',
+                  sourceDay: 'Dates are the data source\'s day (UTC)'
+                }
+              },
+              skew: {
+                name: 'Options skew',
+                asOf: 'As of',
+                unit: 'percentage points',
+                notConnected: 'Options skew is not connected yet.',
+                info: {
+                  definition: '30-day 25-delta risk reversal: 25-delta put IV − 25-delta call IV',
+                  relative: 'An implied-volatility level means nothing on its own; only its own history gives it meaning. A rising line says options are more expensive than before.',
+                  since: 'Skew only accumulates from the day it was connected; earlier days stay blank',
+                  sourceDay: 'Dates are the data source\'s day (UTC)'
+                },
+                direction: {
+                  window: 'Last 5 days',
+                  insufficient: 'Fewer than 5 days of skew data; no direction.',
+                  stale: 'Skew data stops at {time}.',
+                  discontinuous: 'Skew data is not continuous; no direction.'
+                }
+              },
+              history: { since: 'Since', remaining: '{days} more days to a full year' },
+              chart: {
+                fearGreedAria: 'Fear & Greed index chart: dates along the horizontal axis, the index from 0 to 100 along the vertical axis',
+                skewAria: '25-delta risk reversal chart: dates along the horizontal axis, percentage points along the vertical axis'
+              },
+              stale: { pill: 'Stale' },
+              action: { refresh: 'Refresh', enable: 'Turn on', viewSource: 'View source' },
+              verdict: {
+                asOfSuffix: '(as of {date})',
+                fear: {
+                  steeper: 'Sentiment sits in the fear band; the cost of downside protection is widening.',
+                  flatter: 'Sentiment sits in the fear band; the cost of downside protection is narrowing.',
+                  flat: 'Sentiment sits in the fear band; the cost of downside protection barely moved.',
+                  skewMissing: 'Sentiment sits in the fear band; the skew half has no usable direction.'
+                },
+                greed: {
+                  steeper: 'Sentiment sits in the greed band; the cost of downside protection is widening.',
+                  flatter: 'Sentiment sits in the greed band; the cost of downside protection is narrowing.',
+                  flat: 'Sentiment sits in the greed band; the cost of downside protection barely moved.',
+                  skewMissing: 'Sentiment sits in the greed band; the skew half has no usable direction.'
+                },
+                neutral: {
+                  steeper: 'Sentiment sits in the neutral band; the cost of downside protection is widening.',
+                  flatter: 'Sentiment sits in the neutral band; the cost of downside protection is narrowing.',
+                  flat: 'Sentiment sits in the neutral band; the cost of downside protection barely moved.',
+                  skewMissing: 'Sentiment sits in the neutral band; the skew half has no usable direction.'
+                },
+                fgMissing: {
+                  steeper: 'Skew is widening; the Fear & Greed half has no usable reading.',
+                  flatter: 'Skew is narrowing; the Fear & Greed half has no usable reading.',
+                  flat: 'Skew barely moved; the Fear & Greed half has no usable reading.'
+                }
+              },
+              degraded: {
+                fearGreed: 'The Fear & Greed half cannot be read, so this line cannot combine the two.',
+                skew: 'The skew half cannot be read, so this line cannot combine the two.'
+              }
             },
             positioning: {
               title: 'Perpetual positioning & funding',

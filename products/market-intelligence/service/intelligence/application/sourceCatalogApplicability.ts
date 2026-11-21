@@ -57,6 +57,11 @@ const APPLICABILITY_BY_SOURCE_ID: Record<string, ApplicabilitySeed> = {
     applicabilityMode: 'market-domain',
     focusMarkets: ['digital-assets']
   },
+  'deribit-options': {
+    sourceKind: 'data-aggregator',
+    applicabilityMode: 'market-domain',
+    focusMarkets: ['digital-assets']
+  },
   'coindesk-rss': {
     sourceKind: 'market-media',
     applicabilityMode: 'market-domain',

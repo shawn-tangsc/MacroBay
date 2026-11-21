@@ -41,6 +41,8 @@ describe('the derived panels match what the registry declared before purposes ex
     ['defillama-tvl', []],
     ['cryptoetf-etf-flows', ['dashboard']],
     ['alternative-fear-greed', ['dashboard']],
+    // 待接入期用途为空（跟 cryptopanic 一样）：没有面板归属，接入那笔才改成 ['dashboard']。
+    ['deribit-options', []],
     ['coindesk-rss', ['dashboard']],
     ['ethereum-foundation-blog', []],
     ['cryptopanic', []],
