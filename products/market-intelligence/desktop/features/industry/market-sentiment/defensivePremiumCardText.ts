@@ -17,14 +17,14 @@ export type DefensivePremiumCardText = {
     asOf: string
     buckets: Record<FearGreedSnapshotBucket, string>
     infoLabel: string
-    info: { volatility: string; percentile: string; percentileInsufficient: string; sourceDay: string }
+    info: { volatility: string; percentile: string; percentileInsufficient: string }
   }
   gaugeMarkers: { fear: string; neutral: string; greed: string }
   skew: {
     name: string
     notConnected: string
     infoLabel: string
-    info: { definition: string; relative: string; since: string; sourceDay: string }
+    info: { definition: string; relative: string; since: string }
     asOf: string
     unit: string
     direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
@@ -47,7 +47,7 @@ type Source = {
       axis: string
       asOf: string
       infoLabel: string
-      info: { volatility: string; percentile: string; percentileInsufficient: string; sourceDay: string }
+      info: { volatility: string; percentile: string; percentileInsufficient: string }
     }
     skew: {
       name: string
@@ -55,7 +55,7 @@ type Source = {
       infoLabel: string
       asOf: string
       unit: string
-      info: { definition: string; relative: string; since: string; sourceDay: string }
+      info: { definition: string; relative: string; since: string }
       direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
     }
     history: { remaining: string }

@@ -78,7 +78,6 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             percentile
               ? { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentile`, params: { percentile: String(percentile.value) } }
               : { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentileInsufficient` },
-            { labelKey: `${TEXT_PREFIX}.fearGreed.info.sourceDay` }
           ]} trigger={triggerProps => (
             <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.fearGreed.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
           )} />
@@ -114,7 +113,6 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             { labelKey: `${TEXT_PREFIX}.skew.info.definition` },
             { labelKey: `${TEXT_PREFIX}.skew.info.relative` },
             { labelKey: `${TEXT_PREFIX}.skew.info.since` },
-            { labelKey: `${TEXT_PREFIX}.skew.info.sourceDay` }
           ]} trigger={triggerProps => (
             <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
           )} />
