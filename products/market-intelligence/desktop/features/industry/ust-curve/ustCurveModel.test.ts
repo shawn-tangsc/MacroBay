@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { macroRatesSnapshotPublicPolicy } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import type { MacroRatesReading, MacroRatesSnapshotView } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import {
-  buildUstCurve, buildUstRows, changeSet, ustCurveRanges, ustLatestPeriod, ustObservationDates
+  buildUstCurve, buildUstRows, changeSet, ustCurveRanges, ustObservationDates, ustTablePeriod
 } from './ustCurveModel'
 
 const series = macroRatesSnapshotPublicPolicy.series
@@ -217,7 +217,39 @@ describe('ust curve model: windows and footer dates', () => {
     const rows = buildUstRows({ snapshot: fiveTenors })
     // 通胀补偿慢一天：页脚写区间，那一行自己带「截至」。
     expect(ustObservationDates(rows)).toEqual([window(3, () => 2.4).at(-1)!.period, window(300, () => 4.3).at(-1)!.period].sort())
-    expect(ustLatestPeriod(rows)).toBe(window(300, () => 4.3).at(-1)!.period)
     expect(rows.find((row) => row.id === 'breakeven')?.availability.state).toBe('values')
+  })
+
+  it('takes the table day from the rows that share it, not from the one series that prints a day later', () => {
+    // 真实库形状：六条（五个期限 + 实际利率）在 11-19，通胀补偿在 11-20。全表那一天是 11-19，
+    // 只有通胀补偿那一行与它不同——不是反过来把六行逐行标成「截至 11-19」。
+    const at = (seriesId: string, days: readonly [string, string]) =>
+      reading(seriesId, { window: [{ period: days[0], value: 4.2 }, { period: days[1], value: 4.3 }] })
+    const rows = buildUstRows({
+      snapshot: snapshot({
+        readings: [
+          at(series.us3m, ['2026-11-13', '2026-11-19']),
+          at(series.us2y, ['2026-11-13', '2026-11-19']),
+          at(series.us5y, ['2026-11-13', '2026-11-19']),
+          at(series.us10y, ['2026-11-13', '2026-11-19']),
+          at(series.us30y, ['2026-11-13', '2026-11-19']),
+          at(series.real10y, ['2026-11-13', '2026-11-19']),
+          at(series.breakeven10y, ['2026-11-13', '2026-11-20'])
+        ]
+      })
+    })
+    expect(ustTablePeriod(rows)).toBe('2026-11-19')
+    // 两个观测日都真实存在，页脚照旧写区间。
+    expect(ustObservationDates(rows)).toEqual(['2026-11-19', '2026-11-20'])
+  })
+
+  it('falls back to the later day when the table day is a tie', () => {
+    const at = (seriesId: string, end: string) =>
+      reading(seriesId, { window: [{ period: '2026-11-13', value: 4.2 }, { period: end, value: 4.3 }] })
+    const rows = buildUstRows({
+      snapshot: snapshot({ readings: [at(series.us10y, '2026-11-19'), at(series.breakeven10y, '2026-11-20')] })
+    })
+    // 一半一半时不把「更新的那一天」标成异常：基准取较晚的那天，慢的那行才该带 as-of。
+    expect(ustTablePeriod(rows)).toBe('2026-11-20')
   })
 })

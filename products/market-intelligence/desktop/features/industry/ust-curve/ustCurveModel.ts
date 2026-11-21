@@ -263,9 +263,30 @@ export function ustObservationDates(rows: readonly UstRow[]): readonly string[] 
   return Object.freeze([...dates].sort())
 }
 
-/** 全表最新的一天：某行的观测日比它早，就在行名下写「截至 MM-DD」。 */
-export function ustLatestPeriod(rows: readonly UstRow[]): string | undefined {
-  return ustObservationDates(rows).at(-1)
+/**
+ * 全表的观测日：**大多数行共有的那一天**（出现次数最多，并列取较晚的一天）。
+ *
+ * 不是「最新的一天」。通胀预期那三条序列（T5YIE / T10YIE / T5YIFR）本来就比收益率晚一天发布：
+ * 真实库 2026-11-22 逐条查过，16 条收益率都在 11-19，三条通胀在 11-20。拿最新的一天当基准，
+ * 整张表的常态反而被逐行贴上「截至 11-19」——八行小字把卡撑高，正是用户当日报的那一幕。
+ * 规格第 9 条说的是「某行观测日与全表不同 → **那一行**写截至」，所以基准只能是常态那一天。
+ */
+export function ustTablePeriod(rows: readonly UstRow[]): string | undefined {
+  const counts = new Map<string, number>()
+  for (const row of rows) {
+    if (row.availability.state !== 'values') continue
+    counts.set(row.availability.lastPeriod, (counts.get(row.availability.lastPeriod) ?? 0) + 1)
+  }
+  let best: string | undefined
+  let bestCount = 0
+  for (const [period, count] of counts) {
+    // 并列时取较晚的一天：那时被标注的是「真的慢了一天」的那些行，与这条标记的本意一致。
+    if (count > bestCount || (count === bestCount && period > (best ?? ''))) {
+      best = period
+      bestCount = count
+    }
+  }
+  return best
 }
 
 /** 一条线都没有（五个期限全缺）但表里还有数：图那一块换空态，表照留。 */

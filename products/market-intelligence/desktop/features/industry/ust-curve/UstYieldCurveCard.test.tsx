@@ -139,6 +139,37 @@ describe('国债收益率卡', () => {
     unmount()
   })
 
+  it('marks only the row that differs from the table day, not the yields that share the normal day', () => {
+    // 真实库 2026-11-22 的样子（`macro_market_points` 逐条查过）：16 条收益率都在 11-19，
+    // 三条通胀预期（T5YIE / T10YIE / T5YIFR）在 11-20——它们本来就晚一天发布。
+    // 所以「全表观测日」是大多数行共有的 11-19：只有通胀补偿那一行带 as-of，其余九行不带。
+    // 原来拿「最新的一天」当基准，八行被贴上「截至 11-19」，整张卡就是被这八行小字撑高的。
+    const at = (seriesId: string, days: readonly [string, string], values: readonly [number, number]) =>
+      reading(seriesId, [{ period: days[0], value: values[0] }, { period: days[1], value: values[1] }])
+    const { host, unmount } = mount({
+      snapshot: fullSnapshot({
+        readings: [
+          at(series.us3m, ['2026-11-13', '2026-11-19'], [4.3, 4.31]),
+          at(series.us2y, ['2026-11-13', '2026-11-19'], [4.1, 4.12]),
+          at(series.us5y, ['2026-11-13', '2026-11-19'], [4.2, 4.22]),
+          at(series.us10y, ['2026-11-13', '2026-11-19'], [4.3, 4.33]),
+          at(series.us30y, ['2026-11-13', '2026-11-19'], [4.5, 4.52]),
+          at(series.real10y, ['2026-11-13', '2026-11-19'], [1.9, 1.92]),
+          at(series.breakeven10y, ['2026-11-13', '2026-11-20'], [2.4, 2.41])
+        ]
+      })
+    })
+    const marked = cells(host, '.mi-ust__row-as-of')
+    expect(marked).toHaveLength(1)
+    expect(marked[0]?.textContent).toBe(t('templates.asOf').replace('{date}', '11-20'))
+    const row = marked[0]?.closest('tr')
+    expect(text(row?.querySelector('th'))).toContain(t('rows.breakeven'))
+    // 页脚照旧写区间：两个观测日都真实存在，只是常态那一天不该被逐行标注。
+    expect(text(host.querySelector('.mi-ust__foot'))).toContain(
+      t('templates.footRange').replace('{from}', '2026-11-19').replace('{to}', '11-20'))
+    unmount()
+  })
+
   it('marks a row whose observation date is older, and writes the range in the footer', () => {
     const slow = reading(series.breakeven10y, window(3, () => 2.4, '2026-02-02'))
     const base = fullSnapshot() as AvailableView
