@@ -1,10 +1,11 @@
 import { Calendar } from 'lucide-react'
+import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { helpTrigger } from '@platform/ui/components/popover'
 
-import type { ClockCardModel, ClockCenterFace, ClockPlaque } from './clockCardModel'
-import { clockCardCenter, clockCardGeometry } from './clockCardModel'
+import type { ClockCardModel, ClockCenterFace, ClockPlaque, ClockPlaqueStacked } from './clockCardModel'
+import { clockCardCenter, clockCardGeometry, clockPlaqueRaisedZ } from './clockCardModel'
 import './clockCard.css'
 
 /**
@@ -96,8 +97,6 @@ export type ClockCardText = Readonly<{
   overflowLine: string
   /** 溢出逐条：`{name} · {date} · {days} 天后`。 */
   overflowItem: string
-  /** 合并牌的一行：`{date} {name}`（相邻两天放不下时合成一块）。 */
-  mergedLine: string
   /* ── 中央两张面（用户 2026-11-21 拍板，42 号文件）── */
   /** 平时的面名：`利率路径`。 */
   facePath: string
@@ -151,6 +150,12 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       ...(policyState === 'disabled' && onOpenPolicySources !== undefined
         ? { actionLabel: text.openSources, onAction: onOpenPolicySources } : {})
     })
+  /**
+   * 抬起来的那块牌（悬停或键盘聚焦）：环上一组牌会互相叠住，抬到最前的那块必须整块可读
+   * （用户 2026-11：「鼠标移动到对应的卡片就会到前面来」）。层级只在抬起的这一块上用行内给，
+   * 其余牌子的层级仍由模型按「离现在近的在上」排好——两套规矩不混在 CSS 里。
+   */
+  const [raised, setRaised] = useState<string | undefined>(undefined)
   const center = model.center
   /**
    * 没上环的发布清单（`not-selected`）：逐条写「名字 · 日期 · 几天后」。
@@ -215,29 +220,31 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           {...(notice === undefined ? {} : { notice })} />
       </div>}
 
-      {/* 指标牌：位置与 --o 都由模型算。原型是 <button> 但没有动作，故渲染成不可点的节点
-          （规范：行容器不是按钮）；悬停恢复 100% 的视觉保留。
+      {/* 指标牌：位置、透明度和层级都由模型算（`z` 按「离现在近的在上」排好）。
+          原型是 <button> 但没有动作，故渲染成不可点的节点（规范：行容器不是按钮）；
+          悬停恢复 100% 的视觉保留。
           牌上三样：名字、值（有才显示）、**距离**（用户 2026-11：「距离时间呢？」）。
           距离并进值那一行，牌高仍在 37–44px，不为它改时钟几何。
-          合并牌（相邻两天放不下）：两行「MM-DD 名字」+ 较近那个的天数，没有值。
-          合并牌不可点是刻意的，理由见 clockPlaqueLayout.ts 里 `merged` 那条注。 */}
-      {model.plaques.map((plaque: ClockPlaque) => {
+          近了不合并：两块各自一块牌、各写自己的名字与天数，允许叠住（上限在布局里），
+          鼠标移到哪块、键盘聚焦到哪块，哪块就抬到最前并整块可读（用户 2026-11）。 */}
+      {model.plaques.map((plaque: ClockPlaqueStacked) => {
         const distance = plaqueDistance(plaque, text)
         return <div
           key={plaque.id}
           className={`mi-clock__node${plaque.zone === 'past' ? ' mi-clock__node--past' : ''}`}
           data-clock-plaque={plaque.zone}
           data-clock-metric={plaque.metricKey}
-          {...(plaque.merged === undefined ? {} : { 'data-clock-merged': true })}
           {...(plaque.id === centerPlaqueId ? { 'data-center': true } : {})}
-          style={{ left: plaque.x, top: plaque.y, '--o': plaque.opacity } as React.CSSProperties}>
-          {plaque.merged === undefined
-            ? <span className="mi-clock__node-name">{plaqueName(plaque.nameKey, text)}</span>
-            : plaque.merged.map((entry) => <span className="mi-clock__node-merged-line" key={entry.metricKey}>
-              {text.mergedLine
-                .replace('{date}', shortMonthDay(entry.date))
-                .replace('{name}', plaqueName(entry.nameKey, text))}
-            </span>)}
+          tabIndex={0}
+          onMouseEnter={() => setRaised(plaque.id)}
+          onMouseLeave={() => setRaised(undefined)}
+          onFocus={() => setRaised(plaque.id)}
+          onBlur={() => setRaised(undefined)}
+          style={{
+            left: plaque.x, top: plaque.y, '--o': plaque.opacity, '--mi-clock-z': plaque.z,
+            ...(raised === plaque.id ? { zIndex: clockPlaqueRaisedZ } : {})
+          } as React.CSSProperties}>
+          <span className="mi-clock__node-name">{plaqueName(plaque.nameKey, text)}</span>
           {plaque.value === undefined && distance === undefined ? null : <span className="mi-clock__node-meta">
             {plaque.value === undefined ? null : <b>{plaque.value}</b>}
             {distance === undefined ? null : <span className="mi-clock__node-when">{distance}</span>}

@@ -1,7 +1,12 @@
 import { expect, it } from 'vitest'
 
 import { buildClockCardModel } from './clockCardModel'
+import { clockCardText } from './clockCardText'
 import { clockScheduleMetrics, type ClockCardFact, type ClockScheduleEvent } from './clockScheduleMetrics'
+
+/** 牌宽随名字走：布局要按解析后的名字估盒子，所以每处都带上文案表里的名字。 */
+const build = (input: Omit<Parameters<typeof buildClockCardModel>[0], 'plaqueNames'>): ReturnType<typeof buildClockCardModel> =>
+  buildClockCardModel({ plaqueNames: clockCardText['zh-CN'].names, ...input })
 
 /**
  * 挂点输入：**日程给日期与周期 P，卡片读数给值**。
@@ -49,12 +54,12 @@ it('carries the policy meeting and the priced probability; no past plaque and no
   } })
   const policy = metrics.find((metric) => metric.metricKey === 'US.TARGET_RATE.DECISION')!
   expect(policy.nextRelease).toEqual({ date: '2026-12-09', expected: '86.8%' })
-  const unplaced = buildClockCardModel({ today: '2026-11-15', metrics }).unplaced
+  const unplaced = build({ today: '2026-11-15', metrics }).unplaced
   expect(unplaced.some((entry) => entry.metricKey === 'US.TARGET_RATE.DECISION')).toBe(false)
 })
 
-it('rings a date without a market expectation, and merges it with the adjacent policy date', () => {
-  const model = buildClockCardModel({ today: '2026-11-21', metrics: clockScheduleMetrics({
+it('rings a date without a market expectation next to the adjacent policy date, not merged into it', () => {
+  const model = build({ today: '2026-11-21', metrics: clockScheduleMetrics({
     today: '2026-11-21',
     events: [event('2026-12-04T13:30:00.000Z', 'US.NONFARM.SA.CHANGE'), event('2026-12-10T13:30:00.000Z', 'US.CPI.NSA.YOY')],
     facts: [], policy: { meetingDate: '2026-12-09', probability: { value: 0.868 } }
@@ -63,9 +68,14 @@ it('rings a date without a market expectation, and merges it with the adjacent p
   const payrolls = model.plaques.find((plaque) => plaque.metricKey === 'US.NONFARM.CHANGE')!
   expect(payrolls).toBeDefined()
   expect(payrolls.value).toBeUndefined()
-  // 政策 12-09 与 CPI 12-10 相交 → 合并一块，两行日期都在；中央仍是利率路径面。
-  const merged = model.plaques.find((plaque) => plaque.merged !== undefined)!
-  expect(merged.merged!.map((entry) => entry.date)).toEqual(['2026-12-09', '2026-12-10'])
+  // 政策 12-09 与 CPI 12-10 只差一天：**各一块牌**，各写自己的天数（18 / 19），叠住不超上限。
+  const policy = model.plaques.find((plaque) => plaque.metricKey === 'US.TARGET_RATE.DECISION')!
+  const cpi = model.plaques.find((plaque) => plaque.metricKey === 'US.CPI.YOY')!
+  expect(policy, '政策会议必须自己一块牌').toBeDefined()
+  expect(cpi, 'CPI 不能因为挨着政策会议就被并掉').toBeDefined()
+  expect(policy.daysUntil).toBe(18)
+  expect(cpi.daysUntil).toBe(19)
+  expect(policy.z).toBeGreaterThan(cpi.z)
   expect(model.center?.kind).toBe('policy')
 })
 
@@ -80,7 +90,7 @@ it('rings every date, and only the one with a market expectation carries a numbe
     { metricKey: 'US.CPI.NSA.YOY', unit: 'percent' as const,
       next: { releaseAt: '2026-12-10T13:30:00.000Z', expected: { value: 3.2, provenance: 'market-implied' as const } } }
   ]
-  const model = buildClockCardModel({ today: '2026-11-21',
+  const model = build({ today: '2026-11-21',
     metrics: clockScheduleMetrics({ today: '2026-11-21', events: [], facts }) })
   expect(model.plaques.filter((plaque) => plaque.zone === 'future').map((plaque) => plaque.metricKey).sort())
     .toEqual(['US.CORE_PCE.YOY', 'US.CPI.YOY'])
@@ -95,7 +105,7 @@ it('does not treat a source-survey expectation as a market-implied one', () => {
     { ...facts[0]!, next: { releaseAt: '2026-12-10T13:30:00.000Z',
       expected: { value: 3.2, provenance: 'source-survey' as const } } }
   ]
-  const model = buildClockCardModel({ today: '2026-11-15',
+  const model = build({ today: '2026-11-15',
     metrics: clockScheduleMetrics({ today: '2026-11-15', events, facts: surveyOnly }) })
   expect(model.center).toBeUndefined()
   // 问卷值照旧显示在牌上，但它不算盘口：不影响「谁当代表」的优先级，也不进中央的窗口判定。
@@ -114,7 +124,7 @@ it('rings core PCE, payrolls and CPI on their own dates, with the odds on PCE', 
       next: { releaseAt: '2026-12-10T13:30:00.000Z', expected: { value: 3.2, provenance: 'market-implied' as const } } },
     { metricKey: 'US.NONFARM.SA.CHANGE', next: { releaseAt: '2026-12-04T13:30:00.000Z' } }
   ]
-  const model = buildClockCardModel({ today: '2026-11-21',
+  const model = build({ today: '2026-11-21',
     metrics: clockScheduleMetrics({ today: '2026-11-21', events: [], facts }) })
   const ring = model.plaques.filter((plaque) => plaque.zone === 'future')
   expect(ring.map((plaque) => plaque.metricKey).sort())

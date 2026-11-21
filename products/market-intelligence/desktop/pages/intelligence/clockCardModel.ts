@@ -8,9 +8,9 @@
  * 这里只留编排与对外类型。**导出面不变**：调用方仍从本文件取几何、窗口与牌类型。
  */
 import {
-  POLICY_METRIC_KEY, clockCardGeometry, clockDayGap, clockFutureAngle, clockFutureOpacity,
-  clockPastAngle, clockPeriodIsUsable, clockRepresentativeRank, clockRingPoint, clampPlaqueX,
-  rectsIntersect, type ClockPlaque
+  POLICY_METRIC_KEY, arrangePlaques, clockCardGeometry, clockDayGap, clockFutureAngle, clockFutureOpacity,
+  clockPastAngle, clockPeriodIsUsable, clockPlaqueBox, clockRepresentativeRank, clockRingPoint, clampPlaqueX,
+  type ClockPlaque, type ClockPlaqueStacked
 } from './clockPlaqueLayout'
 import { clockCenterFace, selectCenterWindow, type ClockCenterFace } from './clockCenterFace'
 
@@ -99,7 +99,7 @@ function ringWithWindow(ring: readonly ClockScheduleMetric[], windowMetric: Cloc
 }
 
 export type ClockCardModel = Readonly<{
-  plaques: readonly ClockPlaque[]
+  plaques: readonly ClockPlaqueStacked[]
   center?: ClockCenterFace
   unplaced: readonly ClockUnplaced[]
 }>
@@ -109,11 +109,14 @@ export type ClockCardModel = Readonly<{
  *
  * `today` 是**显示时区的日期**（`YYYY-MM-DD`）：卡上的天数跟读者看到的那一天走。
  * `now` 是**此刻的 ISO 时刻**（可选）：中央的 ±24 小时窗口按它算；不给就只有利率路径面。
+ * `plaqueNames` 是牌上名字的解析结果（`nameKey` → 文字）：牌的宽度由名字决定，
+ * 「两块叠了多少」只能按盒子算，所以布局必须拿到名字，不许拿 `nameKey` 顶。
  */
 export function buildClockCardModel(input: Readonly<{
   today: string
   now?: string
   metrics: readonly ClockScheduleMetric[]
+  plaqueNames: Readonly<Record<string, string>>
 }>): ClockCardModel {
   const plaques: ClockPlaque[] = []
   const unplaced: ClockUnplaced[] = []
@@ -196,94 +199,45 @@ export function buildClockCardModel(input: Readonly<{
     ...(window === undefined ? {} : { window }) })
 
   /**
-   * 相邻日期物理放不下时**先合并**（用户 2026-11-21：12-09 政策 / 12-10 CPI）：
-   * 合并要在撞牌之前做，否则政策牌会先被「指标优先」挤掉、根本没有机会合。
+   * 摆放（用户 2026-11-21 新口径）：**不合并**——很近的两块各自成牌、各写自己的名字与天数，
+   * 允许叠，但叠住的比例有上限；超了就沿径向错开，一组最多两块叠住，第三块算位置不足。
+   * 层级（离现在近的在上）与错开都在 `arrangePlaques` 里算，这里只给尺寸与次序。
    */
-  const merged = mergeAdjacentPlaques(plaques)
-  for (const absorbed of merged.absorbed) {
-    unplaced.push({
-      metricKey: absorbed.metricKey, nameKey: absorbed.nameKey, reason: 'crowded',
-      ...(absorbed.daysUntil === undefined ? {} : { daysUntil: absorbed.daysUntil })
-    })
-  }
-
-  // 撞牌：同一区内部比矩形，保留离「现在」更近的；让位的进交代行。
-  const ordered = [...merged.plaques].sort((left, right) => {
-    if (left.zone !== right.zone) return left.zone === 'future' ? -1 : 1
-    /**
-     * 未来区里**窗口内那个指标优先**：它和政策牌撞上时，让位的是政策牌。
-     * 否则会出现「中央已经切成某个指标，环上却只有政策牌」——主位与环上同一条就断了。
-     */
-    if (left.zone === 'future') {
-      const windowKey = window?.metric.metricKey
-      const leftRing = windowKey !== undefined && left.metricKey === windowKey
-      const rightRing = windowKey !== undefined && right.metricKey === windowKey
-      if (leftRing !== rightRing) return leftRing ? -1 : 1
-      /**
-       * **指标发布牌优先于政策牌**（用户 2026-11-21：「CPI、非农怎么没了」）。
-       * 政策牌和某天的发布牌撞上时，让位的是政策牌——它的日期在下面那张利率路径卡里还能看到，
-       * 而发布牌一旦让位，那天就从环上消失了，读者会以为没有这场发布。
-       */
-      const leftPolicy = left.metricKey === POLICY_METRIC_KEY ? 1 : 0
-      const rightPolicy = right.metricKey === POLICY_METRIC_KEY ? 1 : 0
-      if (leftPolicy !== rightPolicy) return leftPolicy - rightPolicy
-    }
-    const leftDays = left.zone === 'future' ? left.daysUntil ?? Number.POSITIVE_INFINITY : left.daysAgo ?? Number.POSITIVE_INFINITY
-    const rightDays = right.zone === 'future' ? right.daysUntil ?? Number.POSITIVE_INFINITY : right.daysAgo ?? Number.POSITIVE_INFINITY
-    return leftDays - rightDays || left.metricKey.localeCompare(right.metricKey)
+  const arrangement = arrangePlaques(plaques, {
+    sizeOf: (plaque) => clockPlaqueBox(input.plaqueNames[plaque.nameKey] ?? plaque.nameKey),
+    order: (left, right) => plaquePlacementOrder(left, right, window?.metric.metricKey),
+    ...(center?.kind === 'metric' ? { sinkId: `${center.metricKey}:future` } : {})
   })
-  const kept: ClockPlaque[] = []
-  for (const plaque of ordered) {
-    const collided = kept.some((other) => rectsIntersect(plaque, other))
-    if (!collided) { kept.push(plaque); continue }
+  for (const plaque of arrangement.crowded) {
     unplaced.push({
       metricKey: plaque.metricKey, nameKey: plaque.nameKey, reason: 'crowded',
       ...(plaque.daysUntil === undefined ? {} : { daysUntil: plaque.daysUntil })
     })
   }
-  return { plaques: kept, ...(center === undefined ? {} : { center }), unplaced }
+  return { plaques: arrangement.plaques, ...(center === undefined ? {} : { center }), unplaced }
 }
 
 /**
- * 相邻两个日期物理放不下时**合成一块牌**（用户 2026-11-21：12-09 政策 / 12-10 CPI）。
+ * 摆放次序：**先放的占住原位，后放的那块让位**。
  *
- * 判据仍是同一个矩形相交（不按天数）：两块盒子相交才合，不相交各占一块。
- * 一组最多两个日期——第三个进下沿「还有 N 个发布不在环上」，不许静默丢。
- * 合并牌没有值：两行日期之间没有单一预期值，只写两行「MM-DD 名字」+ 较近那个的天数。
+ * 1. 未来区先于过去区；
+ * 2. 窗口内那个指标最优先——否则会出现「中央已经切成某个指标，环上却只有政策牌」；
+ * 3. 指标发布牌优先于政策牌（政策日期在下面那张利率路径卡里还能看到，发布牌让位那天就没了）；
+ * 4. 其余按离现在更近的在前。
  */
-function mergeAdjacentPlaques(plaques: readonly ClockPlaque[]): Readonly<{
-  plaques: readonly ClockPlaque[]
-  absorbed: readonly ClockPlaque[]
-}> {
-  const dayOf = (entry: ClockPlaque): number => entry.daysUntil ?? Number.POSITIVE_INFINITY
-  const future = plaques.filter((entry) => entry.zone === 'future')
-    .sort((left, right) => dayOf(left) - dayOf(right))
-  const past = plaques.filter((entry) => entry.zone === 'past')
-  const kept: ClockPlaque[] = []
-  const absorbed: ClockPlaque[] = []
-  const used = new Set<string>()
-  for (const plaque of future) {
-    if (used.has(plaque.id)) continue
-    used.add(plaque.id)
-    const partner = future.find((other) => !used.has(other.id) && rectsIntersect(plaque, other))
-    if (partner === undefined) { kept.push(plaque); continue }
-    used.add(partner.id)
-    // 同一片区域里的第三个及以后：一块牌最多放两个日期。
-    for (const extra of future) {
-      if (used.has(extra.id) || !rectsIntersect(plaque, extra)) continue
-      used.add(extra.id)
-      absorbed.push(extra)
-    }
-    kept.push({
-      ...plaque,
-      id: `merged:${plaque.metricKey}+${partner.metricKey}`,
-      merged: [plaque, partner].map((entry) => ({
-        date: entry.date ?? '', metricKey: entry.metricKey, nameKey: entry.nameKey
-      })),
-      value: undefined
-    })
+function plaquePlacementOrder(left: ClockPlaque, right: ClockPlaque, windowKey: string | undefined): number {
+  if (left.zone !== right.zone) return left.zone === 'future' ? -1 : 1
+  if (left.zone === 'future') {
+    const leftRing = windowKey !== undefined && left.metricKey === windowKey
+    const rightRing = windowKey !== undefined && right.metricKey === windowKey
+    if (leftRing !== rightRing) return leftRing ? -1 : 1
+    const leftPolicy = left.metricKey === POLICY_METRIC_KEY ? 1 : 0
+    const rightPolicy = right.metricKey === POLICY_METRIC_KEY ? 1 : 0
+    if (leftPolicy !== rightPolicy) return leftPolicy - rightPolicy
   }
-  return { plaques: [...kept, ...past], absorbed }
+  const leftDays = left.zone === 'future' ? left.daysUntil ?? Number.POSITIVE_INFINITY : left.daysAgo ?? Number.POSITIVE_INFINITY
+  const rightDays = right.zone === 'future' ? right.daysUntil ?? Number.POSITIVE_INFINITY : right.daysAgo ?? Number.POSITIVE_INFINITY
+  return leftDays - rightDays || left.metricKey.localeCompare(right.metricKey)
 }
 
 /** 透明度落到 4 位小数：原型写 `.914`，多出来的浮点尾巴不该出现在行内样式里。 */

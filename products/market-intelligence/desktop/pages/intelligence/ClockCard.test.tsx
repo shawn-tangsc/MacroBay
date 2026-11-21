@@ -6,11 +6,18 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { ClockCard } from './ClockCard'
-import { buildClockCardModel, clockPlaqueMaxWidth, clockRingPoint, type ClockScheduleMetric } from './clockCardModel'
+import {
+  buildClockCardModel, clockPlaqueMaxWidth, clockPlaqueMinWidth, clockPlaqueOneLineHeight,
+  clockPlaqueOverlayZ, clockPlaqueRaisedZ, clockRingPoint, type ClockScheduleMetric
+} from './clockCardModel'
 import { clockCardText } from './clockCardText'
 
 const text = clockCardText['zh-CN']
 const today = '2026-11-21'
+
+/** 牌宽随名字走：布局要按解析后的名字估盒子，所以每处都带上文案表里的名字。 */
+const build = (input: Omit<Parameters<typeof buildClockCardModel>[0], 'plaqueNames'>): ReturnType<typeof buildClockCardModel> =>
+  buildClockCardModel({ plaqueNames: text.names, ...input })
 /**
  * 真库形状（用户 2026-11-21 更正「CPI 非农怎么没了」）：**每个发布日一块牌**。
  * 12-04 非农、12-10 CPI 各一块，CPI 还有 11-19 刚发布过的过去牌；政策 12-09 与 CPI 未来牌相撞 → 让位。
@@ -42,7 +49,7 @@ async function render(overrides: Partial<Parameters<typeof ClockCard>[0]> = {}) 
   root = createRoot(host)
   const opened: string[] = []
   await act(async () => root!.render(<ClockCard
-    model={buildClockCardModel({ today, metrics })}
+    model={build({ today, metrics })}
     text={text}
     actionLabelKey="pages.intelligence.portal.calendarCard.openCalendar"
     onOpenDetail={() => opened.push('detail')}
@@ -56,9 +63,11 @@ async function render(overrides: Partial<Parameters<typeof ClockCard>[0]> = {}) 
 it('rings one plaque per release date at the angle the schedule gives', async () => {
   const { host } = await render()
   const nodes = [...host.querySelectorAll<HTMLElement>('[data-clock-plaque]')]
-  // 12-04 非农一块；政策 12-09 与 CPI 12-10 只差一天、盒子相交 → 合并成一块；CPI 还有 11-19 的过去牌。
-  expect(nodes.map((node) => `${node.dataset.clockPlaque}:${node.dataset.clockMerged === undefined ? node.dataset.clockMetric : 'merged'}`).sort())
-    .toEqual(['future:US.NONFARM.SA.CHANGE', 'future:merged', 'past:US.CPI.NSA.YOY'])
+  // 每个发布日一块：12-04 非农、12-09 政策、12-10 CPI 各自一块，CPI 还有 11-19 的过去牌。
+  // 政策与 CPI 只差一天也**不合并**（用户 2026-11-21 改口径）：两块各自一块牌，近了就叠。
+  expect(nodes.map((node) => `${node.dataset.clockPlaque}:${node.dataset.clockMetric}`).sort())
+    .toEqual(['future:US.CPI.NSA.YOY', 'future:US.NONFARM.SA.CHANGE', 'future:US.TARGET_RATE.DECISION', 'past:US.CPI.NSA.YOY'])
+  expect(host.querySelector('[data-clock-merged]'), '合并牌已经撤掉，不许再出现').toBeNull()
   const cpiPast = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
   // 11-19 发布、P=30、今天 11-21 → 2 天 → 360 − 2/30×360 = 336°。
   const expected = clockRingPoint(336)
@@ -71,7 +80,7 @@ it('rings one plaque per release date at the angle the schedule gives', async ()
 })
 
 it('drives the ring plaque’s opacity from its position, not from a timer', async () => {
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: [cpiOnly] }) })
+  const { host } = await render({ model: build({ today, metrics: [cpiOnly] }) })
   // CPI 下一期 19 天 → 0.5 + (19/30)²×0.5 ≈ 0.7006。
   const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
   expect(Number(future.style.getPropertyValue('--o'))).toBeCloseTo(0.7006, 4)
@@ -81,7 +90,7 @@ it('drives the ring plaque’s opacity from its position, not from a timer', asy
 })
 
 it('writes the market-implied expectation on the ring plaque it carries', async () => {
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: [cpiOnly] }) })
+  const { host } = await render({ model: build({ today, metrics: [cpiOnly] }) })
   const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
   // 牌上第二行是盘口预期 3.2%，不是上一期的 3.74%——两行都在，读者分得开「预期」与「前值」。
   expect(future.textContent).toContain('CPI 年率')
@@ -91,7 +100,7 @@ it('writes the market-implied expectation on the ring plaque it carries', async 
 
 /** 一个都没有盘口时不硬挂：中央不画大数字（不拿没盘口的指标顶上去假装有预期）。 */
 it('draws no centre value when no candidate has a market-implied expectation', async () => {
-  const model = buildClockCardModel({ today, metrics: [
+  const model = build({ today, metrics: [
     { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
       lastRelease: { date: '2026-11-06', value: '+165K' }, nextRelease: { date: '2026-12-04' }, periodDays: 28 }
   ] })
@@ -115,7 +124,7 @@ const sameDayPair: readonly ClockScheduleMetric[] = [
 ]
 
 it('lists the same-day releases that did not make the ring, with a count', async () => {
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: sameDayPair }) })
+  const { host } = await render({ model: build({ today, metrics: sameDayPair }) })
   const line = host.querySelector<HTMLElement>('[data-clock-overflow]')!
   // 12-11 只上一块（有盘口的 PCE 年率），PCE 月率在这一行里。
   expect(line.textContent).toContain('还有 1 个发布不在环上')
@@ -132,7 +141,7 @@ it('lists the same-day releases that did not make the ring, with a count', async
  * 所以这一行**实际占 22px**，11px 只是字号。政策降级行因此要上移到 40（16+22+2）才不压住它。
  */
 it('anchors the overflow line inside the card with exactly one trigger', async () => {
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: sameDayPair }) })
+  const { host } = await render({ model: build({ today, metrics: sameDayPair }) })
   const line = host.querySelector<HTMLElement>('[data-clock-overflow]')!
   expect(line.parentElement?.tagName).toBe('SECTION')
   expect(line.parentElement?.className).toContain('mi-clock')
@@ -159,7 +168,7 @@ it('positions the overflow line absolutely and lifts the policy note clear of it
  * 不再断言原生 `title`——那张卡上已经不留两种交互了。
  */
 it('leaves a line for a metric it cannot place instead of dropping it silently', async () => {
-  const model = buildClockCardModel({ today, metrics: [
+  const model = build({ today, metrics: [
     { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy', lastRelease: { date: '2026-11-13', value: '1' }, periodDays: 30 }
   ] })
   const { host } = await render({ model })
@@ -183,7 +192,7 @@ it('puts the expectation label above the number, so the number is not read as th
   const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
     lastRelease: { date: '2026-11-06', value: '+165K' },
     nextRelease: { date: '2026-11-25', at: '2026-11-25T13:30:00.000Z', expected: '+88K', expectedFromMarket: true as const }, periodDays: 28 }]
-  const { host } = await render({ model: buildClockCardModel({
+  const { host } = await render({ model: build({
     today: '2026-11-25', now: '2026-11-25T09:30:00.000Z', metrics: withExpected }) })
   const core = host.querySelector('.mi-clock__core')!
   const label = core.querySelector('.mi-clock__label')
@@ -209,7 +218,7 @@ it('shows the policy path face outside any release window', async () => {
 it('rings the policy event by name and leaves the odds to the centre', async () => {
   const policy = [{ metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate',
     nextRelease: { date: '2026-11-25', expected: '90.9%' }, periodDays: 28, policyOutcome: 'hike-25' }]
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: policy }) })
+  const { host } = await render({ model: build({ today, metrics: policy }) })
   // 牌上只有名字 + 距离，概率不重复（用户 2026-11：中央显示概率是对的，缺的是天数上环）。
   const plaque = host.querySelector<HTMLElement>('[data-clock-metric="US.TARGET_RATE.DECISION"]')!
   expect(plaque.textContent).toContain('政策利率')
@@ -234,7 +243,7 @@ it('renders the expectation label in full, never truncated with an ellipsis', as
   const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
     lastRelease: { date: '2026-11-06', value: '+165K' },
     nextRelease: { date: '2026-11-25', at: '2026-11-25T13:30:00.000Z', expected: '+88K', expectedFromMarket: true as const }, periodDays: 28 }]
-  const { host } = await render({ model: buildClockCardModel({
+  const { host } = await render({ model: build({
     today: '2026-11-25', now: '2026-11-25T09:30:00.000Z', metrics: withExpected }) })
   const label = host.querySelector('.mi-clock__label')!
   expect(label.textContent).toBe('预期（市场共识）')
@@ -264,7 +273,7 @@ describe('the centre indicator face inside the release window', () => {
     periodDays: 28, ...extra
   }]
   const coreAt = async (now: string, metrics: readonly ClockScheduleMetric[]) => {
-    const { host } = await render({ model: buildClockCardModel({ today: '2026-11-25', now, metrics }) })
+    const { host } = await render({ model: build({ today: '2026-11-25', now, metrics }) })
     return host.querySelector('.mi-clock__core')!
   }
 
@@ -365,22 +374,48 @@ it('keeps the plaque width limit identical in the model and the stylesheet', () 
 })
 
 /**
+ * 牌子的最小盒与「环上说明行的层级」也各只有一处事实：
+ * 牌宽从 62 到 128 都要参与重叠计算，说明行必须压在牌子之上——两个数都不许在样式表里另有说法。
+ */
+it('keeps the plaque minimum box and the overlay layer identical in the model and the stylesheet', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  expect(css).toContain(`--mi-clock-plaque-min-width: ${clockPlaqueMinWidth}px`)
+  expect(css).toContain(`--mi-clock-plaque-min-height: ${clockPlaqueOneLineHeight}px`)
+  expect(css).toContain(`--mi-clock-overlay-z: ${clockPlaqueOverlayZ}`)
+})
+
+/**
+ * 层级只有一个来源（模型给的 `--mi-clock-z` + 抬起那一块的行内 z-index）：
+ * 样式表里不许再写一个数字层级，也不许在悬停规则里跟行内层级比大小。
+ */
+it('takes the plaque stacking order from the model, never from a stylesheet constant', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const node = /\.mi-clock__node \{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(node, '牌的层级必须读模型给的变量').toContain('z-index: var(--mi-clock-z, 4)')
+  const hover = /\.mi-clock__node:hover[^{]*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(hover, '悬停只恢复不透明度；置顶由组件行内给，两处会比大小').not.toContain('z-index')
+  expect(css, '中央主位那块沉底也由模型给，样式表不再单独写一层').not.toContain('.mi-clock__node[data-center] { z-index')
+})
+
+/**
  * 牌上必须有**距离时间**（用户 2026-11 看图第一句「距离时间呢？」）：
  * 只有名字和值，读者不知道离发布还有多久。未来牌写「N 天后」、过去牌写「N 天前」，
  * 距离与值同一行——牌高仍在 37–44px，不为它改时钟几何。
  */
 it('puts the distance on every plaque, in the future and in the past', async () => {
   const { host } = await render()
-  // 政策 12-09 与 CPI 12-10 合并成一块：距离写较近那个（18 天）。
-  const future = host.querySelector<HTMLElement>('[data-clock-merged]')!
-  expect(future.textContent).toContain('18 天后')
+  // 政策 12-09 自己一块牌，写自己的 18 天；CPI 那块写 19 天。
+  const policy = host.querySelector<HTMLElement>('[data-clock-metric="US.TARGET_RATE.DECISION"]')!
+  expect(policy.textContent).toContain('18 天后')
+  const cpi = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  expect(cpi.textContent).toContain('19 天后')
   const past = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
   expect(past.textContent).toContain('2 天前')
 })
 
 /** 没有盘口预期的那块牌也要有距离——这正是读者要看的「还有几天」，不是「有没有数」。 */
 it('shows the distance even when a plaque has no value', async () => {
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: [
+  const { host } = await render({ model: build({ today, metrics: [
     { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
       nextRelease: { date: '2026-12-04' }, periodDays: 28 }
   ] }) })
@@ -392,7 +427,7 @@ it('shows the distance even when a plaque has no value', async () => {
 
 /** 长名字（两行）+ 值 + 距离同时存在：三样都在，且仍是一块牌。 */
 it('keeps a long name, its value and the distance in the same plaque', async () => {
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: [
+  const { host } = await render({ model: build({ today, metrics: [
     { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy',
       nextRelease: { date: '2026-11-25', expected: '3.12%', expectedFromMarket: true as const } }
   ] }) })
@@ -444,15 +479,61 @@ it('rings the policy meeting as its own event, with its distance and no odds', a
 })
 
 /**
- * 12-09 与 12-10 只差一天、盒子必然相交 → **合成一块牌**，两行各写一个日期。
- * 只合并相交的；不相交的日期各占一块。
+ * 12-09 与 12-10 只差一天：**不合并**，两块各自一块牌、各写自己的名字与天数（用户 2026-11-21）。
+ * 叠住是允许的，但叠多少由布局按常量封顶（见 `clockPlaqueOverlapCap`），牌上的字一个不少。
  */
-it('merges two adjacent dates that cannot both fit into one plaque', async () => {
+it('keeps two adjacent dates as two plaques, each with its own name and distance', async () => {
   const { host } = await render()
-  const merged = host.querySelector<HTMLElement>('[data-clock-merged]')!
-  expect(merged, '两块放不下时必须合并').not.toBeNull()
-  expect(merged.textContent).toContain('12–09 政策利率')
-  expect(merged.textContent).toContain('12–10 CPI 年率')
-  // 合并牌不写数字（两行日期之间没有单一预期值）。
-  expect(merged.textContent).toContain('18 天后')
+  const policy = host.querySelector<HTMLElement>('[data-clock-metric="US.TARGET_RATE.DECISION"]')!
+  const cpi = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  expect(policy, '政策会议必须自己一块牌').not.toBeNull()
+  expect(cpi, 'CPI 不能因为挨着政策会议就被并掉').not.toBeNull()
+  // 两块牌各写自己的名字，不是一块牌上两行日期。
+  expect(policy.textContent).toContain('政策利率')
+  expect(policy.textContent).not.toContain('CPI 年率')
+  expect(cpi.textContent).toContain('CPI 年率')
+  expect(cpi.textContent).not.toContain('政策利率')
+  // 概率仍只在中央（牌上不重复表达同一个数）。
+  expect(policy.textContent).not.toContain('89')
+})
+
+/**
+ * 叠放（用户 2026-11）：**默认离现在近的那块在上**，层级由模型按日期排好，
+ * 不靠 DOM 顺序碰运气；鼠标移到哪块、键盘聚焦到哪块，哪块就抬到最前并整块可读。
+ */
+it('stacks the nearer plaque above the farther one by default', async () => {
+  const { host } = await render()
+  const policy = host.querySelector<HTMLElement>('[data-clock-metric="US.TARGET_RATE.DECISION"]')!
+  const cpi = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  const zOf = (node: HTMLElement): number => Number(node.style.getPropertyValue('--mi-clock-z'))
+  // 12-09（18 天）比 12-10（19 天）近：它的层级更高。
+  expect(zOf(policy)).toBeGreaterThan(zOf(cpi))
+  // 层级不是靠 DOM 顺序：`--mi-clock-z` 真的写在牌上，样式表读这个变量。
+  expect(zOf(cpi)).toBeGreaterThan(0)
+})
+
+it('raises the plaque under the pointer above every other plaque', async () => {
+  const { host } = await render()
+  const policy = host.querySelector<HTMLElement>('[data-clock-metric="US.TARGET_RATE.DECISION"]')!
+  const cpi = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  // 被压住的是 CPI（更远、层级更低）——它抬起来时必须是全卡最高的一块。
+  expect(cpi.style.zIndex).toBe('')
+  await act(async () => { cpi.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })) })
+  expect(cpi.style.zIndex).toBe(String(clockPlaqueRaisedZ))
+  expect(clockPlaqueRaisedZ).toBeGreaterThan(clockPlaqueOverlayZ)
+  expect(Number(cpi.style.zIndex)).toBeGreaterThan(Number(policy.style.getPropertyValue('--mi-clock-z')))
+  // 移开就落回自己那一层，不留着一直压住别人。
+  await act(async () => { cpi.dispatchEvent(new MouseEvent('mouseout', { bubbles: true })) })
+  expect(cpi.style.zIndex).toBe('')
+})
+
+it('raises the plaque a keyboard reader focuses, so the whole plaque is readable', async () => {
+  const { host } = await render()
+  const cpi = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  // 牌可以聚焦（Tab 走到它），聚焦即抬到最前。
+  expect(cpi.getAttribute('tabindex')).toBe('0')
+  await act(async () => { cpi.dispatchEvent(new FocusEvent('focusin', { bubbles: true })) })
+  expect(cpi.style.zIndex).toBe(String(clockPlaqueRaisedZ))
+  await act(async () => { cpi.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
+  expect(cpi.style.zIndex).toBe('')
 })

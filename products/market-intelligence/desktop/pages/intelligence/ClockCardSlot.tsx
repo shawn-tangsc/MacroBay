@@ -50,10 +50,13 @@ export function ClockCardSlot({
   slot?: HTMLDivElement | null
 }>): React.ReactElement {
   const reading = input_reading
+  // 牌宽随名字走：布局要按解析后的名字估盒子，「两块叠了多少」才算得出来（`clockPlaqueBox`）。
+  const cardText = clockCardText[locale]
   return <SlotHost slot={slot}>{<ClockCard
     model={buildClockCardModel({
       today,
       now: nowIso,
+      plaqueNames: cardText.names,
       metrics: clockScheduleMetrics({
         today,
         events: events.map((event) => ({
@@ -72,7 +75,7 @@ export function ClockCardSlot({
         })
       })
     })}
-    text={clockCardText[locale]}
+    text={cardText}
     actionLabelKey="pages.intelligence.portal.calendarCard.openCalendar"
     onOpenDetail={onOpenDrawer}
     onOpenCalendar={onOpenDrawer}

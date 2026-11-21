@@ -70,26 +70,8 @@ export type ClockPlaque = Readonly<{
   daysAgo?: number
   /** 政策牌：主推档，牌名按它生成（写死档位名会出错）。 */
   policyOutcome?: string
-  /** 未来牌的发布日（`YYYY-MM-DD`）：合并牌要把两行日期写出来。 */
+  /** 未来牌的发布日（`YYYY-MM-DD`）。 */
   date?: string
-  /**
-   * 合并牌（用户 2026-11-21）：相邻两个日期物理放不下时合成一块，牌上两行各一个日期。
-   * 有它就不显示 `value`——两行日期之间没有单一预期值，写谁的都是错。
-   *
-   * **合并牌不可点是刻意的，不是漏了**（2026-11-21 定）：环上每一块牌都是不可点节点
-   * （「行容器不是按钮」），只给合并牌开一条可点通道，环上就有两种交互规矩，读者不知道该点哪块。
-   * 要看详情走那两条现成的路：中央那块、下方卡片/抽屉。真要让合并牌点开（先开离现在近的
-   * 那条、另一条浮层给入口），需要宿主提供「按指标打开详情」的通道——现在的 `onOpenDetail`
-   * 不带指标、牌也不是可点节点，那是另一笔设计，别在这里顺手加 onClick。
-   */
-  merged?: readonly ClockMergedEntry[]
-}>
-
-/** 合并牌的一行：哪天、哪个指标。 */
-export type ClockMergedEntry = Readonly<{
-  date: string
-  metricKey: string
-  nameKey: string
 }>
 
 /**
@@ -192,22 +174,166 @@ export function clockPeriodIsUsable(periodDays: number | undefined): boolean {
 }
 
 /**
- * 牌的假定矩形：宽按**上限** `clockPlaqueMaxWidth`（128）、高 `min-height 37`，居中于挂点
- * （`translate(-50%,-50%)`），另加 4px 主档间隔（界面设计 2026-11-15 基线 J 节）。
- *
- * 为什么不按 `min-width 62` 估：牌子现在可以长到 128（长名字两行），按 62 估会漏判一对相交，
- * 两块长牌就压在一起。宁可多判一对，也不留叠牌。
+ * 牌子的最小盒：与 CSS 的 `min-width: 62px` / `min-height: 37px` 同一个数（守卫用例盯着）。
+ * 牌子的实际宽度**随名字文字量走**（`min-width..max-width` 之间），布局要按这个估，不许按上限一把算。
  */
-const PLAQUE_BOX = { width: clockPlaqueMaxWidth, height: 37, gap: 4 } as const
+export const clockPlaqueMinWidth = 62
+/** 名字占一行的牌高。 */
+export const clockPlaqueOneLineHeight = 37
+/** 名字折两行的牌高（界面设计 2026-11-21 探针：两行名字那块 49.9）。 */
+export const clockPlaqueTwoLineHeight = 50
+/** 牌内左右内距（CSS `padding: 2px 4px` + 1px 边框，两侧合计 12）。 */
+const PLAQUE_PADDING_WIDTH = 12
+/** 11px 字号下的字宽估算：中日韩字 11px、ASCII 6.2px（`--font-meta` 是这张卡唯一可用档）。 */
+const CJK_CHAR_WIDTH = 11
+const ASCII_CHAR_WIDTH = 6.2
+
+/** 一块牌的盒子尺寸（不含位置）。 */
+export type ClockPlaqueSize = Readonly<{ width: number; height: number }>
 
 /**
- * 撞牌判据：**全环统一按矩形相交**，不分区。
- * 未来区 0°–240°、过去区 240°–360° 在 12 点的「现在」和 8 点的断口两处相接，
- * 「只同区比」会在这两处各留一个叠牌口子（界面设计扫 241×121 组命中 670 对）。
+ * 牌子的盒子：宽度由名字算——名字越长盒子越宽，超过上限就折两行、盒子到上限。
+ *
+ * 为什么按名字估而不是按 CSS 最大值一把算：`min-width 62 / max-width 128` 之间差别一倍，
+ * 按上限算会把 62 宽的短牌当成 128 宽，明明不叠的两块被判成要错开；按最小值算又会漏判。
+ * 估价只服务于「叠了多少」，与真实渲染的差由 `clockPlaqueOverlapCap` 兜住。
  */
-export function rectsIntersect(left: ClockPlaque, right: ClockPlaque): boolean {
-  return Math.abs(left.x - right.x) < PLAQUE_BOX.width + PLAQUE_BOX.gap &&
-    Math.abs(left.y - right.y) < PLAQUE_BOX.height + PLAQUE_BOX.gap
+export function clockPlaqueBox(name: string): ClockPlaqueSize {
+  let textWidth = 0
+  for (const char of name) {
+    textWidth += (char.codePointAt(0) ?? 0) >= 0x2E80 ? CJK_CHAR_WIDTH : ASCII_CHAR_WIDTH
+  }
+  const wanted = Math.round(textWidth) + PLAQUE_PADDING_WIDTH
+  if (wanted > clockPlaqueMaxWidth) {
+    return { width: clockPlaqueMaxWidth, height: clockPlaqueTwoLineHeight }
+  }
+  return { width: Math.max(clockPlaqueMinWidth, wanted), height: clockPlaqueOneLineHeight }
+}
+
+/** 盒子摆到画布上：位置取牌心（CSS `translate(-50%,-50%)`）。 */
+export type ClockPlaqueRect = Readonly<{ x: number; y: number; width: number; height: number }>
+
+export function clockPlaqueRect(plaque: ClockPlaque, size: ClockPlaqueSize): ClockPlaqueRect {
+  return { x: plaque.x, y: plaque.y, width: size.width, height: size.height }
+}
+
+/**
+ * 两块牌的重叠占比：**分母是较小那块**的面积（用户 2026-11-21：任意一块至少露出四分之一）。
+ * 不相交返回 0。
+ */
+export function plaqueOverlapRatio(left: ClockPlaqueRect, right: ClockPlaqueRect): number {
+  const overlapWidth = Math.min(left.x + left.width / 2, right.x + right.width / 2) -
+    Math.max(left.x - left.width / 2, right.x - right.width / 2)
+  const overlapHeight = Math.min(left.y + left.height / 2, right.y + right.height / 2) -
+    Math.max(left.y - left.height / 2, right.y - right.height / 2)
+  if (overlapWidth <= 0 || overlapHeight <= 0) return 0
+  const smallerArea = Math.min(left.width * left.height, right.width * right.height)
+  return overlapWidth * overlapHeight / smallerArea
+}
+
+/**
+ * 两块牌最多叠住多少（按**较小那块**算）：任意一块至少露出 1/4。
+ *
+ * 用户 2026-11-21 拍的数字是 75%，但界面设计同一天实测：叠到 75% 时被盖那块的名字一个字都读不出
+ * （横向只剩 15.5px、政策利率 0/4 字；纵向全部 0；今天这对已叠 56.5%）。**这个数正被收紧，待定**。
+ * 所以它只在这里写一份：改值改这一处，用例断的是「算出来的读数 ≤ 这个常量」，不写 0.75。
+ */
+export const clockPlaqueOverlapCap = 0.75
+
+/** 超限时沿径向每次错开多少（用户 2026-11-21：每次 4px，直到达标或到边界）。 */
+export const clockPlaqueNudgeStep = 4
+/** 每个方向最多错开几步（6 步 = 24px）：再远就离开环了，此时算位置不足。 */
+export const clockPlaqueNudgeMaxSteps = 6
+/**
+ * 一组最多几块牌互相叠住（界面设计 2026-11-21：三块连叠时静止几乎读不出任何名字，
+ * 而一次悬停只能救一块）。超出的那块进下沿「还有 N 个发布不在环上」并说明位置不足。
+ */
+export const clockPlaqueOverlapGroupMax = 2
+/** 抬起来那块（悬停/聚焦）的层级：必须高于卡内所有牌子，也高于环上的按钮与说明行。 */
+export const clockPlaqueRaisedZ = 200
+/** 环上按钮、溢出行、说明行、状态行的层级：高于所有牌子，低于抬起的那块。 */
+export const clockPlaqueOverlayZ = 100
+
+/** 一块牌最终落在哪：位置、层级。 */
+export type ClockPlaqueStacked = ClockPlaque & Readonly<{ z: number }>
+
+/**
+ * 把牌摆到环上（用户 2026-11-21 口径）：**不合并**，近了就叠，但
+ *
+ * 1. 两块之间叠住的面积不超过较小那块的 `clockPlaqueOverlapCap`；
+ * 2. 超过就沿径向每次 4px 错开，直到达标且不越出卡的安全边；
+ * 3. 一组最多两块互相叠住，第三块算位置不足（进交代行，不静默消失）；
+ * 4. 层级按「离现在近的在上」，中央主位那块沉到最下（中央已完整显示它）。
+ */
+export function arrangePlaques(
+  plaques: readonly ClockPlaque[],
+  options: Readonly<{
+    sizeOf: (plaque: ClockPlaque) => ClockPlaqueSize
+    /** 摆放次序：先放的占住原位，后放的让位（窗内指标、非政策牌优先，见调用处）。 */
+    order: (left: ClockPlaque, right: ClockPlaque) => number
+    /** 中央主位那一块：沉到最下层。 */
+    sinkId?: string
+  }>
+): Readonly<{ plaques: readonly ClockPlaqueStacked[]; crowded: readonly ClockPlaque[] }> {
+  const ordered = [...plaques].sort(options.order)
+  const placed: Array<{ plaque: ClockPlaque; rect: ClockPlaqueRect }> = []
+  const crowded: ClockPlaque[] = []
+  for (const plaque of ordered) {
+    const resolved = placePlaque(plaque, options.sizeOf(plaque), placed)
+    if (resolved === undefined) { crowded.push(plaque); continue }
+    placed.push(resolved)
+  }
+  // 层级：离现在近的在上面。过去牌与未来牌用各自的「离现在多远」比，浮点小=近。
+  const proximity = (plaque: ClockPlaque): number => (plaque.zone === 'future'
+    ? plaque.daysUntil ?? Number.POSITIVE_INFINITY
+    : plaque.daysAgo ?? Number.POSITIVE_INFINITY)
+  const stacked = [...placed].sort((left, right) => proximity(left.plaque) - proximity(right.plaque)
+    || left.plaque.metricKey.localeCompare(right.plaque.metricKey))
+  const zById = new Map<string, number>()
+  stacked.forEach((entry, index) => { zById.set(entry.plaque.id, 4 + stacked.length - 1 - index) })
+  return {
+    plaques: placed.map((entry) => ({
+      ...entry.plaque,
+      z: entry.plaque.id === options.sinkId ? 3 : zById.get(entry.plaque.id) ?? 4
+    })),
+    crowded
+  }
+}
+
+function placePlaque(
+  plaque: ClockPlaque,
+  size: ClockPlaqueSize,
+  placed: readonly Readonly<{ plaque: ClockPlaque; rect: ClockPlaqueRect }>[]
+): Readonly<{ plaque: ClockPlaque; rect: ClockPlaqueRect }> | undefined {
+  const base = { plaque, rect: clockPlaqueRect(plaque, size) }
+  const neighbours = placed.filter((other) => plaqueOverlapRatio(base.rect, other.rect) > 0)
+  if (neighbours.length === 0) return base
+  // 一组最多两块：一上来就叠到两块上，位置不足。
+  if (neighbours.length >= clockPlaqueOverlapGroupMax) return undefined
+  if (plaqueOverlapRatio(base.rect, neighbours[0]!.rect) <= clockPlaqueOverlapCap) return base
+  for (let step = 1; step <= clockPlaqueNudgeMaxSteps; step += 1) {
+    // 先朝圆心、再朝外：朝里更容易避开邻牌，也不容易把牌推出卡边。
+    for (const direction of [-1, 1] as const) {
+      const moved = nudgeRadially(plaque, direction * step * clockPlaqueNudgeStep, size)
+      if (moved === undefined) continue
+      const rect = clockPlaqueRect(moved, size)
+      const blockers = placed.filter((other) => plaqueOverlapRatio(rect, other.rect) > 0)
+      if (blockers.length >= clockPlaqueOverlapGroupMax) continue
+      if (blockers.every((other) => plaqueOverlapRatio(rect, other.rect) <= clockPlaqueOverlapCap)) {
+        return { plaque: moved, rect }
+      }
+    }
+  }
+  return undefined
+}
+
+/** 沿径向挪 `distance` 像素（正=离圆心更远）；越出卡的安全边就不给位置。 */
+function nudgeRadially(plaque: ClockPlaque, distance: number, size: ClockPlaqueSize): ClockPlaque | undefined {
+  const radians = plaque.angle * Math.PI / 180
+  const y = plaque.y - distance * Math.cos(radians)
+  const half = size.height / 2
+  if (y - half < PLAQUE_EDGE_MARGIN || y + half > clockCardGeometry.cardHeight - PLAQUE_EDGE_MARGIN) return undefined
+  return { ...plaque, x: clampPlaqueX(plaque.x + distance * Math.sin(radians)), y }
 }
 
 function clampDays(days: number): number {
