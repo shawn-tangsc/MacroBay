@@ -43,16 +43,17 @@ const REQUIRED_PATHS = [
   'fearGreed.info.volatility',
   'fearGreed.info.percentile',
   'fearGreed.info.percentileInsufficient',
-  'fearGreed.info.sourceDay',
   'skew.name',
   'skew.asOf',
   'skew.unit',
   'skew.notConnected',
+  'skew.unavailable.connection',
+  'skew.unavailable.source',
+  'skew.unavailable.read',
   'skew.infoLabel',
   'skew.info.definition',
   'skew.info.relative',
   'skew.info.since',
-  'skew.info.sourceDay',
   'skew.direction.window',
   'skew.direction.steeper',
   'skew.direction.flatter',
@@ -60,13 +61,13 @@ const REQUIRED_PATHS = [
   'skew.direction.insufficient',
   'skew.direction.stale',
   'skew.direction.discontinuous',
-  'history.since',
   'history.remaining',
   'chart.fearGreedAria',
   'chart.skewAria',
   'chart.fearGreedSummary',
   'chart.skewSummary',
   'stale.pill',
+  'stale.stopsAt',
   'action.refresh',
   'action.enable',
   'action.viewSource',
@@ -90,13 +91,18 @@ const REQUIRED_PATHS = [
   'degraded.skew'
 ] as const
 
-const BANNED: readonly { pattern: RegExp; why: string }[] = [
+/** 「这次」只在这一族里合法：那三句专说读不到，未接入另有 `skew.notConnected`，一句不必两用。 */
+const UNAVAILABLE_PATHS = ['skew.unavailable.connection', 'skew.unavailable.source', 'skew.unavailable.read'] as const
+
+type Banned = Readonly<{ pattern: RegExp; why: string; except?: readonly string[] }>
+
+const BANNED: readonly Banned[] = [
   { pattern: /交易日/u, why: '交易日会让读者以为是股票日历' },
   { pattern: /trading\s*day/iu, why: '同「交易日」' },
   { pattern: /session/iu, why: '同「交易日」' },
   { pattern: /代理/u, why: '代理是设置页的话，卡上不许出现' },
   { pattern: /\bproxy\b/iu, why: '同「代理」' },
-  { pattern: /这次/u, why: '同一句要覆盖「这回读不到」和「从来没接上」' },
+  { pattern: /这次/u, why: '同一句要覆盖「这回读不到」和「从来没接上」；读不到那族除外（未接入另有句子）', except: UNAVAILABLE_PATHS },
   { pattern: /今天/u, why: '不让读者以为是相对时间' },
   { pattern: /昨天/u, why: '不让读者以为是相对时间' },
   { pattern: /明天/u, why: '不让读者以为是相对时间' },
@@ -165,6 +171,7 @@ describe('fear & greed + downside premium card copy', () => {
     const findings: string[] = []
     for (const leaf of [...zh, ...en]) {
       for (const banned of BANNED) {
+        if (banned.except?.includes(leaf.path)) continue
         if (banned.pattern.test(leaf.value)) findings.push(`${leaf.path}: ${banned.why}`)
       }
     }
@@ -202,10 +209,24 @@ describe('fear & greed + downside premium card copy', () => {
     expect(valueOf('en-US', 'titleInfo')).toMatch(/data source's day \(UTC\)/u)
   })
 
+  it('says which failure each unavailable line is, and keeps a dated "stops at" line', () => {
+    // AC-11：偏斜读不到要按原因分句（连接 / 源不可用 / 读取失败），三句不许抄成同一句；
+    // AC-37/43：偏旧的药丸旁边要有「数据停在 {date}」，{dat} 是源日，不是时刻。
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const lines = UNAVAILABLE_PATHS.map((path) => valueOf(locale, path))
+      expect(lines.every((line) => line.trim() !== ''), `${locale}: unavailable lines empty`).toBe(true)
+      expect(new Set(lines).size, `${locale}: unavailable lines must differ`).toBe(lines.length)
+      const stopsAt = valueOf(locale, 'stale.stopsAt')
+      expect(stopsAt, `${locale}: stale.stopsAt needs {date}`).toContain('{date}')
+      expect(stopsAt, `${locale}: stale.stopsAt must not print an instant`).not.toContain('{time}')
+    }
+  })
+
   it('keeps the skew history row about readings, not calendar days', () => {
     // 这一行讲「偏斜自哪天开始记录、还差几个读数」（PRD :203 / 定稿 §5.3），不是「满一年分位」那件事。
-    // 判据断在占位符与词上：since 必须带 {date}；remaining 必须同时带 {date} 与 {n}，
+    // 判据断在占位符与词上：remaining 必须同时带 {date} 与 {n}，
     // 且不许出现「天 / 年 / 周」这类日历单位——用日历说法就是语义又漂回分位满一年。
+    // `history.since` 已按用户 2026-11-22 的裁定删键（起始日由这一句承担），所以只剩这一条。
     const zhLeaves = leaves(block('zh-CN'), '', [])
     const enLeaves = leaves(block('en-US'), '', [])
     const pick = (list: Leaf[], path: string): string => list.find((leaf) => leaf.path === path)?.value ?? ''
@@ -214,9 +235,7 @@ describe('fear & greed + downside premium card copy', () => {
       ['zh-CN', zhLeaves],
       ['en-US', enLeaves]
     ] as const) {
-      const since = pick(list, 'history.since')
       const remaining = pick(list, 'history.remaining')
-      expect(since, `${locale}: history.since needs {date}`).toContain('{date}')
       expect(remaining, `${locale}: history.remaining needs {date}`).toContain('{date}')
       expect(remaining, `${locale}: history.remaining needs {n}`).toContain('{n}')
       expect(remaining, `${locale}: history.remaining must not count calendar time`).not.toMatch(calendar)

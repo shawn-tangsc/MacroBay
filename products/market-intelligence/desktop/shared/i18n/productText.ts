@@ -646,8 +646,7 @@ mi: miText['zh-CN'],
                 info: {
                   volatility: '恐惧贪婪指数本身包含波动率因子：它和隐含波动率同涨时，不能当成两个独立证据。',
                   percentile: '过去一年排在第 {percentile}%',
-                  percentileInsufficient: '历史不足，暂不给分位',
-                  sourceDay: '日期为数据源日（UTC）'
+                  percentileInsufficient: '历史不足，暂不给分位'
                 }
               },
               skew: {
@@ -659,8 +658,12 @@ mi: miText['zh-CN'],
                 info: {
                   definition: '30 天 25Δ 风险反转：25Δ 看跌 IV − 25Δ 看涨 IV',
                   relative: '隐含波动率的绝对值没有意义，要和它自己的历史比；线往上只说明比过去贵。',
-                  since: '偏斜是接入后才开始攒的，更早那段留白',
-                  sourceDay: '日期为数据源日（UTC）'
+                  since: '偏斜是接入后才开始攒的，更早那段留白'
+                },
+                unavailable: {
+                  connection: '期权偏斜：Deribit 连不上。',
+                  source: '期权偏斜：来源暂时不可用。',
+                  read: '期权偏斜：这次读数没读出来。'
                 },
                 direction: {
                   window: '近 5 天',
@@ -672,14 +675,14 @@ mi: miText['zh-CN'],
                   discontinuous: '偏斜数据不连续，不判方向。'
                 }
               },
-              history: { since: '偏斜自 {date} 起', remaining: '从 {date} 开始记录 · 还差 {n} 个读数' },
+              history: { remaining: '从 {date} 开始记录 · 还差 {n} 个读数' },
               chart: {
                 fearGreedAria: '恐惧贪婪指数走势图：横轴是日期，纵轴是 0 到 100 的指数值',
                 skewAria: '25Δ 风险反转走势图：横轴是日期，纵轴是百分点',
                 fearGreedSummary: '恐惧贪婪走势：{from} 至 {to}，共 {count} 个源日；首值 {first}，末值 {last}，指数 0–100。',
                 skewSummary: '25Δ 风险反转走势：{from} 至 {to}，共 {count} 个源日；首值 {first}，末值 {last}，单位百分点。'
               },
-              stale: { pill: '偏旧' },
+              stale: { pill: '偏旧', stopsAt: '数据停在 {date}' },
               action: { refresh: '刷新', enable: '去启用', viewSource: '查看来源' },
               verdict: {
                 asOfSuffix: '（截至 {date}）',
@@ -2247,8 +2250,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 info: {
                   volatility: 'The Fear & Greed index already contains a volatility factor: when it and implied volatility rise together, that is one piece of evidence, not two.',
                   percentile: '{percentile}th percentile over the past year',
-                  percentileInsufficient: 'Not enough history yet; no percentile',
-                  sourceDay: 'Dates are the data source\'s day (UTC)'
+                  percentileInsufficient: 'Not enough history yet; no percentile'
                 }
               },
               skew: {
@@ -2260,8 +2262,12 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 info: {
                   definition: '30-day 25-delta risk reversal: 25-delta put IV − 25-delta call IV',
                   relative: 'An implied-volatility level means nothing on its own; only its own history gives it meaning. A rising line says options are more expensive than before.',
-                  since: 'Skew only accumulates from the day it was connected; earlier days stay blank',
-                  sourceDay: 'Dates are the data source\'s day (UTC)'
+                  since: 'Skew only accumulates from the day it was connected; earlier days stay blank'
+                },
+                unavailable: {
+                  connection: 'Options skew: Deribit is unreachable.',
+                  source: 'Options skew: the source is unavailable.',
+                  read: 'Options skew: this reading could not be read.'
                 },
                 direction: {
                   window: 'Last 5 days',
@@ -2273,14 +2279,14 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   discontinuous: 'Skew data is not continuous; no direction.'
                 }
               },
-              history: { since: 'Skew recorded since {date}', remaining: 'Recording since {date} · {n} more readings needed' },
+              history: { remaining: 'Recording since {date} · {n} more readings needed' },
               chart: {
                 fearGreedAria: 'Fear & Greed index chart: dates along the horizontal axis, the index from 0 to 100 along the vertical axis',
                 skewAria: '25-delta risk reversal chart: dates along the horizontal axis, percentage points along the vertical axis',
                 fearGreedSummary: 'Fear & Greed: {count} source days from {from} to {to}; first {first}, last {last}, index 0–100.',
                 skewSummary: '25-delta risk reversal: {count} source days from {from} to {to}; first {first}, last {last}, in percentage points.'
               },
-              stale: { pill: 'Stale' },
+              stale: { pill: 'Stale', stopsAt: 'Data stops at {date}' },
               action: { refresh: 'Refresh', enable: 'Turn on', viewSource: 'View source' },
               verdict: {
                 asOfSuffix: '(as of {date})',
