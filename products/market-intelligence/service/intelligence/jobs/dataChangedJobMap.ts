@@ -5,7 +5,7 @@ import { CALENDAR_EVENT_REMINDER_JOB_ID } from '../macro-calendar/calendarEventR
 import { MACRO_MARKET_COLLECT_JOB_ID } from '../macro-market/macroMarketJob'
 import { REAL_MARKET_API_DXY_COLLECT_JOB_ID } from '../macro-market/realMarketApiDxyJob'
 import { MARKET_HISTORY_RETENTION_JOB_ID } from '../retention/marketHistoryRetentionJob'
-import { INTELLIGENCE_COLLECT_SOURCE_JOB, INTELLIGENCE_JOB_IDS } from './intelligenceJobIds'
+import { INTELLIGENCE_COLLECT_SOURCE_JOB, INTELLIGENCE_JOB_IDS, INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB } from './intelligenceJobIds'
 
 /**
  * 作业 → 「这次写入影响哪些面板 / 哪些来源」。
@@ -31,6 +31,8 @@ const BY_HANDLER_ID: Readonly<Record<string, DataChangedTarget>> = {
   [INTELLIGENCE_COLLECT_SOURCE_JOB]: NONE,
   // 新闻/情绪管线写的是看板在读的库（情绪卡、分析证据）。
   'market-intelligence.normalizeRawRecords': { panels: DASHBOARD, sources: [] },
+  // 定时回捞写的是同一批条目与判定，所以影响面与 normalize 相同（不是「什么也没动」）。
+  [INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB]: { panels: DASHBOARD, sources: [] },
   'market-intelligence.assessChangedItems': { panels: DASHBOARD, sources: [] },
   'market-intelligence.refreshSentimentAggregates': { panels: DASHBOARD, sources: [] },
   'market-intelligence.reevaluateClusters': { panels: DASHBOARD, sources: [] },

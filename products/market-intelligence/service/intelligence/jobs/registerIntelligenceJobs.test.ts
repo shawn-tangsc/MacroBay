@@ -351,6 +351,7 @@ function createContext(jobRunId: string, extra?: { result?: JobContext['result']
 
 function createPipelineStub(): IntelligencePipeline {
   return {
+    pendingRawRecordCount: () => 0,
     collectSource: vi.fn(async () => ({
       queuedJobs: [INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB],
       counts: { httpCalls: 1, fetchedBytes: 1024, parsed: 2, appended: 2, duplicates: 0 }

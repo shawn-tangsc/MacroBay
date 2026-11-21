@@ -5,7 +5,9 @@ import { translationJobDefinitionId } from './intelligenceJobIds'
 const PRODUCT_ID = 'market-intelligence'
 
 export async function enqueueIntelligencePipelineJobs(
-  jobRuntime: JobRuntime,
+  // 只用到 `enqueueDefinition`：收窄到这一项，定时回捞这类只拿得到注册能力的调用方也能用，
+  // 不必为了一个入队点伪造一整个运行时。
+  jobRuntime: Pick<JobRuntime, 'enqueueDefinition'>,
   jobIds: readonly string[],
   payload: Record<string, unknown>
 ): Promise<void> {

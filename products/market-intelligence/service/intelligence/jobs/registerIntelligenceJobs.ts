@@ -11,6 +11,7 @@ import { isZeroXRouterSource } from '../application/zeroXRouterSourcePolicy'
 import { getSource } from '../application/providerRegistry'
 import type { TranslateIntelligenceItemsJobInput } from '../schema/intelligenceTranslation'
 import { enqueueIntelligencePipelineJobs } from './enqueueIntelligencePipelineJobs'
+import { registerRawRecordRecoveryJob } from './rawRecordRecoveryJob'
 import {
   INTELLIGENCE_ARCHIVE_COMPACTION_JOB,
   INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB,
@@ -46,6 +47,9 @@ export function registerIntelligenceJobs(
   }
 ): void {
   const { pipeline, archiveService, replayService, translationService } = deps
+
+  // 归一化不能只等「启动」或「该源有新记录」：采集全部命中去重时队列会整段停住（0.4.5 #44）。
+  registerRawRecordRecoveryJob(jobRuntime, pipeline)
 
   jobRuntime.registerHandler(INTELLIGENCE_COLLECT_SOURCE_JOB, async (payload, context) => {
     const input = payload as { sourceId: string; runId?: string }

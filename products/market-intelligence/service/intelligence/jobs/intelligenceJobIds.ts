@@ -1,5 +1,12 @@
 export const INTELLIGENCE_COLLECT_SOURCE_JOB = 'market-intelligence.collectSource'
 export const INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB = 'market-intelligence.normalizeRawRecords'
+/**
+ * 定时回捞：把一直停在 `received` 的原始记录按轮次推完（0.4.5 #44）。
+ *
+ * 与 `normalizeRawRecords` 分开一个 handler：那条是「采集刚写进来，按源立刻归一化」，
+ * 这条是「没有新采集时也要往前走」。同一个 handler 两套入参会让运行记录分不清是哪一种。
+ */
+export const INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB = 'market-intelligence.recoverPendingRawRecords'
 export const INTELLIGENCE_TRANSLATE_ITEMS_JOB = 'market-intelligence.translateItems'
 export const INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB = 'market-intelligence.assessChangedItems'
 export const INTELLIGENCE_REFRESH_SENTIMENT_AGGREGATES_JOB = 'market-intelligence.refreshSentimentAggregates'
@@ -33,6 +40,7 @@ export function translationJobDefinitionId(sourceId: string | undefined): string
 export const INTELLIGENCE_JOB_IDS = [
   INTELLIGENCE_COLLECT_SOURCE_JOB,
   INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB,
+  INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB,
   INTELLIGENCE_TRANSLATE_ITEMS_JOB,
   INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB,
   INTELLIGENCE_REFRESH_SENTIMENT_AGGREGATES_JOB,

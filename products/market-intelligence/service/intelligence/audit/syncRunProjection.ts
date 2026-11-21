@@ -77,6 +77,7 @@ export const syncRunHandlerCatalog: Readonly<Record<string, CatalogEntry>> = {
   'market-intelligence.scoreNewsSentiment': { taskLabel: '舆情评分', action: 'analysis' },
   'market-intelligence.enrichNewsDocuments': { taskLabel: '舆情正文', action: 'collect' },
   'market-intelligence.normalizeRawRecords': { taskLabel: '原始记录归一', action: 'other' },
+  'market-intelligence.recoverPendingRawRecords': { taskLabel: '原始记录回捞', action: 'other' },
   'market-intelligence.assessChangedItems': { taskLabel: '变更判定', action: 'analysis' },
   'market-intelligence.groupMarketAnalysisChange': { taskLabel: '变更分组', action: 'analysis' },
   'market-intelligence.recoverMarketAnalysisRuns': { taskLabel: '分析恢复', action: 'analysis' },

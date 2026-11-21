@@ -31,7 +31,17 @@ export const normalizationBatchPolicy = Object.freeze({
    * 从待办里先捞多少条候选再筛。要留出余量：按倒序取候选时高频源占绝大多数，
    * 400 条里才凑得齐 6 个新闻源各 20 条。
    */
-  candidatePool: 400
+  candidatePool: 400,
+  /**
+   * 候选池被截断时，给**最旧的一批**留固定名额（2026-11-22，0.4.5 #44）。
+   *
+   * 只取最新 400 条的话，超出池子的那批永远排在候选之外：积压 500 条时最旧 100 条没有任何
+   * 一轮能看到它们，列表里就一直缺这一段——而且缺得没有报错。10 条/轮让最旧的 100 条在
+   * 10 轮内必然被处理，同时不改变「最新优先」的主体顺序。
+   *
+   * **池子装得下全部待办时不启用**：那时每条都在候选里，不存在轮不到；插队反而让最新新闻变慢。
+   */
+  oldestGuaranteedPerRound: 10
 })
 
 export type NormalizationBatchSource = Readonly<{
@@ -45,29 +55,43 @@ export function selectNormalizationBatch(
 ): RawIntelligenceRecord[] {
   const limit = input.limit ?? normalizationBatchPolicy.roundSize
   const candidates = source
-    .listUnprocessed(normalizationBatchPolicy.candidatePool)
+    .listUnprocessed()
     .filter(record => !isDefillamaStablecoinRetiredPath(record.sourceId))
   const ordered = [...candidates].sort(
     (left, right) => right.detectedAt.localeCompare(left.detectedAt) || left.rawRecordId.localeCompare(right.rawRecordId)
   )
 
+  // 池子装得下全部待办时，每条都在候选里，不需要保底；只有被截断才存在「永远轮不到」。
+  const truncated = ordered.length > normalizationBatchPolicy.candidatePool
+  const pool = truncated ? ordered.slice(0, normalizationBatchPolicy.candidatePool) : ordered
+  // `ordered` 是「最新在前」，尾部就是最旧的那批；倒过来，最旧的先占名额。
+  // `slice(-0)` 会取回整段，所以 0 必须单独挡掉——「没有保底」是空数组，不是全部。
+  const guaranteed = truncated && normalizationBatchPolicy.oldestGuaranteedPerRound > 0
+    ? ordered.slice(-normalizationBatchPolicy.oldestGuaranteedPerRound).reverse()
+    : []
+
   const newsSources: readonly string[] = NEWS_SENTIMENT_SOURCE_IDS
   const selected: RawIntelligenceRecord[] = []
+  const chosen = new Set<string>()
   const perSource = new Map<string, number>()
   let newsCount = 0
 
-  for (const record of ordered) {
-    if (selected.length >= limit) break
-    if (input.sourceId !== undefined && record.sourceId !== input.sourceId) continue
+  const take = (record: RawIntelligenceRecord): void => {
+    if (selected.length >= limit || chosen.has(record.rawRecordId)) return
+    if (input.sourceId !== undefined && record.sourceId !== input.sourceId) return
     if (input.sourceId === undefined) {
       const taken = perSource.get(record.sourceId) ?? 0
-      if (taken >= normalizationBatchPolicy.perSourcePerRound) continue
+      if (taken >= normalizationBatchPolicy.perSourcePerRound) return
       perSource.set(record.sourceId, taken + 1)
     }
     const isNews = newsSources.includes(record.sourceId)
-    if (isNews && newsCount >= normalizationBatchPolicy.newsPerRound) continue
+    if (isNews && newsCount >= normalizationBatchPolicy.newsPerRound) return
     selected.push(record)
+    chosen.add(record.rawRecordId)
     if (isNews) newsCount += 1
   }
+
+  for (const record of guaranteed) take(record)
+  for (const record of pool) take(record)
   return selected
 }
