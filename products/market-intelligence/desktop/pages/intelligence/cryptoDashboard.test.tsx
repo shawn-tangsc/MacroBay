@@ -1539,12 +1539,22 @@ describe('the defensive premium band', () => {
     expect(actions.map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
   })
 
-  it('gives each half its own inline loading instead of blanking the whole card', async () => {
+  it('keeps both half frames while loading, so the card does not collapse', async () => {
     const container = await renderBand({ query: () => new Promise(() => undefined) })
-    const halves = container.querySelectorAll('.mi-defensive-premium__half [data-loading-state]')
-    expect(halves).toHaveLength(2)
-    // 卡头还在，不是整块被一个加载面替掉。
-    expect(container.querySelector('.mi-defensive-premium__header')).not.toBeNull()
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    // 两半各有自己的 inline loading，卡头还在，不是整块被一个加载面替掉。
+    expect(band.querySelectorAll('.mi-defensive-premium__half [data-loading-state]')).toHaveLength(2)
+    expect(band.querySelector('.mi-defensive-premium__header')).not.toBeNull()
+    // 两半各一个空图框：同一 viewBox、不画线不画值，高度由同一套布局算，不写死。
+    const placeholders = band.querySelectorAll('[data-chart-placeholder]')
+    expect(placeholders).toHaveLength(2)
+    for (const placeholder of placeholders) {
+      expect(placeholder.querySelector('[data-chart-line]')).toBeNull()
+      expect(placeholder.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 520 132')
+    }
+    // 仪表仍在画弧与刻度，只是没有指针。
+    expect(band.querySelectorAll('[data-half="fear-greed"] [data-gauge-segment]')).toHaveLength(5)
+    expect(band.querySelector('[data-half="fear-greed"] .mi-crypto-dashboard__gauge-needle')).toBeNull()
   })
 
   it('turns a first-read failure into one whole-card error, with no half and one retry', async () => {

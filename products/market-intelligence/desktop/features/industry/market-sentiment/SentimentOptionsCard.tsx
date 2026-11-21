@@ -11,7 +11,7 @@ import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardSentimentOptionsState } from '../../../pages/intelligence/useDashboardSentimentOptionsCard'
 import type { DashboardFearGreedState } from '../../../pages/intelligence/dashboardFearGreedModel'
 import { SentimentPanel } from './SentimentPanel'
-import { FearGreedChart, SkewChart } from './DefensivePremiumCharts'
+import { ChartPlaceholder, FearGreedChart, SkewChart } from './DefensivePremiumCharts'
 import type { SourceCellOff } from '../shared/sourceCellOff'
 import type { DefensivePremiumCardText } from './defensivePremiumCardText'
 import '../../../shared/styles/sourceAvailability.css'
@@ -95,6 +95,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           onRetry={onRefresh}
           {...(cellOff === undefined ? {} : { cellOff })}
           {...(fearGreed?.state === 'available' ? { observedDay: fearGreed.latestDay } : {})} />
+        {state.state === 'loading' ? <ChartPlaceholder /> : null}
         {fearGreed?.state === 'available' && fearGreed.points.length > 0
           ? <FearGreedChart points={fearGreed.points} axisLabel={text.fearGreed.axis}
             ariaLabel={chartAria({
@@ -118,7 +119,14 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
           )} />
         </div>
-        {skew === undefined && state.state === 'loading' ? <LoadingState label={text.loading} minHeight={96} />
+        {skew === undefined && state.state === 'loading' ? <>
+          <LoadingState label={text.loading} minHeight={24} />
+          {/* 与正常态同构的占位：分数行、截至行、图框、方向行；空行不带文字也不画值。 */}
+          <p className="mi-defensive-premium__score" aria-hidden="true">&nbsp;</p>
+          <p className="mi-defensive-premium__asof" aria-hidden="true">&nbsp;</p>
+          <ChartPlaceholder />
+          <p className="mi-defensive-premium__direction" aria-hidden="true">&nbsp;</p>
+        </>
           : skew?.state === 'not-connected' ? <p className="mi-defensive-premium__state">{text.skew.notConnected}</p>
             : skew?.state === 'available' ? <>
             <p className="mi-defensive-premium__score"><strong>{skew.latest.riskReversal.toFixed(1)}</strong> <span>{text.skew.unit}</span></p>
