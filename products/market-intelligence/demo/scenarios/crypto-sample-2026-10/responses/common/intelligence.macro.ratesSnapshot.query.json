@@ -7,36 +7,161 @@
     "asOf": "$scenarioNow",
     "readings": [
       {
-        "seriesId": "DGS10",
-        "metricKey": "US_10Y_YIELD",
-        "actual": 5,
+        "seriesId": "DGS3MO",
+        "metricKey": "US_3M_YIELD",
+        "actual": 4.3,
         "period": "2026-10-23",
-        "previous": 4.96
-      },
-      {
-        "seriesId": "DFII10",
-        "metricKey": "US_REAL_YIELD_10Y",
-        "actual": 2.66,
-        "period": "2026-10-23",
-        "previous": 2.64
+        "window": [
+          {
+            "period": "2026-10-22",
+            "value": 4.28
+          },
+          {
+            "period": "2026-10-23",
+            "value": 4.3
+          }
+        ],
+        "previous": 4.28
       },
       {
         "seriesId": "DGS2",
         "metricKey": "US_2Y_YIELD",
         "actual": 4.69,
         "period": "2026-10-23",
+        "window": [
+          {
+            "period": "2026-10-22",
+            "value": 4.65
+          },
+          {
+            "period": "2026-10-23",
+            "value": 4.69
+          }
+        ],
         "previous": 4.65
+      },
+      {
+        "seriesId": "DGS5",
+        "metricKey": "US_5Y_YIELD",
+        "actual": 4.85,
+        "period": "2026-10-23",
+        "window": [
+          {
+            "period": "2026-10-22",
+            "value": 4.8
+          },
+          {
+            "period": "2026-10-23",
+            "value": 4.85
+          }
+        ],
+        "previous": 4.8
+      },
+      {
+        "seriesId": "DGS10",
+        "metricKey": "US_10Y_YIELD",
+        "actual": 5.0,
+        "period": "2026-10-23",
+        "window": [
+          {
+            "period": "2026-10-22",
+            "value": 4.96
+          },
+          {
+            "period": "2026-10-23",
+            "value": 5.0
+          }
+        ],
+        "previous": 4.96
+      },
+      {
+        "seriesId": "DGS30",
+        "metricKey": "US_30Y_YIELD",
+        "actual": 5.15,
+        "period": "2026-10-23",
+        "window": [
+          {
+            "period": "2026-10-22",
+            "value": 5.12
+          },
+          {
+            "period": "2026-10-23",
+            "value": 5.15
+          }
+        ],
+        "previous": 5.12
+      },
+      {
+        "seriesId": "DFII10",
+        "metricKey": "US_REAL_YIELD_10Y",
+        "actual": 2.66,
+        "period": "2026-10-23",
+        "window": [
+          {
+            "period": "2026-10-22",
+            "value": 2.64
+          },
+          {
+            "period": "2026-10-23",
+            "value": 2.66
+          }
+        ],
+        "previous": 2.64
       },
       {
         "seriesId": "T10YIE",
         "metricKey": "US_10Y_BREAKEVEN_INFLATION",
         "actual": 2.34,
         "period": "2026-10-26",
+        "window": [
+          {
+            "period": "2026-10-23",
+            "value": 2.34
+          },
+          {
+            "period": "2026-10-26",
+            "value": 2.34
+          }
+        ],
         "previous": 2.34
       }
     ],
     "caveats": [
       "official-daily-close"
+    ],
+    "spreads": [
+      {
+        "key": "us10y-minus-us2y",
+        "actual": 0.31,
+        "previous": 0.31,
+        "period": "2026-10-23",
+        "window": [
+          {
+            "period": "2026-10-22",
+            "value": 0.31
+          },
+          {
+            "period": "2026-10-23",
+            "value": 0.31
+          }
+        ]
+      },
+      {
+        "key": "us10y-minus-us3m",
+        "actual": 0.7,
+        "previous": 0.68,
+        "period": "2026-10-23",
+        "window": [
+          {
+            "period": "2026-10-22",
+            "value": 0.68
+          },
+          {
+            "period": "2026-10-23",
+            "value": 0.7
+          }
+        ]
+      }
     ]
   }
 }

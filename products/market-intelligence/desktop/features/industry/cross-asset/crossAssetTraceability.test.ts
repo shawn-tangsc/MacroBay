@@ -58,7 +58,9 @@ it('states the daily row\'s numbers from the contract and the source catalog tha
   const refs = rendererSide.resolveTraceabilityPolicyRefs(entry)
   expect(refs['daily.series-ids']).toEqual(macroRatesSnapshotPublicPolicy.seriesIds)
   expect(refs['daily.release-cadence']).toBe('daily')
-  expect(refs['daily.maximum-readings']).toBe(4)
+  // 五个期限 + 实际利率 + 盈亏平衡：上限跟着契约走，不在这里另写一个数。
+  expect(refs['daily.maximum-readings']).toBe(macroRatesSnapshotPublicPolicy.maximumReadings)
+  expect(refs['daily.maximum-readings']).toBe(7)
   // 节律的 owner 是服务侧来源目录，契约只是镜像：这条断言就是"镜像不会漂移"的证明。
   expect(FRED_MACRO_ADAPTER_CONFIG.releaseCadence).toBe(macroRatesSnapshotPublicPolicy.releaseCadence)
   // 别侧的族老实说不在这一侧。

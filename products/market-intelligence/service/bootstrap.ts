@@ -523,9 +523,15 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // last outcome rather than the one line the snapshot carries. Read-only, and it re-parses its own
   // answer through the public boundary.
   registerDashboardFeedStatusIpc(register, intelligenceModule.dashboardFeedStatus)
-  // The same block's two rate rows read the FRED metric events the generic collector stored: official
-  // daily closes, so every reading carries its observation date and the `official-daily-close` caveat.
-  const macroRatesSnapshot = createMacroRatesSnapshotQuery({ listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents() })
+  // The same block's rate rows read the daily closes the collector stores: official trading-day
+  // closes, so every reading carries its observation date and the `official-daily-close` caveat, and
+  // the window each row draws comes from the same points.
+  const macroRatesSnapshot = createMacroRatesSnapshotQuery({
+    // 序列是这张表和美元指数、金价共用的那张：日频收盘写进去，窗口也从这里读。
+    store: intelligenceModule.macroMarket.store,
+    // 迁移期兜底：库里还没有这条序列时（刚升级、还没到下一次采集），用 metric 事件的单日读数。
+    listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents()
+  })
   registerMacroRatesIpc(register, { snapshot: macroRatesSnapshot.snapshot })
   // The daily brief's backfill tool reads those same two stores as of an earlier instant — the stored
   // macro-market points for the dollar and gold, and the stored FRED closes for the two 10-year yields.

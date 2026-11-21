@@ -33,13 +33,17 @@ describe('macro rates snapshot IPC', () => {
 
     expect(result).toEqual({
       state: 'available', asOf: '2026-10-14T12:00:00.000Z', caveats: ['official-daily-close'],
-      readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.24, previous: 5.22, period: '2026-10-09' }]
+      spreads: [],
+      readings: [{
+        seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.24, previous: 5.22, period: '2026-10-09',
+        window: [{ period: '2026-10-09', value: 5.24 }]
+      }]
     })
   })
 
   it('answers empty, with the daily caveat, when the store has no FRED observation', async () => {
     expect(await handler([])({})).toEqual({
-      state: 'empty', asOf: '2026-10-14T12:00:00.000Z', readings: [], caveats: ['official-daily-close']
+      state: 'empty', asOf: '2026-10-14T12:00:00.000Z', readings: [], spreads: [], caveats: ['official-daily-close']
     })
   })
 
@@ -48,7 +52,7 @@ describe('macro rates snapshot IPC', () => {
       let reads = 0
       const handlers = new Map<string, (payload: unknown) => unknown>()
       registerMacroRatesIpc(((productId, method, registered) => { handlers.set(`${productId}:${method}`, registered) }) as ProductIpcRegistrar,
-        { snapshot: () => { reads += 1; return { state: 'empty', asOf: new Date(now).toISOString(), readings: [], caveats: [] } } })
+        { snapshot: () => { reads += 1; return { state: 'empty', asOf: new Date(now).toISOString(), readings: [], spreads: [], caveats: [] } } })
 
       expect(await handlers.get(`market-intelligence:${macroRatesSnapshotPublicPolicy.method}`)!(payload)).toEqual({ state: 'unavailable' })
       expect(reads).toBe(0)
@@ -67,7 +71,11 @@ describe('macro rates snapshot IPC', () => {
     registerMacroRatesIpc(((productId, method, registered) => { handlers.set(`${productId}:${method}`, registered) }) as ProductIpcRegistrar, {
       snapshot: () => ({
         state: 'available' as const, asOf: new Date(now).toISOString(), caveats: ['official-daily-close'],
-        readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.24, period: 'today' }]
+        spreads: [],
+        readings: [{
+          seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.24, period: 'today',
+          window: [{ period: 'today', value: 5.24 }]
+        }]
       })
     })
 

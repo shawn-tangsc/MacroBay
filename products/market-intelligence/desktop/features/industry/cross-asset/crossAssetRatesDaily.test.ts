@@ -10,9 +10,10 @@ import type { MacroRatesReading } from '../../../../contracts/macro/macroRatesSn
  * 所以永远带自己的观察日，不能借用这一行的日子。2026-10-15 那次核对就是这个场景：10Y/实际利率/2Y
  * 都在 10-13，T10YIE 已经到 10-14。
  */
-const reading = (overrides: Partial<MacroRatesReading> = {}): MacroRatesReading => ({
-  seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.21, previous: 5.24, period: '2026-10-13', ...overrides
-})
+const reading = (overrides: Partial<MacroRatesReading> = {}): MacroRatesReading => {
+  const base = { seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.21, previous: 5.24, period: '2026-10-13' }
+  return { ...base, window: [{ period: base.period, value: base.actual }], ...overrides }
+}
 const rates = (...readings: readonly MacroRatesReading[]) => new Map(readings.map(entry => [entry.seriesId, entry]))
 const twoYear = (period: string) => reading({ seriesId: 'DGS2', metricKey: 'US_2Y_YIELD', actual: 4.79, previous: 4.8, period })
 const breakeven = (period: string) => reading({ seriesId: 'T10YIE', metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.35, period, previous: undefined })
