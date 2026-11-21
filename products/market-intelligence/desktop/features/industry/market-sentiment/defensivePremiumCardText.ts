@@ -28,6 +28,7 @@ export type DefensivePremiumCardText = {
     asOf: string
     unit: string
     direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
+    history: { since: string; remaining: string }
   }
   chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
   action: { refresh: string; enable: string; viewSource: string }
@@ -57,6 +58,7 @@ type Source = {
       info: { definition: string; relative: string; since: string; sourceDay: string }
       direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
     }
+    history: { since: string; remaining: string }
     chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
     action: { refresh: string; enable: string; viewSource: string }
   }
@@ -80,7 +82,7 @@ export function defensivePremiumCardText(text: Source): DefensivePremiumCardText
       info: text.defensivePremium.fearGreed.info
     },
     gaugeMarkers: text.sentiment.gaugeMarkers,
-    skew: text.defensivePremium.skew,
+    skew: { ...text.defensivePremium.skew, history: text.defensivePremium.history },
     chart: text.defensivePremium.chart,
     action: text.defensivePremium.action,
     loading: text.fearGreed.loading,

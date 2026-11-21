@@ -157,7 +157,10 @@
 .mi-defensive-premium__provenance { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 .mi-defensive-premium__half-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .mi-defensive-premium__source-action { justify-self: start; }
-.mi-defensive-premium__direction { margin: 0; color: var(--mi-dashboard-caution); font-size: var(--font-body); line-height: var(--line-body); }
+.mi-defensive-premium__direction { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }
+/* 只有「不知道方向」那三句才是警示色：正常的走阔/收窄不该被读成警告。 */
+.mi-defensive-premium__direction--unknown { color: var(--mi-dashboard-caution); }
+.mi-defensive-premium__history { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* 两条线各一张图；轴的刻度与日期用 meta 档，不另写像素。 */
 .mi-defensive-premium__chart { display: grid; gap: 2px; min-width: 0; margin: 0; }
 .mi-defensive-premium__chart-axis { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }

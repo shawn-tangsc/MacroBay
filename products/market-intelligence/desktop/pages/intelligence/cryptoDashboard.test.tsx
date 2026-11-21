@@ -1521,8 +1521,17 @@ describe('the defensive premium band', () => {
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
     const direction = band.querySelector('[data-skew-direction="steeper"]')!
     expect(direction.textContent).toBe(`${dashboardText.defensivePremium.skew.direction.steeper} · ${dashboardText.defensivePremium.skew.direction.window}`)
-    // 方向已知就不再出「不知道方向」那类句子。
+    // 方向已知就不再出「不知道方向」那类句子，也不涂警示色。
     expect(band.querySelector('[data-skew-direction="insufficient"]')).toBeNull()
+    expect(direction.classList.contains('mi-defensive-premium__direction--unknown')).toBe(false)
+
+    // 1–29 个读数才出「从哪天开始记录、还差几个」；满窗不出。
+    const six = await renderBand(skewClient({ kind: 'steeper' }, 6))
+    const history = six.querySelector('[data-skew-history]')!
+    expect(history.textContent).toContain('2026-07-06')
+    expect(history.textContent).toContain('24')
+    const full = await renderBand(skewClient({ kind: 'steeper' }, 30))
+    expect(full.querySelector('[data-skew-history]')).toBeNull()
 
     const notConnected = await renderBand()
     const header = notConnected.querySelector('.mi-defensive-premium__header')!
@@ -1538,6 +1547,21 @@ describe('the defensive premium band', () => {
     expect(container.querySelector('.mi-defensive-premium__header')).not.toBeNull()
   })
 
+  it('turns a first-read failure into one whole-card error, with no half and one retry', async () => {
+    const failing = { query: async () => { throw new Error('request failed') } }
+    const container = await renderBand(failing)
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    expect(band.querySelector('.mi-defensive-premium__halves')).toBeNull()
+    expect(band.querySelector('[data-verdict]')).toBeNull()
+    const stateView = band.querySelector('.state-view')!
+    expect(stateView).not.toBeNull()
+    // 标题行只剩卡头那颗 ⓘ：重试在状态面里，只有一颗。
+    const headerButtons = [...band.querySelectorAll('.mi-defensive-premium__header button')]
+    expect(headerButtons.map(button => button.getAttribute('aria-label')))
+      .toEqual([dashboardText.defensivePremium.titleInfoLabel])
+    expect(stateView.querySelectorAll('button')).toHaveLength(1)
+  })
+
   it('falls back to one whole-card state when both halves are unreadable, with no verdict', async () => {
     const bothDown = { query: async (input: { asOf: string; timeZone: string }) => ({
       asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
@@ -1549,6 +1573,9 @@ describe('the defensive premium band', () => {
     expect(band.querySelector('.mi-defensive-premium__halves')).toBeNull()
     expect(band.querySelector('[data-verdict]')).toBeNull()
     expect(band.querySelector('.state-view')).not.toBeNull()
+    // 状态面自己带重试，标题行不再给第二颗（AC-14）。
+    expect([...band.querySelectorAll('.mi-defensive-premium__header button')]).toHaveLength(1)
+    expect(band.querySelector('.state-view')!.querySelectorAll('button')).toHaveLength(1)
   })
 })
 

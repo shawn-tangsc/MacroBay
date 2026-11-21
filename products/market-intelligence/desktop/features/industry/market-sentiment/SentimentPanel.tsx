@@ -103,8 +103,12 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTit
             <GaugeFigure />
             <p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>
           </>
-          // 走到这里的只剩「还在读」。
-          : <LoadingState label={text.fearGreed.loading} minHeight={120} />}
+          // 走到这里的只剩「还在读」：弧线与刻度照画，指针和圆盘不画——换态时卡不许塌形。
+          : <>
+            <GaugeFigure />
+            <p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>
+            <LoadingState label={text.fearGreed.loading} minHeight={24} />
+          </>}
     </div>
     {/* 图下方卡内一行：状态句 + 恰一颗按钮（空态没有可点的动作）。左右跟卡内距，不进图、不居中盖图。 */}
     {row

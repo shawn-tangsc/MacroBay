@@ -40,8 +40,13 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   const skew = result?.optionSkew
   const bothUnavailable = fearGreed?.state === 'unavailable' && skew?.state === 'unavailable'
   const bothEmpty = fearGreed?.state === 'empty' && skew?.state === 'empty'
-  // 两半都读不到/都没有：整块一个状态面，不留半张卡，也不给结论。
-  const verdictKey = result && !bothUnavailable && !bothEmpty ? verdictPath(result) : undefined
+  /** 一张卡只能有一个整块状态面：首读失败、两半都读不到、两半都没有。它下面不出半张卡、不出结论。 */
+  const wholeCardState: 'error' | 'empty' | undefined = state.state === 'unavailable' || bothUnavailable
+    ? 'error'
+    : bothEmpty ? 'empty' : undefined
+  const showRefresh = wholeCardState === undefined && skew?.state !== 'not-connected'
+  const showViewSource = wholeCardState === undefined && skew?.state === 'not-connected'
+  const verdictKey = result && wholeCardState === undefined ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
 
   return <section className="mi-defensive-premium" aria-labelledby={TITLE_ID} data-testid="defensive-premium-card">
@@ -51,28 +56,20 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
         trigger={triggerProps => (
           <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.titleInfoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
         )} />
-      {/* 整卡只留一颗动作：未接入时这颗是「查看来源」，其余时候是刷新（加载中保留但禁用）。 */}
-      {skew?.state === 'not-connected' ? null : <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="sm" variant="plain"
-        onSelect={onRefresh} disabled={state.state === 'loading'} className="mi-defensive-premium__refresh" />}
+      {/* 整卡只留一颗动作：未接入时是「查看来源」，其余可读状态下是刷新；整块状态面自己带动作，
+          标题行不再给第二颗（AC-14）。 */}
+      {showRefresh ? <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="sm" variant="plain"
+        onSelect={onRefresh} disabled={state.state === 'loading'} className="mi-defensive-premium__refresh" /> : null}
       <span className="mi-defensive-premium__window">{dataText(`${TEXT_PREFIX}.window`)}</span>
-      {/* 「查看来源」是卡级动作，跟着「未接入」这件事走、落在标题行；行内不再放按钮。 */}
-      {skew?.state === 'not-connected' ? <Button size="small" onClick={onViewSource} className="mi-defensive-premium__source-action">
+      {showViewSource ? <Button size="small" onClick={onViewSource} className="mi-defensive-premium__source-action">
         {text.action.viewSource}
       </Button> : null}
     </header>
 
-    {state.state === 'unavailable' ? (
-      <p className="mi-defensive-premium__state" role="status">{dataText('pages.intelligence.portal.data.temporarilyUnavailable')}</p>
-    ) : null}
-
-    {bothUnavailable ? <StateView state="error" reasonCode="unreadable"
+    {wholeCardState === 'error' ? <StateView state="error" reasonCode="unreadable"
       action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />
-      : bothEmpty ? <StateView state="empty" reasonCode="not-yet" />
+      : wholeCardState === 'empty' ? <StateView state="empty" reasonCode="not-yet" />
         : <div className="mi-defensive-premium__halves">
-      {state.state === 'loading' ? <>
-        <div className="mi-defensive-premium__half" data-half="fear-greed"><LoadingState label={text.loading} minHeight={96} /></div>
-        <div className="mi-defensive-premium__half" data-half="skew"><LoadingState label={text.loading} minHeight={96} /></div>
-      </> : <>
       <div className="mi-defensive-premium__half" data-half="fear-greed">
         <div className="mi-defensive-premium__half-head">
           <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
@@ -121,8 +118,9 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
           )} />
         </div>
-        {skew?.state === 'not-connected' ? <p className="mi-defensive-premium__state">{text.skew.notConnected}</p>
-          : skew?.state === 'available' ? <>
+        {skew === undefined && state.state === 'loading' ? <LoadingState label={text.loading} minHeight={96} />
+          : skew?.state === 'not-connected' ? <p className="mi-defensive-premium__state">{text.skew.notConnected}</p>
+            : skew?.state === 'available' ? <>
             <p className="mi-defensive-premium__score"><strong>{skew.latest.riskReversal.toFixed(1)}</strong> <span>{text.skew.unit}</span></p>
             <p className="mi-defensive-premium__asof">{text.skew.asOf} {skew.latestDay}</p>
             {skew.points.length > 0
@@ -134,6 +132,12 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                   last: skew.points[0]!.riskReversal.toFixed(1)
                 })} />
               : null}
+            {/* 1–29 个读数才说「从哪天开始记录、还差几个」；0 点与满窗不说。 */}
+            {skew.points.length > 0 && skew.points.length < 30
+              ? <p className="mi-defensive-premium__history" data-skew-history>
+                {fillLabelParams(text.skew.history.remaining, { date: skew.seriesStart, n: String(30 - skew.points.length) })}
+              </p>
+              : null}
             {skew.direction.kind === 'unknown'
               ? <SkewDirectionSentence direction={skew.direction} latestDay={skew.latestDay} text={text} />
               : <p className="mi-defensive-premium__direction" data-skew-direction={skew.direction.kind}>
@@ -142,10 +146,9 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           </> : skew?.state === 'empty' ? <p className="mi-defensive-premium__state">{text.empty}</p>
             : <p className="mi-defensive-premium__state">{dataText('pages.intelligence.portal.data.temporarilyUnavailable')}</p>}
       </div>
-      </>}
     </div>}
 
-    {verdictKey && !bothUnavailable && !bothEmpty ? <p className="mi-defensive-premium__verdict" data-verdict>{dataText(verdictKey)}</p> : null}
+    {verdictKey && !wholeCardState ? <p className="mi-defensive-premium__verdict" data-verdict>{dataText(verdictKey)}</p> : null}
     {result ? <p className="mi-defensive-premium__provenance">{text.provenance}</p> : null}
   </section>
 }
@@ -178,7 +181,7 @@ function SkewDirectionSentence({ direction, latestDay, text }: Readonly<{
     : direction.reason === 'discontinuous'
       ? text.skew.direction.discontinuous
       : text.skew.direction.stale.replace('{time}', latestDay)
-  return <p className="mi-defensive-premium__direction" data-skew-direction={direction.reason}>{sentence}</p>
+  return <p className="mi-defensive-premium__direction mi-defensive-premium__direction--unknown" data-skew-direction={direction.reason}>{sentence}</p>
 }
 
 function toGaugeState(section: SentimentOptionsCardResult['fearGreed'] | undefined): DashboardFearGreedState {
