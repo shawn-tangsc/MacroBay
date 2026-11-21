@@ -142,43 +142,50 @@
 /* 恐惧与防跌溢价：整行一条带。宽度跟着看板容器走（1080 视口下是 1040），两半各自 minmax(0,1fr)，
    所以窄到哪里都不会把曲线挤成负宽。 */
 .mi-crypto-dashboard__defensive-premium-row { min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-.mi-defensive-premium { display: grid; gap: 12px; min-width: 0; }
+/* 定稿 §4.2：内容行三列并排 —— 仪表盘 112 | 恐惧贪婪格 1fr | BTC 偏斜格 1fr；
+   结论用 `grid-column: 1 / -1` 独占一行。没有断点、没有右列分支、没有 520 那套数字。 */
+.mi-defensive-premium { display: grid; grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; row-gap: 12px; min-width: 0; }
+.mi-defensive-premium > .mi-defensive-premium__header,
+.mi-defensive-premium > .mi-defensive-premium__verdict,
+.mi-defensive-premium > .mi-defensive-premium__provenance,
+.mi-defensive-premium > .state-view { grid-column: 1 / -1; }
 .mi-defensive-premium__header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .mi-defensive-premium__header h2 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-card-title); line-height: var(--line-card-title); font-weight: 650; }
 .mi-defensive-premium__refresh { margin-left: auto; }
 .mi-defensive-premium__window { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
-.mi-defensive-premium__halves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; min-width: 0; }
-.mi-defensive-premium__half { display: grid; align-content: start; gap: 8px; min-width: 0; }
-.mi-defensive-premium__half h3 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-section); line-height: var(--line-section); font-weight: 600; }
-.mi-defensive-premium__state,
-.mi-defensive-premium__asof { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-body); line-height: var(--line-body); }
-.mi-defensive-premium__score { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }
+.mi-defensive-premium__cell { display: grid; align-content: start; row-gap: 4px; min-width: 0; }
+.mi-defensive-premium__cell h3 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 500; }
+.mi-defensive-premium__cell-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* 读数行（两格共用同一行高）：值是 12/650 tabular，方向词与「截至」是 11/400 muted。 */
+.mi-defensive-premium__reading,
+.mi-defensive-premium__state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
+.mi-defensive-premium__reading strong { color: var(--mi-dashboard-text); font-size: var(--font-body); font-variant-numeric: tabular-nums; font-weight: 650; line-height: var(--line-body); }
 .mi-defensive-premium__verdict { margin: 0; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-defensive-premium__provenance { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
-.mi-defensive-premium__half-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .mi-defensive-premium__source-action { justify-self: start; }
-.mi-defensive-premium__direction { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }
+.mi-defensive-premium__direction { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* 只有「不知道方向」那三句才是警示色：正常的走阔/收窄不该被读成警告。 */
 .mi-defensive-premium__direction--unknown { color: var(--mi-dashboard-caution); }
 .mi-defensive-premium__history { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
-/* 两条线各一张图；轴的刻度与日期用 meta 档，不另写像素。 */
-.mi-defensive-premium__chart { display: grid; gap: 2px; min-width: 0; margin: 0; }
+/* 两条线各一张图，高度由 viewBox 与容器宽按同一比例算出来（1080 下 452 宽 → 46 高），
+   轴的刻度、日期与量程说明都画在这张 SVG 里，不另起一行。 */
+.mi-defensive-premium__chart { display: block; min-width: 0; margin: 0; }
 /* 空图框里的等待指示叠在图上，不占网格行：多一行，加载态就比正常态高。 */
 .mi-defensive-premium__chart-frame { position: relative; display: grid; }
 .mi-defensive-premium__chart-wait { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 /* 叠放的等待指示不吃自己那套内距与最小高：它的尺寸不该被用来撑卡，也不该溢出图框。 */
 .mi-defensive-premium__chart-wait .loading-state { min-height: 0; padding: 0; }
-.mi-defensive-premium__chart-axis { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
+.mi-defensive-premium__chart-axis { fill: var(--mi-dashboard-muted); font-size: var(--font-meta); }
 .mi-defensive-premium__grid line { stroke: var(--mi-dashboard-line); stroke-width: 1; }
-.mi-defensive-premium__line { stroke: var(--mi-dashboard-lime); stroke-width: 1.5; }
+.mi-defensive-premium__line { stroke: var(--mi-dashboard-lime); stroke-width: 1.4; }
 .mi-defensive-premium__dot { fill: var(--mi-dashboard-lime); }
 .mi-defensive-premium__tick text { fill: var(--mi-dashboard-muted); font-size: var(--font-meta); }
 .mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0 8px; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 .mi-crypto-dashboard__sentiment { display: grid; align-content: center; row-gap: 2px; container-name: mi-sentiment-positioning; container-type: inline-size; /* 卡宽跟卡片内容区：不由内容宽决定（空态不许缩水）。 */ width: 100%; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
-/* 仪表自带的那圈带内缩进是给旧并排带用的；进了卡的半格，缩进由卡的 gap 管。 */
-.mi-defensive-premium__half .mi-crypto-dashboard__sentiment { padding-left: 0; padding-right: 0; }
+/* 仪表自带的那圈带内缩进是给旧并排带用的；进了卡的第一列，缩进由卡的 column-gap 管。 */
+.mi-defensive-premium .mi-crypto-dashboard__sentiment { padding-left: 0; padding-right: 0; }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
 .mi-capital-conditions__summary > p { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions__header-band { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap); }

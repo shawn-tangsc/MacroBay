@@ -10,14 +10,19 @@ import type { FearGreedSeriesPoint, OptionSkewSeriesPoint } from '../../../../co
  *
  * 横轴从最新一个源日往回数 30 天：只剩 1 个点就画在右端（不假装有一整条历史），29 天就把
  * 最左那格空着。日期就是源给的 `YYYY-MM-DD`，不印钟点、不换算时区。
+ *
+ * 高度按定稿 §4.5：曲线区 46 高（1080 下每格 452 宽），轴旁那句量程/单位说明画在同一个 SVG
+ * 里、和刻度同一处，不另起一行——多一行就不是 46 了。
  */
 
 const WIDTH = 520
-const HEIGHT = 132
-const PAD = { left: 40, right: 10, top: 10, bottom: 20 } as const
+/** 452 宽时渲染 46 高（520 × 46 ÷ 452 ≈ 52.9）：高度随宽度等比，窄了只是变矮。 */
+const HEIGHT = 53
+const PAD = { left: 34, right: 6, top: 16, bottom: 11 } as const
 const PLOT_WIDTH = WIDTH - PAD.left - PAD.right
 const PLOT_HEIGHT = HEIGHT - PAD.top - PAD.bottom
 const WINDOW_DAYS = 30
+const AXIS_LABEL_BASELINE = 9
 
 export function FearGreedChart({ points, ariaLabel, axisLabel }: Readonly<{
   points: readonly FearGreedSeriesPoint[]
@@ -65,16 +70,17 @@ export function SkewChart({ points, ariaLabel, axis }: Readonly<{
  * 加载态的空图框：与真图同一 viewBox、同一 `width: 100%`，所以高度由同一套布局算出来，
  * 不写死任何像素；不画线、不画值——它只占位，不让换态把卡压塌。
  *
- * 等待的转圈叠在图框里、不另占一行：它是指示，不是内容，多一行就把加载态撑得比正常态高。
+ * 等待的转圈叠在图框里、不另占一行：它是指示，不是内容。
  * 给了 `waitingLabel` 时图框不再对读屏隐藏，转圈照常播报；空 `<svg>` 自己隐藏掉。
  */
 export function ChartPlaceholder({ axisLabel, waitingLabel }: Readonly<{ axisLabel: string; waitingLabel?: string }>): React.ReactElement {
   return <figure className="mi-defensive-premium__chart" data-chart-placeholder
     {...(waitingLabel === undefined ? { 'aria-hidden': 'true' } : {})}>
-    {/* 与真图同一条轴说明：少了它，加载态比正常态矮一行。 */}
-    <figcaption className="mi-defensive-premium__chart-axis">{axisLabel}</figcaption>
     <span className="mi-defensive-premium__chart-frame">
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto" aria-hidden="true" />
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto" aria-hidden="true">
+        {/* 与真图同一条轴说明：少了它，加载态比正常态矮一块。 */}
+        <text className="mi-defensive-premium__chart-axis" x="0" y={AXIS_LABEL_BASELINE}>{axisLabel}</text>
+      </svg>
       {waitingLabel === undefined ? null : <span className="mi-defensive-premium__chart-wait">
         <LoadingState label={waitingLabel} layout="inline" />
       </span>}
@@ -90,17 +96,19 @@ function ChartFigure({ ariaLabel, axisLabel, ticks, formatTick = String, childre
   children: React.ReactNode
 }>): React.ReactElement {
   const unique = [...new Set(ticks)]
+  const min = Math.min(...unique)
+  const max = Math.max(...unique)
   return <figure className="mi-defensive-premium__chart">
-    <figcaption className="mi-defensive-premium__chart-axis">{axisLabel}</figcaption>
     <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto">
+      <text className="mi-defensive-premium__chart-axis" x="0" y={AXIS_LABEL_BASELINE}>{axisLabel}</text>
       <g className="mi-defensive-premium__grid">
         {unique.map(value => <line key={value} x1={PAD.left} x2={WIDTH - PAD.right}
-          y1={yOf(value, Math.min(...unique), Math.max(...unique))} y2={yOf(value, Math.min(...unique), Math.max(...unique))} />)}
+          y1={yOf(value, min, max)} y2={yOf(value, min, max)} />)}
       </g>
       {children}
       <g className="mi-defensive-premium__tick">
-        {unique.map(value => <text key={value} x={PAD.left - 6} textAnchor="end" dominantBaseline="middle"
-          y={yOf(value, Math.min(...unique), Math.max(...unique))}>{formatTick(value)}</text>)}
+        {unique.map(value => <text key={value} x={PAD.left - 4} textAnchor="end" dominantBaseline="middle"
+          y={yOf(value, min, max)}>{formatTick(value)}</text>)}
       </g>
     </svg>
   </figure>
@@ -108,9 +116,10 @@ function ChartFigure({ ariaLabel, axisLabel, ticks, formatTick = String, childre
 
 function XAxisLabels({ first, last }: Readonly<{ first: string; last: string }>): React.ReactElement {
   // 只有一个点时左右两处会印同一个日期，看起来像有 30 天跨度；那种情况只留右缘那一个。
+  const baseline = HEIGHT - 2
   return <g className="mi-defensive-premium__tick">
-    {first === last ? null : <text data-axis-date="first" x={PAD.left} y={HEIGHT - 6} textAnchor="start">{first}</text>}
-    <text data-axis-date="last" x={WIDTH - PAD.right} y={HEIGHT - 6} textAnchor="end">{last}</text>
+    {first === last ? null : <text data-axis-date="first" x={PAD.left} y={baseline} textAnchor="start">{first}</text>}
+    <text data-axis-date="last" x={WIDTH - PAD.right} y={baseline} textAnchor="end">{last}</text>
   </g>
 }
 
@@ -120,14 +129,18 @@ function XAxisLabels({ first, last }: Readonly<{ first: string; last: string }>)
 function Series({ plotted, seriesKey }: Readonly<{ plotted: ReadonlyArray<{ x: number; y: number }>; seriesKey: string }>): React.ReactElement {
   return <g data-chart-series={seriesKey}>
     {plotted.length >= 5
-      ? <polyline className="mi-defensive-premium__line" fill="none" points={pathOf(plotted)} data-chart-line={seriesKey} />
+      ? <polyline className="mi-defensive-premium__line" fill="none" points={pointsOf(plotted)} data-chart-line={seriesKey} />
       : null}
-    {plotted.map((point, index) => <circle key={`${point.x}-${index}`} className="mi-defensive-premium__dot" cx={point.x} cy={point.y} r="2.5" />)}
+    {plotted.map((point, index) => <circle key={`${point.x}-${index}`} className="mi-defensive-premium__dot" cx={point.x} cy={point.y} r="1.6" />)}
   </g>
 }
 
-function pathOf(points: ReadonlyArray<{ x: number; y: number }>): string {
-  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+/**
+ * `polyline` 的 `points` 是「x,y 空格分隔」的**点列**，不是路径语法：写成 `M … L …` 时解析器读到
+ * 第一个不是数字的字符就停下，整条线一个点都没有——圆点还在、连线消失（读者 2026-11-22 看到的就是）。
+ */
+function pointsOf(points: ReadonlyArray<{ x: number; y: number }>): string {
+  return points.map(point => `${point.x},${point.y}`).join(' ')
 }
 
 function oldestLabel(points: ReadonlyArray<{ day: string }>): string {
