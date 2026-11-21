@@ -62,6 +62,40 @@ describe('metric parsers', () => {
     expect(drafts[0]?.actual).toBe(22)
   })
 
+  it('parses every day in a fear and greed payload, newest first', () => {
+    const drafts = parseAlternativeFearGreedPayload(
+      { data: [
+        { value: '24', value_classification: 'Extreme Fear', timestamp: '1795046400' },
+        { value: '31', value_classification: 'Fear', timestamp: '1794960000' },
+        { value: '40', value_classification: 'Fear', timestamp: '1794873600' }
+      ] },
+      { ...config, sourceId: 'alternative-fear-greed', category: 'mainstream-news' }
+    )
+    expect(drafts.map((draft) => draft.period)).toEqual(['2026-11-19', '2026-11-18', '2026-11-17'])
+    expect(drafts.map((draft) => draft.actual)).toEqual([24, 31, 40])
+    expect(drafts[0]?.releaseTime).toBe('2026-11-19T00:00:00.000Z')
+  })
+
+  it('skips fear and greed days with no timestamp instead of pretending they are today', () => {
+    const drafts = parseAlternativeFearGreedPayload(
+      { data: [
+        { value: '24', value_classification: 'Extreme Fear', timestamp: '1795046400' },
+        { value: 'not-a-number' },
+        { value: '31', value_classification: 'Fear' }
+      ] },
+      { ...config, sourceId: 'alternative-fear-greed', category: 'mainstream-news' }
+    )
+    expect(drafts).toHaveLength(1)
+    expect(drafts[0]?.period).toBe('2026-11-19')
+  })
+
+  it('throws when no fear and greed day carries a usable timestamp and value', () => {
+    expect(() => parseAlternativeFearGreedPayload(
+      { data: [{ value: '24' }, { value: 'x', timestamp: '1795046400' }] },
+      { ...config, sourceId: 'alternative-fear-greed', category: 'mainstream-news' }
+    )).toThrow(/alternative-fear-greed/)
+  })
+
   it('parses Binance ETH ticker fixture', () => {
     const drafts = parseBinanceSpotMarketPayload(
       {
