@@ -66,16 +66,32 @@ describe('fredRatesHistoryPoints', () => {
     expect(points.map(point => point.value)).toEqual([4.5, 4.73])
   })
 
-  it('maps the admitted series to instrument names, not to the provider', () => {
-    expect(Object.keys(macroMarketRatesSeries)).toHaveLength(7)
-    expect(macroMarketRatesSeries).toEqual({
-      DGS3MO: 'ust-3m', DGS2: 'ust-2y', DGS5: 'ust-5y', DGS10: 'ust-10y', DGS30: 'ust-30y',
-      DFII10: 'ust-10y-real', T10YIE: 'ust-10y-breakeven'
+  it('does not store trading days before 1970, where the epoch key cannot reach', () => {
+    // 1Y/3Y/5Y/10Y/20Y 从 1962 年就有值，但存储主键是非负纪元毫秒。早期行**跳过**而不是让整批判非法：
+    // 一个 1962 的行不该让一整个序列消失（真库重放时六条序列就是这样丢的）。
+    const points = fredRatesHistoryPoints({
+      payload: fredPayload([
+        { date: '1962-01-02', value: '4.07' },
+        { date: '1969-12-31', value: '7.99' },
+        { date: '1970-01-02', value: '8.00' },
+        { date: '2026-11-10', value: '4.73' }
+      ]),
+      providerSeriesId: 'DGS10', observedAtMs: nowMs
     })
-    expect(macroMarketRatesSeriesIds).toHaveLength(7)
-    expect(macroMarketRatesSeriesIds).toEqual([
-      'ust-3m', 'ust-2y', 'ust-5y', 'ust-10y', 'ust-30y', 'ust-10y-real', 'ust-10y-breakeven'
-    ])
+
+    expect(points.map(point => new Date(point.atMs).toISOString().slice(0, 10))).toEqual(['1970-01-02', '2026-11-10'])
+  })
+
+  it('maps the admitted series to instrument names, not to the provider', () => {
+    expect(Object.keys(macroMarketRatesSeries)).toHaveLength(19)
+    expect(macroMarketRatesSeries).toMatchObject({
+      DGS1MO: 'ust-1m', DGS3MO: 'ust-3m', DGS20: 'ust-20y', DGS30: 'ust-30y',
+      DFII10: 'ust-10y-real', DFII30: 'ust-30y-real', T5YIFR: 'ust-5y5y-forward'
+    })
+    expect(macroMarketRatesSeriesIds).toHaveLength(19)
+    expect(macroMarketRatesSeriesIds).toContain('ust-1m')
+    expect(macroMarketRatesSeriesIds).toContain('ust-20y-real')
+    expect(new Set(macroMarketRatesSeriesIds).size).toBe(19)
     const series = Object.keys(macroMarketRatesSeries).map(providerSeriesId =>
       fredRatesHistoryPoints({
         payload: fredPayload([{ date: '2026-11-10', value: '1.25' }]), providerSeriesId, observedAtMs: nowMs

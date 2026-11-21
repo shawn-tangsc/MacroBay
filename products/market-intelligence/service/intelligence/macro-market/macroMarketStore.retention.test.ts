@@ -74,7 +74,7 @@ describe('macro-market bar retention', () => {
   it('never trims any registered daily rate series', () => {
     const store = openStore()
     const longAgo = nowMs - 900 * 24 * hour
-    expect(macroMarketRatesSeriesIds.length).toBe(7)
+    expect(macroMarketRatesSeriesIds.length).toBe(19)
     store.append(macroMarketRatesSeriesIds.map((series, index) => ({
       series, atMs: longAgo + index * 24 * hour, value: 4, observedAtMs: nowMs
     })))

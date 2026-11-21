@@ -32,12 +32,17 @@ export function fredRatesHistoryPoints(input: Readonly<{
 }>): MacroMarketPoint[] {
   const series = seriesByProviderId.get(input.providerSeriesId)
   if (!series) return []
-  return readFredObservations(input.payload).map((row) => ({
-    series,
-    atMs: Date.parse(`${row.date}T00:00:00.000Z`),
-    value: row.value,
-    observedAtMs: input.observedAtMs
-  }))
+  const points: MacroMarketPoint[] = []
+  for (const row of readFredObservations(input.payload)) {
+    const atMs = Date.parse(`${row.date}T00:00:00.000Z`)
+    // 存储的主键是「非负的纪元毫秒」，1970 以前的交易日（1Y/3Y/5Y/10Y/20Y 从 1962 起）落不进来。
+    // 窗口是最近一年，用不到它们；所以这里明确不存早期历史，而不是让一条 1962 的行把整批都判成
+    // 非法——那会让一整个序列在真实数据上消失（第一次真库重放就是这样丢了六条）。
+    // 登记表里的 `historyStart` 是 FRED 的事实，不是库里第一行的日期。
+    if (!Number.isSafeInteger(atMs) || atMs < 0) continue
+    points.push({ series, atMs, value: row.value, observedAtMs: input.observedAtMs })
+  }
+  return points
 }
 
 export type FredRatesWindowIngest = Readonly<{ sourceId: string; payloadBody?: string; payloadMetaJson?: string }>

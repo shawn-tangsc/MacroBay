@@ -3,6 +3,7 @@ import type {
   MacroRatesReading, MacroRatesSpread, MacroRatesSpreadKey, MacroRatesWindowPoint
 } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import type { MacroMarketStore } from '../macro-market/macroMarketStore'
+import { macroMarketRatesSeries } from '../macro-market/macroMarketSeries'
 import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
 
 export type MacroRatesSnapshot =
@@ -100,8 +101,11 @@ export function createMacroRatesSnapshotQuery(deps: MacroRatesSnapshotQueryDeps)
     const windows = new Map<string, readonly MacroRatesWindowPoint[]>()
     if (!deps.store) return windows
     for (const seriesId of policy.seriesIds) {
+      // 契约按供应商序列指认（DGS10），存储按品种名（ust-10y）：这一行是两者的唯一换算。
+      const storedSeries = macroMarketRatesSeries[seriesId]
+      if (!storedSeries) continue
       const points: MacroRatesWindowPoint[] = []
-      for (const point of deps.store.series(seriesId, 0, Number.MAX_SAFE_INTEGER)) {
+      for (const point of deps.store.series(storedSeries, 0, Number.MAX_SAFE_INTEGER)) {
         if (!level(point.value)) continue
         const period = observationDay(point.atMs)
         if (!period) continue

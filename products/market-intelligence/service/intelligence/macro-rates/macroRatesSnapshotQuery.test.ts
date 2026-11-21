@@ -7,6 +7,7 @@ import { createMacroRatesSnapshotQuery } from './macroRatesSnapshotQuery'
 import type { MacroRatesSnapshot } from './macroRatesSnapshotQuery'
 import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import { createMacroMarketStore, type MacroMarketStore } from '../macro-market/macroMarketStore'
+import { macroMarketRatesSeries } from '../macro-market/macroMarketSeries'
 import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
 
 const now = Date.parse('2026-10-14T12:00:00.000Z')
@@ -20,6 +21,9 @@ function openStore(): MacroMarketStore {
   const directory = mkdtempSync(join(tmpdir(), 'macro-rates-query-')); directories.push(directory)
   return createMacroMarketStore(join(directory, 'macro-market.sqlite'))
 }
+
+/** 契约按供应商序列指认，存储按品种名——用例也照这个换算，不拿一侧的 id 去写另一侧的表。 */
+const stored = (providerSeriesId: string): string => macroMarketRatesSeries[providerSeriesId]!
 
 /** Stored daily closes for one instrument: `[date, level]` pairs, written the way the collector writes them. */
 function storeSeries(store: MacroMarketStore, series: string, rows: readonly (readonly [string, number])[]): void {
@@ -57,7 +61,7 @@ function published(snapshot: MacroRatesSnapshot) {
 describe('macro rates snapshot query', () => {
   it('answers each series with the window the store holds, newest last', () => {
     const store = openStore()
-    storeSeries(store, macroRatesSnapshotPublicPolicy.series.us10y, [['2026-10-08', 5.22], ['2026-10-09', 5.24]])
+    storeSeries(store, stored(macroRatesSnapshotPublicPolicy.series.us10y), [['2026-10-08', 5.22], ['2026-10-09', 5.24]])
     const snapshot = published(query([], store).snapshot())
 
     expect(snapshot.state).toBe('available')
@@ -68,13 +72,27 @@ describe('macro rates snapshot query', () => {
     store.close()
   })
 
+  it('reads the stored window by instrument name, never by the provider id', () => {
+    const store = openStore()
+    // 写进库的键是 `ust-10y`（品种名）。拿 `DGS10` 去读会读空——那是第一次真库重放抓到的真实 bug：
+    // 用例用同一个 id 写和读时全绿，生产里窗口永远是空的、面板退回「只有一天」。
+    storeSeries(store, 'ust-10y', [['2026-10-09', 5.24]])
+    storeSeries(store, 'DGS10', [['2026-10-09', 9.99]])
+    const snapshot = published(query([], store).snapshot())
+
+    expect(snapshot.readings).toHaveLength(1)
+    expect(snapshot.readings[0]).toMatchObject({ seriesId: 'DGS10', actual: 5.24 })
+    expect(JSON.stringify(snapshot)).not.toContain('9.99')
+    store.close()
+  })
+
   it('states a spread only on the days both legs share', () => {
     const store = openStore()
     const series = macroRatesSnapshotPublicPolicy.series
-    storeSeries(store, series.us10y, [['2026-10-08', 5.22], ['2026-10-09', 5.24]])
+    storeSeries(store, stored(series.us10y), [['2026-10-08', 5.22], ['2026-10-09', 5.24]])
     // 2 年期只有 10-09：10-08 那天没有共同收盘，就不该有那一天的价差点。
-    storeSeries(store, series.us2y, [['2026-10-09', 4.8]])
-    storeSeries(store, series.us3m, [['2026-10-09', 4.6]])
+    storeSeries(store, stored(series.us2y), [['2026-10-09', 4.8]])
+    storeSeries(store, stored(series.us3m), [['2026-10-09', 4.6]])
     const snapshot = published(query([], store).snapshot())
 
     const us2y = snapshot.readings.find((reading) => reading.seriesId === series.us2y)
@@ -99,8 +117,8 @@ describe('macro rates snapshot query', () => {
   it('carries the spread window day by day, with a previous value when both days are shared', () => {
     const store = openStore()
     const series = macroRatesSnapshotPublicPolicy.series
-    storeSeries(store, series.us10y, [['2026-10-08', 5.22], ['2026-10-09', 5.24]])
-    storeSeries(store, series.us2y, [['2026-10-08', 4.9], ['2026-10-09', 4.8]])
+    storeSeries(store, stored(series.us10y), [['2026-10-08', 5.22], ['2026-10-09', 5.24]])
+    storeSeries(store, stored(series.us2y), [['2026-10-08', 4.9], ['2026-10-09', 4.8]])
     const snapshot = published(query([], store).snapshot())
 
     const spread = snapshot.spreads.find((candidate) => candidate.key === 'us10y-minus-us2y')
@@ -113,7 +131,7 @@ describe('macro rates snapshot query', () => {
 
   it('does not state a spread whose short leg is missing', () => {
     const store = openStore()
-    storeSeries(store, macroRatesSnapshotPublicPolicy.series.us10y, [['2026-10-09', 5.24]])
+    storeSeries(store, stored(macroRatesSnapshotPublicPolicy.series.us10y), [['2026-10-09', 5.24]])
     const snapshot = published(query([], store).snapshot())
 
     expect(snapshot.readings).toHaveLength(1)
@@ -124,7 +142,7 @@ describe('macro rates snapshot query', () => {
 
   it('keeps a day with no observation as a gap in the window, never as a zero', () => {
     const store = openStore()
-    storeSeries(store, macroRatesSnapshotPublicPolicy.series.us10y, [['2026-10-07', 5.28], ['2026-10-09', 5.24]])
+    storeSeries(store, stored(macroRatesSnapshotPublicPolicy.series.us10y), [['2026-10-07', 5.28], ['2026-10-09', 5.24]])
     const snapshot = published(query([], store).snapshot())
 
     expect(snapshot.readings[0]?.window).toEqual([
@@ -138,7 +156,7 @@ describe('macro rates snapshot query', () => {
   it('caps the window at the policy length, keeping the newest trading days', () => {
     const store = openStore()
     const length = macroRatesSnapshotPublicPolicy.windowPoints + 20
-    storeSeries(store, macroRatesSnapshotPublicPolicy.series.us10y,
+    storeSeries(store, stored(macroRatesSnapshotPublicPolicy.series.us10y),
       Array.from({ length }, (_, index) => [new Date(Date.UTC(2025, 0, 1) + index * day).toISOString().slice(0, 10), 4 + index / 1_000] as const))
     const snapshot = published(query([], store).snapshot())
 
@@ -158,7 +176,7 @@ describe('macro rates snapshot query', () => {
     expect(snapshot.state).toBe('available')
     expect(snapshot.asOf).toBe('2026-10-14T12:00:00.000Z')
     expect(snapshot.caveats).toEqual(['official-daily-close'])
-    // 顺序是曲线读的顺序：期限在前（3M → 30Y），非期限的两个跟在后面。
+    // 顺序跟着契约的 seriesIds 走（曲线排齐是契约那一笔的事，这里只钉「按契约顺序出」）。
     expect(snapshot.readings).toEqual([
       {
         seriesId: 'DGS2', metricKey: 'US_2Y_YIELD', actual: 4.8, previous: 4.72, period: '2026-10-09',
@@ -194,7 +212,7 @@ describe('macro rates snapshot query', () => {
 
   it('prefers the stored window over the single-day event for the same series', () => {
     const store = openStore()
-    storeSeries(store, macroRatesSnapshotPublicPolicy.series.us10y, [['2026-10-08', 5.22], ['2026-10-09', 5.24]])
+    storeSeries(store, stored(macroRatesSnapshotPublicPolicy.series.us10y), [['2026-10-08', 5.22], ['2026-10-09', 5.24]])
     const snapshot = published(query([event({ actual: 5.3 })], store).snapshot())
 
     expect(snapshot.readings).toHaveLength(1)

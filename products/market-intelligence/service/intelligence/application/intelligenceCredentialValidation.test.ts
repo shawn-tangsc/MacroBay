@@ -53,7 +53,7 @@ describe('validateIntelligenceCredential', () => {
       expect.any(Object)
     )
     // 探针打的是配置里的第一条序列（现在短端在最前），只证明「这条请求能通」。
-    expect(mockedHttpRequest.mock.calls[0]?.[0]?.url).toContain('series_id=DGS3MO')
+    expect(mockedHttpRequest.mock.calls[0]?.[0]?.url).toContain('series_id=DGS1MO')
   })
 
   it('verifies bea-economic-series with UserID on the probe request', async () => {
