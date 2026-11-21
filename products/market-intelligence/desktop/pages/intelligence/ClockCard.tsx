@@ -151,9 +151,11 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         ? { actionLabel: text.openSources, onAction: onOpenPolicySources } : {})
     })
   /**
-   * 抬起来的那块牌（悬停或键盘聚焦）：环上一组牌会互相叠住，抬到最前的那块必须整块可读
+   * 抬起来的那块牌（鼠标悬停）：环上一组牌会互相叠住，抬到最前的那块必须整块可读
    * （用户 2026-11：「鼠标移动到对应的卡片就会到前面来」）。层级只在抬起的这一块上用行内给，
    * 其余牌子的层级仍由模型按「离现在近的在上」排好——两套规矩不混在 CSS 里。
+   *
+   * 不给牌子 `tabIndex`：它们不点击、不展开，做成可聚焦就是假控件（读屏会以为这里能操作）。
    */
   const [raised, setRaised] = useState<string | undefined>(undefined)
   const center = model.center
@@ -226,7 +228,9 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           牌上三样：名字、值（有才显示）、**距离**（用户 2026-11：「距离时间呢？」）。
           距离并进值那一行，牌高仍在 37–44px，不为它改时钟几何。
           近了不合并：两块各自一块牌、各写自己的名字与天数，允许叠住（上限在布局里），
-          鼠标移到哪块、键盘聚焦到哪块，哪块就抬到最前并整块可读（用户 2026-11）。 */}
+          鼠标移到哪块，哪块就抬到最前并整块可读（用户 2026-11）。
+          **只对鼠标抬，不给牌子 tabIndex**：牌不点击也不展开，给它焦点就是假控件。
+          遮挡只是视觉问题——牌上的名字与天数是**真实文本**，读屏照读，被盖住的那块信息不丢。 */}
       {model.plaques.map((plaque: ClockPlaqueStacked) => {
         const distance = plaqueDistance(plaque, text)
         return <div
@@ -235,11 +239,8 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           data-clock-plaque={plaque.zone}
           data-clock-metric={plaque.metricKey}
           {...(plaque.id === centerPlaqueId ? { 'data-center': true } : {})}
-          tabIndex={0}
           onMouseEnter={() => setRaised(plaque.id)}
           onMouseLeave={() => setRaised(undefined)}
-          onFocus={() => setRaised(plaque.id)}
-          onBlur={() => setRaised(undefined)}
           style={{
             left: plaque.x, top: plaque.y, '--o': plaque.opacity, '--mi-clock-z': plaque.z,
             ...(raised === plaque.id ? { zIndex: clockPlaqueRaisedZ } : {})

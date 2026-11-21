@@ -527,13 +527,32 @@ it('raises the plaque under the pointer above every other plaque', async () => {
   expect(cpi.style.zIndex).toBe('')
 })
 
-it('raises the plaque a keyboard reader focuses, so the whole plaque is readable', async () => {
+/**
+ * 牌子是**假控件**的反面：它不点击、不展开，所以不许进 Tab 序列（进去了读屏会以为这里能操作，
+ * 聚焦之后却什么都不发生）。抬起来只对鼠标，键盘/读屏靠的是「文字本来就在」。
+ */
+it('keeps the plaques out of the tab order, because nothing happens on them', async () => {
   const { host } = await render()
-  const cpi = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
-  // 牌可以聚焦（Tab 走到它），聚焦即抬到最前。
-  expect(cpi.getAttribute('tabindex')).toBe('0')
-  await act(async () => { cpi.dispatchEvent(new FocusEvent('focusin', { bubbles: true })) })
-  expect(cpi.style.zIndex).toBe(String(clockPlaqueRaisedZ))
-  await act(async () => { cpi.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
-  expect(cpi.style.zIndex).toBe('')
+  for (const node of host.querySelectorAll<HTMLElement>('[data-clock-plaque]')) {
+    expect(node.getAttribute('tabindex'), '牌子不许可聚焦').toBeNull()
+    expect(node.getAttribute('role'), '牌子不许伪装成控件').toBeNull()
+  }
+})
+
+/**
+ * 叠住只是**视觉**问题：信息不能跟着被盖掉。每块牌的名字与天数都是真实文本，
+ * 读屏按文档顺序读得到——包括被压在最下面那块，以及和它压在一起的那条时间。
+ */
+it('lets a screen reader read every plaque in full, including the covered one', async () => {
+  const { host } = await render()
+  const covered = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  // 今天被盖住的是 CPI：名字与它自己的 19 天都在文本里。
+  expect(covered.textContent).toContain('CPI 年率')
+  expect(covered.textContent).toContain('19 天后')
+  // 被盖住的那块没有被任何无障碍手段藏起来（藏了读屏就读不到）。
+  for (const node of host.querySelectorAll<HTMLElement>('[data-clock-plaque]')) {
+    expect(node.getAttribute('aria-hidden'), '盖住是视觉的，不许连读屏一起藏').toBeNull()
+    expect(node.hasAttribute('hidden')).toBe(false)
+    expect(node.getAttribute('aria-label'), '文字本来就在，不再另起一个可访问名重复读一遍').toBeNull()
+  }
 })
