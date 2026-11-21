@@ -1434,8 +1434,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/consumer-confidence",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "咨商会 · 消费者信心指数官方主题页，含当月指数"
     },
     "status": "active"
   },
@@ -1912,8 +1915,11 @@
     "measure": "DIFF",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "U.S. Bureau of Economic Analysis",
+      "url": "https://www.bea.gov/data/intl-trade-investment/international-transactions",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "BEA · 国际交易（含经常帐）官方数据集页"
     },
     "status": "active"
   },
@@ -2770,8 +2776,11 @@
     "measure": "ANNUALIZED_QOQ",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "U.S. Bureau of Economic Analysis",
+      "url": "https://www.bea.gov/data/gdp/gross-domestic-product",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "BEA · GDP 发布内含 final sales 分项，按年化季率发布"
     },
     "status": "active"
   },
@@ -3571,8 +3580,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/employment-trends-index",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "咨商会 · 就业趋势指数（ETI）官方主题页"
     },
     "status": "active"
   },
@@ -3592,8 +3604,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/us-leading-indicators",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "咨商会 · 领先经济指标官方主题页，含月度环比"
     },
     "status": "active"
   },
