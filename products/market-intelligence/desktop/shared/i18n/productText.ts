@@ -452,7 +452,7 @@ mi: miText['zh-CN'],
              */
             ustCurve: {
               title: '国债收益率 · 日频',
-              info: 'FRED 日收盘，最后一个点就是观测日，不画到今天。起点归一按基点算：4.5% → 5.0% 是 +50bp，不是 +11%。10Y 实际利率 + 10Y 通胀补偿 = 10Y，这两行只做分解、不进曲线；价差要两条腿同一天都有收盘，缺一天就留空。',
+              info: 'FRED 日收盘，最后一个点就是观测日，不画到今天。起点归一按基点算：4.5% → 5.0% 是 +50bp，不是 +11%。10Y 实际利率 + 10Y 通胀补偿 = 10Y，这两行只做分解、不进曲线，三行日期不同时不能直接相加；价差要两条腿同一天都有收盘，缺一天就留空。',
               tableAria: '国债收益率读数',
               colName: '指标',
               colLatest: '最新',
@@ -2106,7 +2106,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             ustCurve: {
               title: 'Treasury yields · daily',
-              info: 'FRED daily close: the last point is the observation date, never drawn up to today. Normalization is in basis points: 4.5% → 5.0% is +50bp, not +11%. Nominal 10Y = real yield + breakeven, and those two rows are the decomposition only, not drawn; a spread needs both legs on the same trading day, and a missing day stays blank.',
+              info: 'FRED daily close: the last point is the observation date, never drawn up to today. Normalization is in basis points: 4.5% → 5.0% is +50bp, not +11%. Nominal 10Y = real yield + breakeven, and those two rows are the decomposition only, not drawn, so they cannot be added up when the three rows are on different dates; a spread needs both legs on the same trading day, and a missing day stays blank.',
               tableAria: 'Treasury yield readings',
               colName: 'Series',
               colLatest: 'Latest',
