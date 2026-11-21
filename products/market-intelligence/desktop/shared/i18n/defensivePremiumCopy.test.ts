@@ -184,6 +184,27 @@ describe('fear & greed + downside premium card copy', () => {
     expect(pick(enLeaves, 'skew.direction.insufficient')).toContain(`Fewer than ${points} days`)
   })
 
+  it('keeps the skew history row about readings, not calendar days', () => {
+    // 这一行讲「偏斜自哪天开始记录、还差几个读数」（PRD :203 / 定稿 §5.3），不是「满一年分位」那件事。
+    // 判据断在占位符与词上：since 必须带 {date}；remaining 必须同时带 {date} 与 {n}，
+    // 且不许出现「天 / 年 / 周」这类日历单位——用日历说法就是语义又漂回分位满一年。
+    const zhLeaves = leaves(block('zh-CN'), '', [])
+    const enLeaves = leaves(block('en-US'), '', [])
+    const pick = (list: Leaf[], path: string): string => list.find((leaf) => leaf.path === path)?.value ?? ''
+    const calendar = /天|年|周|\b(?:days?|weeks?|months?|years?)\b/iu
+    for (const [locale, list] of [
+      ['zh-CN', zhLeaves],
+      ['en-US', enLeaves]
+    ] as const) {
+      const since = pick(list, 'history.since')
+      const remaining = pick(list, 'history.remaining')
+      expect(since, `${locale}: history.since needs {date}`).toContain('{date}')
+      expect(remaining, `${locale}: history.remaining needs {date}`).toContain('{date}')
+      expect(remaining, `${locale}: history.remaining needs {n}`).toContain('{n}')
+      expect(remaining, `${locale}: history.remaining must not count calendar time`).not.toMatch(calendar)
+    }
+  })
+
   it('keeps one direction vocabulary: each direction slot word reappears in that direction\'s verdict lines', () => {
     // 2026-11-22 用户口径（Chief 转）：一套词。方向位印「走阔/收窄/基本没动」（英 Widening/Narrowing/Little changed），
     // 结论句必须用同一个词，不许方向位说 Steeper、结论句说 widening 各说一套。
