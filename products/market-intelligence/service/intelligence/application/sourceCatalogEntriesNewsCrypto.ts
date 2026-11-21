@@ -383,8 +383,9 @@ const catalogEntries: IntelligenceSourceCatalogEntry[] = [
     reliabilityTier: 'aggregator',
     eventFamily: 'metric-event',
     readiness: 'live',
+    readinessNote: '首轮一次拉 365 天（日频），之后每轮仍取整段、按源日去重：同一天只有一条，来稿不旧于已存才覆盖。回填条目不进翻译与评估队列。',
     supportedImpactScopes: ['crypto-market'],
-    adapterConfig: { endpointUrl: 'https://api.alternative.me/fng/?limit=1' }
+    adapterConfig: { endpointUrl: 'https://api.alternative.me/fng/?limit=365' }
   }),
   source({
     sourceId: 'defillama-stablecoins',
