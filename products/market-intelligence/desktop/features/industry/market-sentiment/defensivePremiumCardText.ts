@@ -27,9 +27,9 @@ export type DefensivePremiumCardText = {
     info: { definition: string; relative: string; since: string; sourceDay: string }
     asOf: string
     unit: string
-    direction: { insufficient: string; stale: string; discontinuous: string }
+    direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
   }
-  chart: { fearGreedAria: string; skewAria: string }
+  chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
   action: { refresh: string; enable: string; viewSource: string }
   loading: string
   empty: string
@@ -55,9 +55,9 @@ type Source = {
       asOf: string
       unit: string
       info: { definition: string; relative: string; since: string; sourceDay: string }
-      direction: { insufficient: string; stale: string; discontinuous: string }
+      direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
     }
-    chart: { fearGreedAria: string; skewAria: string }
+    chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
     action: { refresh: string; enable: string; viewSource: string }
   }
   /** 两个半条和旧情绪卡共用同一批字：读数的「截至」与档位名只该有一份。 */

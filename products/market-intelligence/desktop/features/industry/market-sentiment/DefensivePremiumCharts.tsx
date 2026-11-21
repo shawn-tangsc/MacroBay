@@ -29,8 +29,7 @@ export function FearGreedChart({ points, ariaLabel, axisLabel }: Readonly<{
     .reverse()
 
   return <ChartFigure ariaLabel={ariaLabel} axisLabel={axisLabel} ticks={[0, 50, 100]}>
-    <polyline className="mi-defensive-premium__line" fill="none" points={pathOf(plotted)} data-chart-line="fear-greed" />
-    <circle className="mi-defensive-premium__dot" cx={plotted[plotted.length - 1]!.x} cy={plotted[plotted.length - 1]!.y} r="2.5" />
+    <Series plotted={plotted} seriesKey="fear-greed" />
     <XAxisLabels first={oldestLabel(plotted)} last={newest.day} />
   </ChartFigure>
 }
@@ -55,8 +54,7 @@ export function SkewChart({ points, ariaLabel, axisLabel, unit }: Readonly<{
     .reverse()
 
   return <ChartFigure ariaLabel={ariaLabel} axisLabel={`${axisLabel}（${unit}）`} ticks={[min, max]} formatTick={value => value.toFixed(1)}>
-    <polyline className="mi-defensive-premium__line" fill="none" points={pathOf(plotted)} data-chart-line="skew" />
-    <circle className="mi-defensive-premium__dot" cx={plotted[plotted.length - 1]!.x} cy={plotted[plotted.length - 1]!.y} r="2.5" />
+    <Series plotted={plotted} seriesKey="skew" />
     <XAxisLabels first={oldestLabel(plotted)} last={newest.day} />
   </ChartFigure>
 }
@@ -86,9 +84,22 @@ function ChartFigure({ ariaLabel, axisLabel, ticks, formatTick = String, childre
 }
 
 function XAxisLabels({ first, last }: Readonly<{ first: string; last: string }>): React.ReactElement {
+  // 只有一个点时左右两处会印同一个日期，看起来像有 30 天跨度；那种情况只留右缘那一个。
   return <g className="mi-defensive-premium__tick">
-    <text x={PAD.left} y={HEIGHT - 6} textAnchor="start">{first}</text>
-    <text x={WIDTH - PAD.right} y={HEIGHT - 6} textAnchor="end">{last}</text>
+    {first === last ? null : <text data-axis-date="first" x={PAD.left} y={HEIGHT - 6} textAnchor="start">{first}</text>}
+    <text data-axis-date="last" x={WIDTH - PAD.right} y={HEIGHT - 6} textAnchor="end">{last}</text>
+  </g>
+}
+
+/**
+ * 少于 5 个点只画点、不连线：几个点连起来会被读成「趋势」，而方向判定恰恰说这时不够判。
+ */
+function Series({ plotted, seriesKey }: Readonly<{ plotted: ReadonlyArray<{ x: number; y: number }>; seriesKey: string }>): React.ReactElement {
+  return <g data-chart-series={seriesKey}>
+    {plotted.length >= 5
+      ? <polyline className="mi-defensive-premium__line" fill="none" points={pathOf(plotted)} data-chart-line={seriesKey} />
+      : null}
+    {plotted.map((point, index) => <circle key={`${point.x}-${index}`} className="mi-defensive-premium__dot" cx={point.x} cy={point.y} r="2.5" />)}
   </g>
 }
 

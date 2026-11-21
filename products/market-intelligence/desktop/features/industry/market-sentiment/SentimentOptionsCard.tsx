@@ -4,6 +4,8 @@ import { Info, RefreshCw } from 'lucide-react'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import type { OptionSkewDirection, SentimentOptionsCardResult } from '../../../../contracts/intelligenceQueryContracts'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardSentimentOptionsState } from '../../../pages/intelligence/useDashboardSentimentOptionsCard'
@@ -36,7 +38,10 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   const result = state.state === 'available' ? state.result : undefined
   const fearGreed = result?.fearGreed
   const skew = result?.optionSkew
-  const verdictKey = result ? verdictPath(result) : undefined
+  const bothUnavailable = fearGreed?.state === 'unavailable' && skew?.state === 'unavailable'
+  const bothEmpty = fearGreed?.state === 'empty' && skew?.state === 'empty'
+  // 两半都读不到/都没有：整块一个状态面，不留半张卡，也不给结论。
+  const verdictKey = result && !bothUnavailable && !bothEmpty ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
 
   return <section className="mi-defensive-premium" aria-labelledby={TITLE_ID} data-testid="defensive-premium-card">
@@ -46,8 +51,9 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
         trigger={triggerProps => (
           <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.titleInfoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
         )} />
-      <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="sm" variant="plain"
-        onSelect={onRefresh} disabled={state.state === 'loading'} className="mi-defensive-premium__refresh" />
+      {/* 整卡只留一颗动作：未接入时这颗是「查看来源」，其余时候是刷新（加载中保留但禁用）。 */}
+      {skew?.state === 'not-connected' ? null : <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="sm" variant="plain"
+        onSelect={onRefresh} disabled={state.state === 'loading'} className="mi-defensive-premium__refresh" />}
       <span className="mi-defensive-premium__window">{dataText(`${TEXT_PREFIX}.window`)}</span>
       {/* 「查看来源」是卡级动作，跟着「未接入」这件事走、落在标题行；行内不再放按钮。 */}
       {skew?.state === 'not-connected' ? <Button size="small" onClick={onViewSource} className="mi-defensive-premium__source-action">
@@ -55,12 +61,18 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
       </Button> : null}
     </header>
 
-    {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={120} /> : null}
     {state.state === 'unavailable' ? (
       <p className="mi-defensive-premium__state" role="status">{dataText('pages.intelligence.portal.data.temporarilyUnavailable')}</p>
     ) : null}
 
-    {fearGreed || skew ? <div className="mi-defensive-premium__halves">
+    {bothUnavailable ? <StateView state="error" reasonCode="unreadable"
+      action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />
+      : bothEmpty ? <StateView state="empty" reasonCode="not-yet" />
+        : <div className="mi-defensive-premium__halves">
+      {state.state === 'loading' ? <>
+        <div className="mi-defensive-premium__half" data-half="fear-greed"><LoadingState label={text.loading} minHeight={96} /></div>
+        <div className="mi-defensive-premium__half" data-half="skew"><LoadingState label={text.loading} minHeight={96} /></div>
+      </> : <>
       <div className="mi-defensive-premium__half" data-half="fear-greed">
         <div className="mi-defensive-premium__half-head">
           <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
@@ -84,9 +96,16 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             fearGreed: { loading: text.loading, empty: text.empty, observedAt: text.fearGreed.asOf, buckets: text.fearGreed.buckets }
           }}
           onRetry={onRefresh}
-          {...(cellOff === undefined ? {} : { cellOff })} />
+          {...(cellOff === undefined ? {} : { cellOff })}
+          {...(fearGreed?.state === 'available' ? { observedDay: fearGreed.latestDay } : {})} />
         {fearGreed?.state === 'available' && fearGreed.points.length > 0
-          ? <FearGreedChart points={fearGreed.points} ariaLabel={text.chart.fearGreedAria} axisLabel={text.fearGreed.axis} />
+          ? <FearGreedChart points={fearGreed.points} axisLabel={text.fearGreed.axis}
+            ariaLabel={chartAria({
+              ariaLabel: text.chart.fearGreedAria, summary: text.chart.fearGreedSummary,
+              days: fearGreed.points.map(point => point.day),
+              first: String(fearGreed.points[fearGreed.points.length - 1]!.score),
+              last: String(fearGreed.points[0]!.score)
+            })} />
           : null}
       </div>
 
@@ -107,17 +126,44 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             <p className="mi-defensive-premium__score"><strong>{skew.latest.riskReversal.toFixed(1)}</strong> <span>{text.skew.unit}</span></p>
             <p className="mi-defensive-premium__asof">{text.skew.asOf} {skew.latestDay}</p>
             {skew.points.length > 0
-              ? <SkewChart points={skew.points} ariaLabel={text.chart.skewAria} axisLabel={text.skew.name} unit={text.skew.unit} />
+              ? <SkewChart points={skew.points} axisLabel={text.skew.name} unit={text.skew.unit}
+                ariaLabel={chartAria({
+                  ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
+                  days: skew.points.map(point => point.day),
+                  first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
+                  last: skew.points[0]!.riskReversal.toFixed(1)
+                })} />
               : null}
-            <SkewDirectionSentence direction={skew.direction} latestDay={skew.latestDay} text={text} />
+            {skew.direction.kind === 'unknown'
+              ? <SkewDirectionSentence direction={skew.direction} latestDay={skew.latestDay} text={text} />
+              : <p className="mi-defensive-premium__direction" data-skew-direction={skew.direction.kind}>
+                {text.skew.direction[skew.direction.kind]} · {text.skew.direction.window}
+              </p>}
           </> : skew?.state === 'empty' ? <p className="mi-defensive-premium__state">{text.empty}</p>
             : <p className="mi-defensive-premium__state">{dataText('pages.intelligence.portal.data.temporarilyUnavailable')}</p>}
       </div>
-    </div> : null}
+      </>}
+    </div>}
 
-    {verdictKey ? <p className="mi-defensive-premium__verdict" data-verdict>{dataText(verdictKey)}</p> : null}
+    {verdictKey && !bothUnavailable && !bothEmpty ? <p className="mi-defensive-premium__verdict" data-verdict>{dataText(verdictKey)}</p> : null}
     {result ? <p className="mi-defensive-premium__provenance">{text.provenance}</p> : null}
   </section>
+}
+
+/** 读屏名 = 原图描述 + 一句带窗口、点数与首末值的摘要；参数都是已格式化的字符串。 */
+function chartAria(input: {
+  ariaLabel: string
+  summary: string
+  days: readonly string[]
+  first: string
+  last: string
+}): string {
+  const newest = input.days[0]
+  const oldest = input.days[input.days.length - 1]
+  if (!newest || !oldest) return input.ariaLabel
+  return `${input.ariaLabel} ${fillLabelParams(input.summary, {
+    from: oldest, to: newest, count: String(input.days.length), first: input.first, last: input.last
+  })}`
 }
 
 /** 方向未知时说明是哪种未知：不够几天 / 停在哪天 / 中间断档。三句各有自己的键，不共用一个泛句。 */

@@ -40,7 +40,7 @@ type Text = {
   }
 }
 
-export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTitle, titleId }: Readonly<{
+export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTitle, titleId, observedDay }: Readonly<{
   fearGreedState: DashboardFearGreedState
   text: Text
   onRetry: () => void
@@ -52,6 +52,8 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTit
   /** 合并卡里半条已经有自己的标题，这里就不再画第二行同名标题；`titleId` 把 section 的标签接过去。 */
   showTitle?: boolean
   titleId?: string
+  /** 日桶的日期标签：源给的 `YYYY-MM-DD`，原样印，不换算时区、不带钟点。 */
+  observedDay?: string
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const dataText = useProductTextKey() as (key: string) => string
@@ -92,7 +94,7 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTit
             <strong>{reading.score}</strong>
           </span>
           <span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[reading.bucket]}>{text.fearGreed.buckets[reading.bucket]}</span>
-          <small>{text.fearGreed.observedAt} {formatTime(reading.observedAt)}</small>
+          <small>{text.fearGreed.observedAt} {observedDay ?? formatTime(reading.observedAt)}</small>
           <p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>
         </>
         : row
