@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { sentimentOptionsCardPolicy } from '../../../service/intelligence/public-query/sentimentOptionsCardPolicy'
 import { productText } from './productText'
 
 /**
@@ -145,6 +146,19 @@ describe('fear & greed + downside premium card copy', () => {
       }
     }
     expect(findings).toEqual([])
+  })
+
+  it('ties every direction-window number to direction.points instead of a stray constant', () => {
+    // 文案静态写「近 5 天」（占位会诱导实现方填自然日），但那个 5 必须跟着判据走：
+    // 常量改了、文案没改，这条用例就红——不靠人记得。
+    const points = sentimentOptionsCardPolicy.direction.points
+    const zhLeaves = leaves(block('zh-CN'), '', [])
+    const enLeaves = leaves(block('en-US'), '', [])
+    const pick = (list: Leaf[], path: string): string => list.find((leaf) => leaf.path === path)?.value ?? ''
+    expect(pick(zhLeaves, 'skew.direction.window')).toContain(`近 ${points} 天`)
+    expect(pick(enLeaves, 'skew.direction.window')).toContain(`Last ${points} days`)
+    expect(pick(zhLeaves, 'skew.direction.insufficient')).toContain(`还不够 ${points} 天`)
+    expect(pick(enLeaves, 'skew.direction.insufficient')).toContain(`Fewer than ${points} days`)
   })
 
   it('keeps direction words out of the direction-unknown sentences and the card-head popover', () => {
