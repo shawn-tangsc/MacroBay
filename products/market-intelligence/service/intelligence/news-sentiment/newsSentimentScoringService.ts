@@ -389,7 +389,9 @@ export function createNewsSentimentScoringService(deps: {
             sourceName: getIntelligenceSourceDefinition(item.sourceId)?.displayName ?? item.sourceId,
             polarity: record.polarity,
             publishedAt: record.publishedAt,
-            timeZone: deps.notificationDelivery?.timeZone?.() ?? 'UTC'
+            timeZone: deps.notificationDelivery?.timeZone?.() ?? 'UTC',
+            // 新鲜度跟评分自己的时钟走（注入时钟也从这里来），否则测试与 `--mi-clock-z` 都看不见。
+            now: deps.now()
           })
         }
         await Promise.resolve(
