@@ -65,11 +65,13 @@ describe('toSafeHealthView', () => {
         sourceId: 'coindesk-rss',
         runtimeStatus: 'healthy',
         consecutiveFailures: 0,
-        staleReasons: ['no-output', 'normalize-failing']
+        staleReasons: ['no-output', 'normalize-failing'],
+        staleMeasurements: { noOutputHours: 30, normalizeFailureStreak: 3 }
       },
       true
     )
 
     expect(view.staleReasons).toEqual(['no-output', 'normalize-failing'])
+    expect(view.staleMeasurements).toEqual({ noOutputHours: 30, normalizeFailureStreak: 3 })
   })
 })

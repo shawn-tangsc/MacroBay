@@ -166,18 +166,20 @@ describe('pipeline health snapshot staleReasons', () => {
       nowMs: NOW
     })
 
-  it('源年龄超阈值 → 健康快照带 no-output', () => {
-    expect(snapshot({ lastPublishedAt: hoursAgo(30) })?.staleReasons).toEqual(['no-output'])
+  it('源年龄超阈值 → 健康快照带 no-output 和小时数', () => {
+    const view = snapshot({ lastPublishedAt: hoursAgo(30) })
+    expect(view?.staleReasons).toEqual(['no-output'])
+    expect(view?.staleMeasurements).toEqual({ noOutputHours: 30 })
   })
 
-  it('归一化连续失败 → 健康快照带 normalize-failing', () => {
-    expect(
-      snapshot({
-        lastPublishedAt: hoursAgo(0.1),
-        normalizeFailureStreak: 3,
-        firstNormalizeFailureAt: hoursAgo(3)
-      })?.staleReasons
-    ).toEqual(['normalize-failing'])
+  it('归一化连续失败 → 健康快照带 normalize-failing 和次数', () => {
+    const view = snapshot({
+      lastPublishedAt: hoursAgo(0.1),
+      normalizeFailureStreak: 3,
+      firstNormalizeFailureAt: hoursAgo(3)
+    })
+    expect(view?.staleReasons).toEqual(['normalize-failing'])
+    expect(view?.staleMeasurements).toEqual({ normalizeFailureStreak: 3 })
   })
 
   it('没有 lastPublishedAt 时不出 no-output：读不到就是读不到', () => {

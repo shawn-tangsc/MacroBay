@@ -5,6 +5,7 @@ import type {
 } from '../schema/intelligenceSource'
 import type { CredentialProbeFailureCode } from '../application/credentialedProviderProbes'
 import type { IntelligencePipelineHealth } from '../application/intelligencePipeline'
+import type { SourceStaleMeasurements } from '../application/pipelineHealth'
 import type { SourceStaleReason } from '../application/sourceStaleness'
 
 export type SafeIntelligenceSourceDefinition = Omit<IntelligenceSourceDefinition, 'requestGovernance'>
@@ -51,6 +52,8 @@ export type SafeIntelligenceSourceHealthView = {
   collectionGap?: boolean
   /** 采集产出状态的闭集值；两个病可能同时为真。文案由设置页各自映射，这里不拼句子。 */
   staleReasons?: readonly SourceStaleReason[]
+  /** 文案插值用的数字（小时 / 次数）；只在对应原因存在时出现。 */
+  staleMeasurements?: SourceStaleMeasurements
 }
 
 export type SafeIntelligenceSourceDetailView = {
@@ -196,7 +199,8 @@ export function toSafeHealthView(
     cursor: health?.cursor,
     supportsHistoricalBackfill: health?.supportsHistoricalBackfill,
     collectionGap: health?.collectionGap,
-    ...(health?.staleReasons?.length ? { staleReasons: health.staleReasons } : {})
+    ...(health?.staleReasons?.length ? { staleReasons: health.staleReasons } : {}),
+    ...(health?.staleMeasurements === undefined ? {} : { staleMeasurements: health.staleMeasurements })
   } satisfies Omit<SafeIntelligenceSourceHealthView, 'connectivityStatus'>
 
   const normalized = {

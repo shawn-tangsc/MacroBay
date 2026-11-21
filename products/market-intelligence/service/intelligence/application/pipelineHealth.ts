@@ -28,7 +28,15 @@ export type IntelligencePipelineHealth = {
   collectionGap?: boolean
   /** 可能同时为真：有产出但归一化失败，与完全没产出是两种病。 */
   staleReasons?: readonly SourceStaleReason[]
+  /** 与 `staleReasons` 配套的测量值，只给文案插值用，不参与判据（状态本身仍是闭集）。 */
+  staleMeasurements?: SourceStaleMeasurements
 }
+
+/** 两个原因各自的数字：界面拿它填 `{hours}` / `{count}`，不自己重算。 */
+export type SourceStaleMeasurements = Readonly<{
+  noOutputHours?: number
+  normalizeFailureStreak?: number
+}>
 
 /**
  * 从运行时状态（采集 checkpoint）投影出健康快照。`nowMs` 可注入，判据本身在
@@ -53,11 +61,19 @@ export function buildPipelineHealthSnapshot(input: Readonly<{
     | undefined
   const isStreamSource = input.definition?.executionMode === 'websocket'
   const normalize = normalizeStreakFromCheckpoint(state.checkpoint as Record<string, unknown> | undefined)
+  const nowMs = input.nowMs ?? Date.now()
   const staleReasons = evaluateSourceStaleness({
     sourceId: input.sourceId,
     ...(checkpoint?.lastPublishedAt === undefined ? {} : { lastOutputAt: checkpoint.lastPublishedAt }),
     normalize
-  }, input.nowMs ?? Date.now())
+  }, nowMs)
+  const lastOutputMs = checkpoint?.lastPublishedAt === undefined ? Number.NaN : Date.parse(checkpoint.lastPublishedAt)
+  const staleMeasurements: SourceStaleMeasurements = {
+    ...(staleReasons.includes('no-output') && Number.isFinite(lastOutputMs)
+      ? { noOutputHours: Math.floor((nowMs - lastOutputMs) / 3_600_000) }
+      : {}),
+    ...(staleReasons.includes('normalize-failing') ? { normalizeFailureStreak: normalize.streak } : {})
+  }
   return {
     sourceId: input.sourceId,
     runtimeStatus: state.status === 'failed' ? 'failed' : state.consecutiveFailures > 0 ? 'degraded' : 'healthy',
@@ -71,6 +87,7 @@ export function buildPipelineHealthSnapshot(input: Readonly<{
     cursor: checkpoint?.cursor,
     supportsHistoricalBackfill: !isStreamSource,
     collectionGap: isStreamSource,
-    ...(staleReasons.length > 0 ? { staleReasons } : {})
+    ...(staleReasons.length > 0 ? { staleReasons } : {}),
+    ...(Object.keys(staleMeasurements).length > 0 ? { staleMeasurements } : {})
   }
 }
