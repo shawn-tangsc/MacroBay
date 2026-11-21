@@ -10,6 +10,10 @@
   --mi-ust-quote-wide: 380px;
   container-type: inline-size;
   container-name: mi-ust;
+  /* 与上面那张面板留出同一档间距，但**不画线**（它有 border-block，卡再画一条就是两条线相距 16px）。
+     面板在场时两条 margin 折叠，仍是 16px；面板不在场时（冷启动首帧、或三格全关时它不渲染）
+     这张卡就是这一屏的第一块，没有这条 margin 会直接贴上去。 */
+  margin-top: 16px;
   display: flex; flex-direction: column; gap: 8px; min-width: 0;
 }
 .mi-ust__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }

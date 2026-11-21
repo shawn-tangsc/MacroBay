@@ -55,10 +55,14 @@ describe('国债收益率卡的样式边界', () => {
     expect(block('.mi-ust__axis')).toContain('fill: var(--muted);')
   })
 
-  it('draws no line of its own above the card: the panel above already has one', () => {
+  it('draws no second line above the card, but keeps its own 16px of space', () => {
+    // 面板自己在 `.mi-cross-asset` 上有 `border-block` + `margin-block: 16`，卡再画一条线就是两条线
+    // 相距 16px；所以这里只有间距、没有线。但间距必须有：`crossAssetClient` 为空时上面那张面板不渲染
+    // （冷启动首帧 `readsReady=false`，或读者把 index/btc/eth 三格全关），那时这张卡就是第一块，
+    // 没有 margin 会直接贴上去。面板在场时两条 margin 折叠，仍是 16px。
     const root = block('.mi-ust')
+    expect(root).toContain('margin-top: 16px;')
     expect(root).not.toContain('border-top')
-    expect(root).not.toContain('margin-top')
     expect(root).not.toContain('padding-top')
   })
 
