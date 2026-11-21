@@ -541,6 +541,17 @@ export const intelligenceSourcesText = {
   },
   writeFailureAria: '这一行的值是旧的：最近一次采集成功，但没写进标准表。原因：{reason}',
   /**
+   * **采集有没有产出**（用户 2026-11-21）：这两句回答「这个源还在不在工作」，与上面的「采到了没写进
+   * 标准表」是两件事。**两者不许合并成一句**——「没抓到」和「抓到了但处理不了」是两种病：
+   * 前者要查源/网络，后者要查我们的解析；写成一句话，读者永远不知道该去查哪边。
+   * 值来自采集侧闭集 `staleReason`；读不到状态时走既有的「状态暂时读不到」，没有第三句话。
+   */
+  staleReason: {
+    'no-output': '这个源已经 {hours} 小时没有新内容了',
+    'normalize-failing': '这个源连续 {count} 次解析失败，抓到了但没变成条目',
+  },
+  staleReasonAria: '采集产出状态：{reason}',
+  /**
    * 「核心指标」那组配置的文案（用户 2026-11-14）。
    *
    * 每格三样：**现状**（只读：期次 / 来源 / 值 / 成交量 / 观测时刻）+ 来源顺序 + 两个显示开关。
@@ -1207,6 +1218,13 @@ export const intelligenceSourcesText = {
     'value-shape-rejected': 'Collected, but the value shape was rejected before writing',
   },
   writeFailureAria: 'This row is showing an older value: the last collection succeeded but was never written to the standard table. Reason: {reason}',
+  /** Collection **output**, not collection success: "nothing fetched" and "fetched but unprocessable" are two
+   * different illnesses and must stay two sentences — the reader's next step differs (source/network vs parser). */
+  staleReason: {
+    'no-output': 'This source has produced nothing new for {hours} hours',
+    'normalize-failing': 'This source failed to parse {count} times in a row: items were fetched but never became entries',
+  },
+  staleReasonAria: 'Collection output state: {reason}',
   coreIndicators: {
     title: 'Core indicators',
     metrics: { cpiYoy: 'CPI (YoY)', coreCpiYoy: 'Core CPI (YoY)', nonfarmPayrolls: 'Nonfarm payrolls', corePceYoy: 'Core PCE (YoY)' },
