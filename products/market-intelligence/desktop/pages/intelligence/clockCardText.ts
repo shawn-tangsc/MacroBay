@@ -21,6 +21,10 @@ export const clockCardText = {
     expectationMissing: '预期未提供',
     previous: '前值',
     daysUntil: '{days} 天后',
+    /* 过去牌的距离：与未来牌一样是「离现在多久」，只是方向相反。 */
+    daysAgo: '{days} 天前',
+    /* 当天发布不写「0 天后」（读着像没发生），写「今天」。 */
+    today: '今天',
     now: '现在',
     live: '● 实时',
     detail: '详细 ↗',
@@ -83,6 +87,8 @@ export const clockCardText = {
     expectationMissing: 'Expectation unavailable',
     previous: 'Previous',
     daysUntil: 'In {days} days',
+    daysAgo: '{days} days ago',
+    today: 'Today',
     now: 'Now',
     live: '● Live',
     detail: 'Details ↗',

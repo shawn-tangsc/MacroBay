@@ -56,10 +56,10 @@ it('rings one plaque per release date at the angle the schedule gives', async ()
   const expected = clockRingPoint(336)
   expect(Number.parseFloat(cpiPast.style.left)).toBeCloseTo(expected.x, 2)
   expect(Number.parseFloat(cpiPast.style.top)).toBeCloseTo(expected.y, 2)
-  // 牌上永远是「名字 + 数值」：名字在，值在；天数不出现在牌上。
+  // 牌上是「名字 + 值 + 距离」（用户 2026-11：「距离时间呢？」）：过去牌写「N 天前」。
   expect(cpiPast.textContent).toContain('CPI 年率')
   expect(cpiPast.textContent).toContain('3.74%')
-  expect(cpiPast.textContent).not.toContain('天')
+  expect(cpiPast.textContent).toContain('2 天前')
 })
 
 it('drives the ring plaque’s opacity from its position, not from a timer', async () => {
@@ -348,4 +348,43 @@ it('renders the orbit glow that spins', async () => {
 it('keeps the plaque width limit identical in the model and the stylesheet', () => {
   const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
   expect(css).toContain(`--mi-clock-plaque-max-width: ${clockPlaqueMaxWidth}px`)
+})
+
+/**
+ * 牌上必须有**距离时间**（用户 2026-11 看图第一句「距离时间呢？」）：
+ * 只有名字和值，读者不知道离发布还有多久。未来牌写「N 天后」、过去牌写「N 天前」，
+ * 距离与值同一行——牌高仍在 37–44px，不为它改时钟几何。
+ */
+it('puts the distance on every plaque, in the future and in the past', async () => {
+  const { host } = await render()
+  const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  expect(future.textContent).toContain('19 天后')
+  const past = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
+  expect(past.textContent).toContain('2 天前')
+})
+
+/** 没有盘口预期的那块牌也要有距离——这正是读者要看的「还有几天」，不是「有没有数」。 */
+it('shows the distance even when a plaque has no value', async () => {
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: [
+    { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+      nextRelease: { date: '2026-12-04' }, periodDays: 28 }
+  ] }) })
+  const node = host.querySelector<HTMLElement>('[data-clock-metric="US.NONFARM.SA.CHANGE"]')!
+  expect(node.textContent).toContain('13 天后')
+  // 没有预期就不显示数字（不拿编的数顶上）。
+  expect(node.querySelector('b')).toBeNull()
+})
+
+/** 长名字（两行）+ 值 + 距离同时存在：三样都在，且仍是一块牌。 */
+it('keeps a long name, its value and the distance in the same plaque', async () => {
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: [
+    { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy',
+      nextRelease: { date: '2026-11-25', expected: '3.12%', expectedFromMarket: true as const } }
+  ] }) })
+  const nodes = host.querySelectorAll<HTMLElement>('[data-clock-plaque]')
+  expect(nodes).toHaveLength(1)
+  const node = nodes[0]!
+  expect(node.textContent).toContain('核心 PCE 年率（季调）')
+  expect(node.textContent).toContain('3.12%')
+  expect(node.textContent).toContain('4 天后')
 })

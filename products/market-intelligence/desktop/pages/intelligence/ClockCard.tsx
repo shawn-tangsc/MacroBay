@@ -66,6 +66,10 @@ export type ClockCardText = Readonly<{
   previous: string
   /** 主位倒计时：`{days} 天后`。 */
   daysUntil: string
+  /** 过去牌的距离：`{days} 天前`。 */
+  daysAgo: string
+  /** 当天发布不写「0 天后」，写这个。 */
+  today: string
   /** 12 点位置标记。 */
   now: string
   /** 底部状态行。 */
@@ -88,7 +92,7 @@ export type ClockCardText = Readonly<{
   crowdedLead: string
   /** 超过 3 项时的尾巴：`另有 {count} 项`。 */
   crowdedMore: string
-  /** 环上只放一个指标后，其余发布在这行里（`{count}` 个），点 ⓘ 列全。 */
+  /** 每个发布日一块牌；同一天没被选上的发布在这行里（`{count}` 个），点 ⓘ 列全。 */
   overflowLine: string
   /** 溢出逐条：`{name} · {date} · {days} 天后`。 */
   overflowItem: string
@@ -148,7 +152,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
   const center = model.center
   /**
    * 没上环的发布清单（`not-selected`）：逐条写「名字 · 日期 · 几天后」。
-   * 环上只放一个指标后，这里是**其余全部**——不在一行里堆 12 个名字，放进 ⓘ 里列全。
+   * 每个发布日只上一块牌；同一天其余的一级指标在这里列全——不在一行里堆 12 个名字。
    */
   const overflowItems = model.unplaced
     .filter((entry) => entry.reason === 'not-selected')
@@ -210,25 +214,33 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       </div>}
 
       {/* 指标牌：位置与 --o 都由模型算。原型是 <button> 但没有动作，故渲染成不可点的节点
-          （规范：行容器不是按钮）；悬停恢复 100% 的视觉保留。 */}
-      {model.plaques.map((plaque: ClockPlaque) => <div
-        key={plaque.id}
-        className={`mi-clock__node${plaque.zone === 'past' ? ' mi-clock__node--past' : ''}`}
-        data-clock-plaque={plaque.zone}
-        data-clock-metric={plaque.metricKey}
-        {...(plaque.id === centerPlaqueId ? { 'data-center': true } : {})}
-        style={{ left: plaque.x, top: plaque.y, '--o': plaque.opacity } as React.CSSProperties}>
-        <span>{plaqueName(plaque.metricKey, plaque.nameKey, text, plaque.policyOutcome)}</span>
-        {plaque.value === undefined ? null : <b>{plaque.value}</b>}
-      </div>)}
+          （规范：行容器不是按钮）；悬停恢复 100% 的视觉保留。
+          牌上三样：名字、值（有才显示）、**距离**（用户 2026-11：「距离时间呢？」）。
+          距离并进值那一行，牌高仍在 37–44px，不为它改时钟几何。 */}
+      {model.plaques.map((plaque: ClockPlaque) => {
+        const distance = plaqueDistance(plaque, text)
+        return <div
+          key={plaque.id}
+          className={`mi-clock__node${plaque.zone === 'past' ? ' mi-clock__node--past' : ''}`}
+          data-clock-plaque={plaque.zone}
+          data-clock-metric={plaque.metricKey}
+          {...(plaque.id === centerPlaqueId ? { 'data-center': true } : {})}
+          style={{ left: plaque.x, top: plaque.y, '--o': plaque.opacity } as React.CSSProperties}>
+          <span className="mi-clock__node-name">{plaqueName(plaque.metricKey, plaque.nameKey, text, plaque.policyOutcome)}</span>
+          {plaque.value === undefined && distance === undefined ? null : <span className="mi-clock__node-meta">
+            {plaque.value === undefined ? null : <b>{plaque.value}</b>}
+            {distance === undefined ? null : <span className="mi-clock__node-when">{distance}</span>}
+          </span>}
+        </div>
+      })}
 
       {/* 叠在右上角：绝对定位，不挤动卡内任何计算值。点击复用「请求序号 → 打开抽屉」那条路。 */}
       <div className="mi-clock__action">
         <IconButton ariaLabelKey={actionLabelKey} icon={Calendar} size="sm" variant="overlay" resolveText={resolveText} onSelect={onOpenCalendar} />
       </div>
 
-      {/* 环上只放一个指标（用户 2026-11-21）：其余发布在这行里，点 ⓘ 列全（名字 · 日期 · 几天后）。
-          计数为 0 时整行不渲染——不写「还有 0 个」。 */}
+      {/* 每个发布日一块牌（用户 2026-11-21 更正）：同一天没被选上的其余发布在这行里，
+          点 ⓘ 列全（名字 · 日期 · 几天后）。计数为 0 时整行不渲染——不写「还有 0 个」。 */}
       {overflowItems.length === 0 ? null : <p className="mi-clock__overflow" data-clock-overflow>
         <span>{text.overflowLine.replace('{count}', String(overflowItems.length))}</span>
         {helpTrigger({ text: overflowItems.join('；') })}
@@ -249,8 +261,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       <div className="mi-clock__foot">
         {/* 底部这格也是 ⓘ，与溢出行那颗**同一套交互**（`helpTrigger` → Popover）：一张卡上不留两种
             交互（原生 `title` 在键盘/触屏上唤不出来，且与上面的浮层不一致）。
-            内容只放这里该说的：来源说明 + 撞牌让位 + 其他没上环的原因；`not-selected`（环上只放一个、
-            其余没被选中）由上面那行溢出行单独表达，**两处不重复**。 */}
+            内容只放这里该说的：来源说明 + 撞牌让位 + 其他没上环的原因；`not-selected`（同一天没被选为代表）由上面那行溢出行单独表达，**两处不重复**。 */}
         <span className="mi-clock__info">
           {helpTrigger({ text: [text.sourceNote, ...unplacedLines(model, text, policyState)].join('｜') })}
         </span>
@@ -271,7 +282,7 @@ function unplacedLines(model: ClockCardModel, text: ClockCardText, policyState?:
   const crowdedLine = crowded.length === 0 ? undefined : text.crowdedLead
     .replace('{count}', String(crowded.length))
     .replace('{items}', [...shown, ...(rest > 0 ? [text.crowdedMore.replace('{count}', String(rest))] : [])].join('、'))
-  // `not-selected`（环上只放一个、其余没被选中）由卡片下沿那行单独表达，不混进 ⓘ。
+  // `not-selected`（同一天没被选为代表）由卡片下沿那行单独表达，不混进 ⓘ。
   const lines = model.unplaced
     .filter((entry) => entry.reason !== 'crowded' && entry.reason !== 'not-selected')
     .map((entry) => text.unplacedLine
@@ -395,6 +406,23 @@ function faceAction(label: string | undefined, onAction: (() => void) | undefine
 function shortMonthDay(date: string): string {
   return date.length >= 10 ? `${date.slice(5, 7)}–${date.slice(8, 10)}` : date
 }
+/**
+ * 牌上的距离（用户 2026-11：「距离时间呢？」）：未来牌「N 天后」、过去牌「N 天前」。
+ * 当天发布写「今天」，不写「0 天后」——那读着像还没发生。
+ */
+function plaqueDistance(plaque: ClockPlaque, text: ClockCardText): string | undefined {
+  if (plaque.zone === 'past') {
+    if (plaque.daysAgo === undefined) return undefined
+    return plaque.daysAgo === 0 ? text.today : text.daysAgo.replace('{days}', String(plaque.daysAgo))
+  }
+  if (plaque.daysUntil === undefined) return undefined
+  return plaque.daysUntil === 0 ? text.today : text.daysUntil.replace('{days}', String(plaque.daysUntil))
+}
+
+/**
+ * 牌上的名字：政策利率那一格的值是**盘口主推档的概率**，不是利率水平——
+ * 名字必须带「概率」，否则 90.9% 会被读成利率（用户 2026-11-20 报的就是这个）。
+ */
 function plaqueName(metricKey: string, nameKey: string, text: ClockCardText, policyOutcome?: string): string {
   if (metricKey === 'US.TARGET_RATE.DECISION') {
     // 主推档名字按 outcome 取；取不到就写「政策利率」——不编一个档位。
