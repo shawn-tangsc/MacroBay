@@ -2365,8 +2365,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 调查同一份月报的 employment 分项"
     },
     "status": "active"
   },
@@ -2386,8 +2389,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 调查同一份月报的 new orders 分项"
     },
     "status": "active"
   },
@@ -2407,8 +2413,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 调查同一份月报的 prices paid 分项"
     },
     "status": "active"
   },
@@ -2428,8 +2437,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 调查同一份月报的 prices received 分项"
     },
     "status": "active"
   },
@@ -2449,8 +2461,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 制造业调查官方页，月报主指数为 general business conditions"
     },
     "status": "active"
   },
@@ -4868,8 +4883,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of Richmond",
+      "url": "https://www.richmondfed.org/region_communities/regional_data_analysis/business_surveys/manufacturing",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "里奇蒙联储 · 制造业调查当前结果页（composite manufacturing index）"
     },
     "status": "active"
   },
@@ -4889,8 +4907,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of Richmond",
+      "url": "https://www.richmondfed.org/region_communities/regional_data_analysis/business_surveys/non-manufacturing",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "里奇蒙联储 · 非制造业调查当前结果页（原service sector调查，已改名并沿用同一系列）"
     },
     "status": "active"
   },
@@ -4910,8 +4931,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of Richmond",
+      "url": "https://www.richmondfed.org/region_communities/regional_data_analysis/business_surveys/manufacturing",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "里奇蒙联储 · 制造业调查当前结果页，月报含 shipments 分项指数"
     },
     "status": "active"
   },
