@@ -1,0 +1,29 @@
+[
+  {
+    "gecko_id": "moonbeam",
+    "gasTokenGeckoId": "moonbeam",
+    "tvl": 0,
+    "tokenSymbol": "GLMR",
+    "cmcId": "6836",
+    "name": "Moonbeam",
+    "chainId": 1284
+  },
+  {
+    "gecko_id": "mantle",
+    "gasTokenGeckoId": "mantle",
+    "tvl": 75973751.27726582,
+    "tokenSymbol": "MNT",
+    "cmcId": "27075",
+    "name": "Mantle",
+    "chainId": 5000
+  },
+  {
+    "gecko_id": "corn-3",
+    "gasTokenGeckoId": "bitcorn-3",
+    "tvl": 0,
+    "tokenSymbol": "CORN",
+    "cmcId": "36164",
+    "name": "Corn",
+    "chainId": 21000000
+  }
+]

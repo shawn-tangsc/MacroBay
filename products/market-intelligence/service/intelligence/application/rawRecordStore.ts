@@ -36,6 +36,16 @@ export type RawRecordPruneResult = Readonly<{
   remainingRecords: number
 }>
 
+/**
+ * 归一化读原文的结果。`missing`（文件不在）与 `hash-mismatch`（在但内容不对）必须分开：
+ * 两者都不等于「没有原文」，只是一条要重试、一条要人看。
+ */
+export type RawRecordPayloadRead =
+  | Readonly<{ state: 'inline'; body: string }>
+  | Readonly<{ state: 'file'; body: string }>
+  | Readonly<{ state: 'missing' }>
+  | Readonly<{ state: 'hash-mismatch' }>
+
 export type RawRecordStore = {
   appendRawRecord: (input: AppendRawRecordInput) => RawIntelligenceRecord | undefined
   /**
@@ -55,6 +65,11 @@ export type RawRecordStore = {
   migrateInlinePayloads: () => RawRecordPayloadMigration
   getRawRecord: (rawRecordId: string) => RawIntelligenceRecord | undefined
   findBySourceDedupeKey: (sourceId: string, sourceDedupeKey: string) => RawIntelligenceRecord | undefined
+  /**
+   * 归一化前读原文：inline 直接用 `payloadBody`；file 引用从内容寻址目录读回并校验 hash。
+   * 原文外置后**这是唯一的读口**——调用方不要再直接读 `record.payloadBody`。
+   */
+  readPayloadBody: (record: RawIntelligenceRecord) => RawRecordPayloadRead
   markParsed: (rawRecordId: string) => RawIntelligenceRecord | undefined
   markFailed: (rawRecordId: string, errorMessage: string) => RawIntelligenceRecord | undefined
   markNormalized: (rawRecordId: string) => RawIntelligenceRecord | undefined
@@ -95,6 +110,9 @@ export function createRawRecordStore(deps?: {
   deletePayload?: (fileRef: string) => number | undefined
   /** 列出现有原文文件名（内容寻址名）；孤儿清理用。读不到就返回 undefined，按「不清理孤儿」处理。 */
   listPayloadFiles?: () => readonly string[] | undefined
+  /** 读回内容寻址原文并校验 hash；`missing` / `hash-mismatch` 分开报（由原语给出）。 */
+  readPayload?: (input: Readonly<{ fileRef: string; expectedHash?: string }>) =>
+    Readonly<{ state: 'found'; body: string }> | Readonly<{ state: 'missing' }> | Readonly<{ state: 'hash-mismatch' }>
 }): RawRecordStore {
   const snapshot = deps?.snapshot ?? createEmptyRawRecordSnapshot()
   /**
@@ -339,6 +357,16 @@ export function createRawRecordStore(deps?: {
     findBySourceDedupeKey(sourceId, sourceDedupeKey) {
       const rawRecordId = dedupeIndex.get(`${sourceId}:${sourceDedupeKey}`)
       return rawRecordId ? records.get(rawRecordId) : undefined
+    },
+
+    readPayloadBody(record) {
+      if (record.payloadBody !== undefined) return { state: 'inline', body: record.payloadBody }
+      if (record.payloadFileRef === undefined || deps?.readPayload === undefined) return { state: 'missing' }
+      const read = deps.readPayload({
+        fileRef: record.payloadFileRef,
+        ...(record.payloadHash === undefined ? {} : { expectedHash: record.payloadHash })
+      })
+      return read.state === 'found' ? { state: 'file', body: read.body } : read
     },
     markParsed(rawRecordId) {
       const next = transitionState(records, rawRecordId, 'parsed')

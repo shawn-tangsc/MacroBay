@@ -33,6 +33,8 @@ import { normalizePublishedAt } from './publishedAtNormalizer'
 import { resolveCluster } from './clusterResolver'
 import { getIntelligenceSourceDefinition, isDefillamaStablecoinRetiredPath } from './sourceCatalog'
 import { createRawRecordStore } from './rawRecordStore'
+import { parseRecordForNormalization } from './normalizeRecordParsing'
+import { countStaleNewsRecords } from './normalizeQueueDiagnostics'
 import { resolveRevision } from './revisionResolver'
 import { createSourceProfileStore, createInMemoryProfileStorage } from './sourceProfileStore'
 import { resolveAndValidateRuntimeConfig } from './sourceRuntimeConfig'
@@ -482,46 +484,15 @@ export function createIntelligencePipeline(deps?: {
         const profile = await profileStore.resolveProfile(rawRecord.sourceId)
         const { config } = resolveAndValidateRuntimeConfig({ definition, profile })
 
-        /**
-         * 一条记录解析失败**不许挡住整队**（2026-11-21 事故）。
-         *
-         * `defillama-tvl` 每半小时抛一次 `missing TVL total`，而队列是按追加顺序取的：它一直排在
-         * 最前面，后面的新闻记录永远轮不到归一化——enrich/score 从 11-19 起再没触发过，而每个
-         * 采集任务都显示「成功」。这里改为记一条结构化日志后继续；坏记录保持未处理，下一轮重试。
-         */
-        let parsed: ReturnType<typeof adapter.parseRawRecord>
-        try {
-          parsed = adapter.parseRawRecord({
-            config,
-            rawRecord: {
-              ...rawRecord,
-              payloadBody: rawRecord.payloadBody
-            }
-          })
-        } catch (error) {
-          failedCount += 1
-          console.log(JSON.stringify({
-            marker: 'MI_NORMALIZE_RECORD_FAILED',
-            sourceId: rawRecord.sourceId,
-            rawRecordId: rawRecord.rawRecordId,
-            message: (error instanceof Error ? error.message : String(error)).slice(0, 200)
-          }))
-          continue
-        }
-        if (deps?.onMetricWindow && parsed.metricEvents?.length && rawRecord.payloadBody !== undefined) {
-          try {
-            deps.onMetricWindow({
-              sourceId: rawRecord.sourceId,
-              payloadBody: rawRecord.payloadBody,
-              ...(rawRecord.payloadMetaJson === undefined ? {} : { payloadMetaJson: rawRecord.payloadMetaJson })
-            })
-          } catch (error) {
-            console.log(JSON.stringify({
-              marker: 'MI_METRIC_WINDOW_SINK_FAILED', sourceId: rawRecord.sourceId,
-              message: String(error).slice(0, 200)
-            }))
-          }
-        }
+        const recordParse = parseRecordForNormalization({
+          rawRecord,
+          adapter,
+          config,
+          readPayloadBody: (record) => rawRecordStore.readPayloadBody(record),
+          ...(deps?.onMetricWindow ? { onMetricWindow: deps.onMetricWindow } : {})
+        })
+        if (recordParse.state === 'failed') { failedCount += 1; continue }
+        const { parsed, payloadBody } = recordParse
         rawRecordStore.markParsed(rawRecord.rawRecordId)
 
         const drafts = adapter.normalizeParsedItems
@@ -616,12 +587,7 @@ export function createIntelligencePipeline(deps?: {
       }
 
       // 饿死诊断：新原始记录进来、却超过一天没有归一化出来的新闻条目——这次就是它被静默盖住的。
-      const nowMs = Date.now()
-      const staleNewsCount = rawRecordStore
-        .listUnprocessed()
-        .filter((record) => (NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(record.sourceId))
-        .filter((record) => nowMs - Date.parse(record.detectedAt) > 24 * 60 * 60 * 1_000)
-        .length
+      const staleNewsCount = countStaleNewsRecords(rawRecordStore.listUnprocessed())
       return { processedCount, failedCount, staleNewsCount, queuedJobs: [...queuedJobs], newItemIds, backfillItemIds }
     },
 

@@ -235,6 +235,66 @@ describe('intelligencePipeline', () => {
     expect(rawRecordStore.listUnprocessed().map((record) => record.sourceId)).toEqual(['defillama-tvl'])
   })
 
+  it('reads externalized payloads back before parsing, so file-ref records normalize (2026-11-21)', async () => {
+    /* 原文外置后正文只在内容寻址文件里。读路径以前把 `payloadBody`（undefined）直接交给适配器，
+       三个源以「解析失败」收场：`No RSS items found` / `HTML parser not implemented` /
+       `missing TVL total`。夹具是当时库里的真实响应正文，不是按解析器口味拼的结构。 */
+    const bodies: Record<string, string> = {
+      'sec.bin': loadFixture('sec-rss-item-sample.json'),
+      'binance.bin': loadFixture('binance-announcement-item-sample.json'),
+      'defillama.bin': loadFixture('defillama-chains-sample.json')
+    }
+    const readPayload = vi.fn(({ fileRef }: { fileRef: string }) => ({ state: 'found' as const, body: bodies[fileRef]! }))
+    const rawRecordStore = createRawRecordStore({ readPayload })
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore
+    })
+    const append = (sourceId: string, key: string, fileRef: string, payloadFormat: 'rss-item' | 'json', parserVersion: string) =>
+      rawRecordStore.appendRawRecord({
+        sourceId, runId: `run-${key}`, sourceDedupeKey: key, payloadFormat,
+        payloadRefType: 'file', payloadFileRef: fileRef, payloadHash: `${key}-hash`, parserVersion
+      })
+
+    append('sec-rss', 'sec-1', 'sec.bin', 'rss-item', 'rss-v1')
+    append('binance-announcements', 'binance-1', 'binance.bin', 'json', 'binance-announcements-v1')
+    append('defillama-tvl', 'defillama-1', 'defillama.bin', 'json', 'metric-rest-api-v1')
+
+    const result = await pipeline.normalizeRawRecords({})
+
+    expect(result.failedCount).toBe(0)
+    // 三个源都不再以解析失败收场；DefiLlama 是指标线（产出 metric event），新闻两条各成条目。
+    expect(result.processedCount).toBeGreaterThanOrEqual(2)
+    // 三条都过了解析：新闻条目带真实标题，DefiLlama 的 TVL 总和不再为 0。
+    const titles = pipeline.listItems().map(item => item.title)
+    // 解析这一步三条都过了；SEC 那条随后按产品规则被判 ignore（不进情报条目），不是解析失败。
+    expect(titles).toEqual(expect.arrayContaining([
+      expect.stringContaining('Binance Alpha Trading Competition'),
+      'Chain TVL Total'
+    ]))
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(0)
+    expect(pipeline.listMetricEvents().some(event => event.sourceId === 'defillama-tvl')).toBe(true)
+  })
+
+  it('counts an unreadable externalized payload as failed and never parses an empty body', async () => {
+    const rawRecordStore = createRawRecordStore({ readPayload: () => ({ state: 'missing' as const }) })
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore
+    })
+    rawRecordStore.appendRawRecord({
+      sourceId: 'sec-rss', runId: 'run-gone', sourceDedupeKey: 'sec-gone', payloadFormat: 'rss-item',
+      payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash', parserVersion: 'rss-v1'
+    })
+
+    const result = await pipeline.normalizeRawRecords({})
+
+    expect(result.failedCount).toBe(1)
+    expect(result.processedCount).toBe(0)
+    // 不把「读不到原文」当成「解析成功但 0 条」：记录留在待办里，下一轮还有机会。
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(1)
+  })
+
   it('writes raw records before parsing and avoids duplicate items', async () => {
     const pipeline = createPipeline()
     const fixture = loadFixture('rss-sample.xml')
