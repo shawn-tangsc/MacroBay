@@ -107,3 +107,66 @@ describe('the same-anchor chart palette', () => {
     expect(separation(btc, gold).lightness).toBeGreaterThanOrEqual(palettePolicy.minimumLightnessSeparation)
   })
 })
+
+/**
+ * 浅色那一套是**对比度缺陷的修复**，不是另一个配色稿：深色五条线在白底只有 1.29–2.75:1，
+ * 非文字要求 3:1，cream 那条几乎看不见（同起点收益率那张图今天同样中招）。
+ *
+ * 所以这里断言三件事：浅色确实重定义了全部五条；每一条对白底都过 3:1；3M 与 30Y 靠明度分开
+ * ——两个都取中间值会在 1.6px 的线上撞成同一条（界面设计第一稿的毛病）。
+ */
+describe('chart palette in light theme', () => {
+  const lightBlock = (() => {
+    const source = css('pages/intelligence/cryptoDashboard.css')
+    const start = source.indexOf(":root[data-theme='light'] .mi-crypto-dashboard {")
+    expect(start).toBeGreaterThanOrEqual(0)
+    return source.slice(start, source.indexOf('}', start))
+  })()
+
+  const luminance = (hex: string): number => {
+    const channels = [0, 2, 4].map((index) => Number.parseInt(hex.replace('#', '').slice(index, index + 2), 16) / 255)
+    return channels
+      .map((value) => (value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
+      .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index]!, 0)
+  }
+  /** 白底（`--surface` 浅色是 #ffffff）的对比度。 */
+  const contrastOnWhite = (hex: string): number => (1.05) / (luminance(hex) + 0.05)
+
+  it('redefines every line, each at least 3:1 on the light surface', () => {
+    const light = lineIds.map((id) => tokenValue(lightBlock, `--mi-dashboard-chart-${id}`))
+    for (const [index, value] of light.entries()) {
+      expect(value, `${lineIds[index]} 在浅色下没有重映射`).toMatch(/^#[0-9a-f]{6}$/)
+      expect(contrastOnWhite(value!), `${lineIds[index]} ${value} 对白底不足 3:1`).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('keeps 3M and 30Y apart by brightness, not by a hue nobody can see at 1.6px', () => {
+    // 浅色照抄深色那套「一亮一暗」的关系：一个 4.90:1、一个 8.93:1（差 1.8 倍）。
+    // 判据用对比度差，不用 HSL 明度差——取中间值时两条线的对比度会落到同一档，那才是撞成一条线的条件。
+    const threeMonth = contrastOnWhite(tokenValue(lightBlock, '--mi-dashboard-chart-gold')!)
+    const thirtyYear = contrastOnWhite(tokenValue(lightBlock, '--mi-dashboard-chart-btc')!)
+    const [bright, dark] = threeMonth < thirtyYear ? [threeMonth, thirtyYear] : [thirtyYear, threeMonth]
+    expect(dark / bright).toBeGreaterThanOrEqual(1.7)
+  })
+
+  it('still keeps all five lines distinguishable from each other in light', () => {
+    const colors = lineIds.map((id) => hsl(tokenValue(lightBlock, `--mi-dashboard-chart-${id}`)!))
+    for (let left = 0; left < colors.length; left += 1) {
+      for (let right = left + 1; right < colors.length; right += 1) {
+        const gap = separation(colors[left]!, colors[right]!)
+        // 浅色下多一条判据：对比度差 ≥ 2（一个 4.9:1、一个 8.9:1 的两条线，在 1.6px 上不会看成一件事）。
+        const contrastGap = Math.abs(
+          contrastOnWhite(tokenValue(lightBlock, `--mi-dashboard-chart-${lineIds[left]}`)!) -
+          contrastOnWhite(tokenValue(lightBlock, `--mi-dashboard-chart-${lineIds[right]}`)!)
+        )
+        expect(
+          gap.hue >= palettePolicy.minimumHueSeparationDegrees ||
+          gap.lightness >= palettePolicy.minimumLightnessSeparation ||
+          gap.saturation >= palettePolicy.minimumSaturationSeparation ||
+          contrastGap >= 2,
+          `${lineIds[left]} 与 ${lineIds[right]} 在浅色下分不清：${JSON.stringify({ ...gap, contrastGap })}`
+        ).toBe(true)
+      }
+    }
+  })
+})
