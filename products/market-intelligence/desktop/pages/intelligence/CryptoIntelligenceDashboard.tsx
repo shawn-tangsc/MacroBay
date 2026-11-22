@@ -384,13 +384,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         onClose={() => setSettingsDrawerOpen(false)}
         onDraftChange={setSourcesDraftDirty} />
 
-      {/* 恐惧与防跌溢价：整行一条带，看板最上面、钟表那排之前（用户 2026-11-22：
-          恐惧贪婪要放到钟表上面）。卡里左半就是原来资金面带里那副仪表：读口、组件、锚点都只此一份。 */}
-      <div className="mi-crypto-dashboard__defensive-premium-row">
-        <SentimentOptionsCard state={sentimentOptions.state} text={defensivePremiumCardText(text)}
-          onRefresh={sentimentOptions.reload} onViewSource={() => onManageSource()}
-          {...(fearGreedCellOff === undefined ? {} : { cellOff: fearGreedCellOff })} />
-      </div>
       {/* 左栏顶部一排两块（用户 2026-11-15）：钟表 336 固定 + 利率数学期望占满剩余。
           间距只有 8，这一排不带左右内距；AI 结论已搬到右栏（下面那个 portal）。 */}
       <DashboardMacroRow
@@ -455,9 +448,15 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         {...(readCalendarMonth ? { readCalendarMonth } : {})}
         onOpenPolicyDetail={policyDrawer.openFrom} onConfigure={onConfigureSources}
         onClose={() => setIndicatorDrawerOpen(false)} />}
-      {/* 阅读顺序（用户 2026-11-22）：恐惧与防跌溢价 → 钟表+利率 → 行情 → 国债 → 资金面 → 杠杆。
-          情绪不并进资金面那一带：它已经是上面那张整行卡的一半，和资金面是两件事。
-          资金面自己占满整行，不留左列。 */}
+      {/* 恐惧与防跌溢价：整行一条带，落在「同一起点收益率」之后、资金面之前（界面定稿落法 A）。
+          卡里左半就是原来资金面带里那副仪表：读口、组件、锚点都只此一份。 */}
+      <div className="mi-crypto-dashboard__defensive-premium-row">
+        <SentimentOptionsCard state={sentimentOptions.state} text={defensivePremiumCardText(text)}
+          onRefresh={sentimentOptions.reload} onViewSource={() => onManageSource()}
+          {...(fearGreedCellOff === undefined ? {} : { cellOff: fearGreedCellOff })} />
+      </div>
+      {/* 阅读顺序：同一起点收益率 → 恐惧与防跌溢价 → 资金面 → 杠杆。情绪不再并进资金面那一带：
+          它已经是上面那张整行卡的一半，和资金面是两件事。资金面自己占满整行，不留左列。 */}
       <div className="mi-crypto-dashboard__capital-positioning-row">
         {/* 资金面卡逐格标「没配置 / 没启用」（`ef952ba`），宿主只把两格的状态传进去，
             不用「两格都能读」决定画不画卡——那正是用户骂的整卡隐藏。 */}
