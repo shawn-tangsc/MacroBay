@@ -236,17 +236,25 @@ export function skewChartOption(input: {
 }
 
 /**
- * 30 天的日期轴 + 按日对齐的取值；窗口里没有数据的日子是 `null`（缺口就是缺口，不补 0）。
+ * 日期轴 + 按日对齐的取值；窗口里没有数据的日子是 `null`（缺口就是缺口，不补 0）。
+ *
+ * 窗口**按实际数据跨度铺满**（首日…最新一天），最多 30 天：攒到 5 个读数时曲线铺满整格，
+ * 而不是被钉死的 30 天挤到最右边一小条（用户 2026-11-22）。满 30 天自然就是 30 天窗口。
  * 无法解析最新一天时退回原样，让图至少能画出来。
  */
 function pinnedWindow(days: readonly string[], values: readonly number[]): { days: string[]; values: Array<number | null> } {
   const newest = days[0]
   const newestMs = newest === undefined ? Number.NaN : Date.parse(`${newest}T00:00:00.000Z`)
   if (!Number.isFinite(newestMs)) return { days: [...days].reverse(), values: [...values].reverse() }
+  const oldest = days[days.length - 1]
+  const oldestMs = oldest === undefined ? Number.NaN : Date.parse(`${oldest}T00:00:00.000Z`)
+  const spanDays = Number.isFinite(oldestMs)
+    ? Math.min(CHART_WINDOW_DAYS, Math.max(1, Math.round((newestMs - oldestMs) / 86_400_000) + 1))
+    : CHART_WINDOW_DAYS
   const byDay = new Map(days.map((day, index) => [day, values[index]]))
   const windowDays: string[] = []
   const windowValues: Array<number | null> = []
-  for (let offset = CHART_WINDOW_DAYS - 1; offset >= 0; offset -= 1) {
+  for (let offset = spanDays - 1; offset >= 0; offset -= 1) {
     const day = new Date(newestMs - offset * 86_400_000).toISOString().slice(0, 10)
     windowDays.push(day)
     const value = byDay.get(day)

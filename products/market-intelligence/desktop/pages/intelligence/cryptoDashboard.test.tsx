@@ -1719,10 +1719,9 @@ describe('the defensive premium band', () => {
   it('draws a smooth line with a light area once there are three points', () => {
     const many = skewChartOption({ points: skewPoints(29), axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const manySeries = (many.series as Array<{ data: Array<number | null>; smooth: number; lineStyle: { width: number; opacity: number; color: string }; areaStyle?: unknown }>)[0]!
-    // 轴钉 30 天：29 个读数 + 一个空日，值一个不多一个不少，空的那天是 null 不是 0。
-    expect(manySeries.data).toHaveLength(30)
+    // 窗口按数据跨度铺满：29 个连续读数就是 29 天，值一个不多一个不少，不补空日也不加 0。
+    expect(manySeries.data).toHaveLength(29)
     expect(manySeries.data.filter(value => value !== null)).toHaveLength(29)
-    expect(manySeries.data[0]).toBeNull()
     expect(manySeries.smooth).toBe(0.22)
     expect(manySeries.lineStyle.width).toBe(1.6)
     expect(manySeries.lineStyle.opacity).toBe(1)
@@ -1735,19 +1734,52 @@ describe('the defensive premium band', () => {
     expect(threeSeries.areaStyle).toBeDefined()
   })
 
-  it.each([3, 4, 5, 29, 30])('pins the %i-day data to a full 30-day axis without inventing points', async (count) => {
+  it.each([3, 4, 5, 29, 30])('spans exactly the recorded range (%i days) without inventing points', async (count) => {
     const points = skewPoints(count)
     const option = skewChartOption({ points, axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const axis = (option.xAxis as { data: string[]; splitLine: { show: boolean } })
     const series = (option.series as Array<{ data: Array<number | null> }>)[0]!
-    // 横轴永远是整 30 天：末位是最新一天，首位是它往前 29 天。数据少也不把窗口压窄。
-    expect(axis.data).toHaveLength(30)
-    expect(axis.data[29]).toBe(points[0]!.day)
-    expect(axis.data[0]).toBe(new Date(Date.parse(`${points[0]!.day}T00:00:00.000Z`) - 29 * 86_400_000).toISOString().slice(0, 10))
+    // 窗口跟着数据跨度走（首日…今天），最多 30 天：5 个读数就铺满 5 天，不被钉死的 30 天挤到右边一小条。
+    expect(axis.data).toHaveLength(count)
+    expect(axis.data[count - 1]).toBe(points[0]!.day)
+    expect(axis.data[0]).toBe(points[count - 1]!.day)
     // 竖向网格线一条都没有。
     expect(axis.splitLine.show).toBe(false)
     // 有数的日子才有值，其余是 null（缺口就是缺口）。
     expect(series.data.filter(value => value !== null)).toHaveLength(count)
+  })
+
+  it('keeps the gaps inside the span instead of shrinking to the number of readings', () => {
+    // 断档那几天要留白：窗口是「首日…今天」，不是「有几个读数就几天」。
+    const points = [
+      { day: '2026-08-04', observedAt: '2026-08-04T00:00:00.000Z', riskReversal: 1.8 },
+      { day: '2026-08-01', observedAt: '2026-08-01T00:00:00.000Z', riskReversal: 1.5 },
+      { day: '2026-07-29', observedAt: '2026-07-29T00:00:00.000Z', riskReversal: 1.2 }
+    ]
+    const option = skewChartOption({ points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const axis = (option.xAxis as { data: string[] }).data
+    const series = (option.series as Array<{ data: Array<number | null> }>)[0]!
+    expect(axis).toHaveLength(7)
+    expect(axis[0]).toBe('2026-07-29')
+    expect(axis[6]).toBe('2026-08-04')
+    expect(series.data).toEqual([1.2, null, null, 1.5, null, null, 1.8])
+  })
+
+  it('never lets the verdict contradict the reading row about the direction', async () => {
+    // 读数行给出方向（「走阔 · 近 5 天」）时，结论还得说「偏斜这半没有可用的方向」——两处口径分叉了
+    // （用户 2026-11-22 抓到的就是这张图）。判据取两处共同的来源：方向枚举 `direction.kind`。
+    const known = await renderBand(skewClient({ kind: 'steeper' }, 5))
+    const knownBand = known.querySelector('.mi-defensive-premium')!
+    expect(knownBand.querySelector('[data-skew-direction="steeper"]')).not.toBeNull()
+    expect(knownBand.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fear.steeper)
+    expect(knownBand.querySelector('[data-verdict]')?.textContent)
+      .not.toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
+
+    // 方向未知时反过来也一样：结论说没方向，读数行里不许出现方向词（图上那句「不够 5 天」不算读数）。
+    const unknown = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 5))
+    const unknownBand = unknown.querySelector('.mi-defensive-premium')!
+    expect(unknownBand.querySelector('.mi-defensive-premium__reading [data-skew-direction]')).toBeNull()
+    expect(unknownBand.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
   })
 
   it('names the direction with the 5-day window, and leaves one action in the header when not connected', async () => {
