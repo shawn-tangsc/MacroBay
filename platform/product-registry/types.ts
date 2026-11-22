@@ -59,6 +59,17 @@ export interface GeneratedProductSettingsEntry {
   load: () => Promise<unknown>
 }
 
+/** 一次性窗口入口（不进菜单）：壳层按 `productId` + `id` 解析，加载后自己拿默认导出渲染。 */
+export interface GeneratedProductWindowEntry {
+  id: string
+  productId: string
+  load: () => Promise<unknown>
+}
+
+interface PreparedProductWindowEntry extends Omit<GeneratedProductWindowEntry, 'load'> {
+  modulePath: string
+}
+
 interface PreparedProductMenuEntry extends Omit<GeneratedProductMenuEntry, 'load'> {
   modulePath: string
 }
@@ -72,6 +83,7 @@ export interface GeneratedProductRegistry {
   menuEntries: readonly PreparedProductMenuEntry[]
   settingsEntries: readonly PreparedProductSettingsEntry[]
   panelEntries: readonly PreparedProductPanelEntry[]
+  windowEntries: readonly PreparedProductWindowEntry[]
   settingsDrawers: readonly GeneratedProductSettingsDrawerEntry[]
   /**
    * 工具名 → 字段名 → 两种语言的一句话，由各产品在自己的 manifest 里声明、生成期汇总。

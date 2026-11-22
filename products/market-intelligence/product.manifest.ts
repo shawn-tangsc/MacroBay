@@ -36,6 +36,11 @@ export const marketIntelligenceProductManifest = {
         module: './desktop/pages/intelligence'
       }
     ],
+    /* 一次性窗口入口（自动推送带图）：主进程起隐藏窗口把这一版画成海报，不进菜单、不进路由。
+       模块必须真实存在，由生成器校验——否则要到出图那一刻才报错，报错只会变成「这次没图」。 */
+    windowEntries: [
+      { id: 'briefing-poster', module: './desktop/pages/briefing-poster' }
+    ],
     /* 平台设置侧不再放本产品的配置：全部改由产品自己的配置抽屉承载（用户 2026-11-11）。
        平台侧渲染逻辑没变，仍按注册数据驱动；这里撤的是「贡献」，不是能力。 */
     settingsSections: [] as readonly ProductSettingsSectionContribution[],
