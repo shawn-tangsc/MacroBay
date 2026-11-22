@@ -5,6 +5,7 @@ import { createChannelPosterSend } from '../channelPosterSend'
 import { getChannelPosterOutbox } from '../../../storage/channelPosterOutbox'
 import type { PosterPublish } from '../../../ai/agent-platform/channels/channelPosterPublishRegistry'
 import { getBriefingPosterRead } from '../../../ai/agent-platform/channels/briefingPosterReadRegistry'
+import { configureChannelPosterPushSource } from '../../../ai/agent-platform/channels/channelPosterPushRegistry'
 
 /**
  * 「把助手聊天里的图消息发到频道」的装配分片（多通道方案 §4b 定稿 A）。
@@ -28,11 +29,6 @@ export type ChannelImageWiring = {
   send: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) => Promise<ChannelImageSendResult>
   /** 日报海报：按通道能力选形态（图 + 导读 / 纯导读），逐通道结果写回同一条记录。 */
   posterPublish: PosterPublish
-  /** 简报**随推送**的海报取图入口（方案 §12.1）：只按记录里的内容 hash 取，给不出路径。 */
-  resolvePoster: (contentHash: string) => Promise<
-    | { ok: true; mime: string; bytes: Uint8Array }
-    | { ok: false; code: 'delivery-image-unavailable' | 'delivery-image-source-not-allowed'; detail: string }
-  >
 }
 
 type MessageLike = { data?: { parts?: unknown } }
@@ -119,6 +115,17 @@ export function createChannelImageWiring(deps: {
     return { kind: 'published', delivery: { state: sent.state, ...(sent.code === null ? {} : { reason: sent.code }), at: new Date().toISOString(), channels: sent.channels }, channels: sent.channels }
   }
 
+  // 简报**随推送**发海报（方案 §12.1）：推送执行器在通知运行时里，装配期只把两个开关交出去。
+  // 注册放在这里而不是组合根：取图与图片投递这两样**本来就是这个分片的依赖**，多一处搬运就多一处漂移。
+  // 没注册时那条链路自动退回「只发正文」。
+  configureChannelPosterPushSource({
+    resolve: (contentHash) => channelImageSource.resolve({ kind: 'briefing-poster', contentHash }),
+    // 目标解析已经保证「恰好一条会话」，所以逐个取第一条；空结果如实记「没目标」，不猜。
+    deliverImage: async (request) =>
+      (await deps.delivery.deliverImageToEnabledTargets(request))[0]
+      ?? { status: 'failed', attemptId: null, errorCode: 'delivery-no-target-bound' }
+  })
+
   return {
     target() {
       const ready = deps.channels.list().filter((channel) => channel.state === 'runtime-ready')
@@ -133,8 +140,7 @@ export function createChannelImageWiring(deps: {
       return channels.length === 0 ? null : { channels }
     },
     send,
-    posterPublish,
-    resolvePoster: (contentHash) => channelImageSource.resolve({ kind: 'briefing-poster', contentHash })
+    posterPublish
   }
 }
 
