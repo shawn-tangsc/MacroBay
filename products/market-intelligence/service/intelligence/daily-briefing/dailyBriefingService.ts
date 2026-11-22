@@ -137,7 +137,7 @@ export function createDailyBriefingService(deps: Readonly<{
    * 「打开会话」，而不是显示一个禁用占位（那等于承诺"本来该有"）。
    */
   sessionIdOf?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => Promise<string | null>
-  noticeSubmit?: DailyBriefingNoticeSubmit
+  noticeSubmit?: DailyBriefingNoticeSubmit; /** 出图（自动推送带图）：缺省＝不出图，行为回到只发正文。 */ renderPoster?: import('./briefingPosterProducer').BriefingPosterProducer['render']
   /** 结构化诊断（appLog）：导读被扣时那条日志走它；缺省时只是不记。 */
   log?: import('./dailyBriefReadinessGate').BriefingDiagnosticLog
   redeliverPush?: BriefingRedeliver
@@ -428,7 +428,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // 写作没出来之后发不发、按什么记：判定与两个出口都住在 `settleEditorialEdition`（一处实现）。
     return settleEditorialEdition({
       document, store: deps.store, attempts, run, recorder, now,
-      ...(deps.noticeSubmit ? { noticeSubmit: deps.noticeSubmit } : {}),
+      ...(deps.noticeSubmit ? { noticeSubmit: deps.noticeSubmit } : {}), ...(deps.renderPoster ? { renderPoster: deps.renderPoster } : {}),
       date: input.date, periodId: input.periodId, locale: input.locale, asOf: input.asOf, timeZone: input.timeZone, force
     })
   }

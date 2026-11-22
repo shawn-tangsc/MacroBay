@@ -24,7 +24,7 @@ import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSenti
 import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
-import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
+import { createBriefingPosterRuntime } from './daily-briefing/briefingPosterRuntime'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
@@ -391,7 +391,7 @@ export function getIntelligenceModule(
       })
       : undefined
     const dailyBriefAgentRunner = dailyBriefSessionPort ? createDailyBriefAgentRunner({ port: dailyBriefSessionPort, agentId: 'daily-brief-editor' }) : undefined
-    const dailyBriefingStore = createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite'))
+    const { store: dailyBriefingStore, renderPoster: briefingRenderPoster } = createBriefingPosterRuntime({ databasePath: join(dataDir, 'daily-briefings.sqlite'), posterDirectory: join(dataDir, 'briefing-posters'), ...(hooks.captureBriefingPoster === undefined ? {} : { capture: hooks.captureBriefingPoster }) }) // 海报：文件、海报表、取图口、出图生产者一处装好
     const isSourceEnabled = async (sourceId: string): Promise<boolean | undefined> => {
       try {
         return (await profileStore.resolveProfile(sourceId)).enabled
@@ -508,7 +508,7 @@ export function getIntelligenceModule(
         macroWebRead: macroWebReadFromHooks(hooks, () => dailyBriefingAiSettings.getView()),
       }),
       store: dailyBriefingStore,
-      ...briefingNotificationPorts(hooks),
+      ...briefingNotificationPorts(hooks), ...(briefingRenderPoster === undefined ? {} : { renderPoster: briefingRenderPoster }),
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,

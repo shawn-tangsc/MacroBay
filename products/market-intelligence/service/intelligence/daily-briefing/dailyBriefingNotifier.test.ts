@@ -73,6 +73,16 @@ describe('daily briefing notifier', () => {
     expect(catalog.get(READY_EVENT_ID)?.approvedDisruptionLevels).toContain('desktop')
   })
 
+  it('carries the poster hash outside the dedupe key, so the same day never reminds twice', async () => {
+    // 海报进记录、**不进键**：掺进键里，同一天重生成就会多提醒一次（那正是这条键存在的理由）。
+    const withPoster = buildBriefingNoticeRequest({
+      kind: 'ready', date: DATE, periodId: 'period_x', editionId: `${DATE}:en-US:period_x`, locale: 'en-US',
+      editionPoster: { contentHash: 'abcdef0123456789' }
+    }, NOW)
+    expect(withPoster.editionPoster).toEqual({ contentHash: 'abcdef0123456789' })
+    expect(JSON.stringify(withPoster.dedupeVars)).not.toMatch(/abcdef0123456789/)
+  })
+
   it('accepts a completion submission and keeps one row a day, so a same-day regeneration does not repeat it', async () => {
     const { runtime, records } = createRuntime()
     const request = buildBriefingNoticeRequest({ kind: 'ready', date: DATE, periodId: 'period_x', editionId: `${DATE}:en-US:period_x`, locale: 'en-US' }, NOW)

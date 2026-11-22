@@ -16,6 +16,8 @@ function readSource(relativePath: string): string {
 }
 
 const appSource = readSource('app.ts')
+// 启动期「哪些产品真的注册服务」的纯函数搬到了这个模块（app.ts 只留调用点），断言跟着实现走。
+const productBootstrapSelectionSource = readSource('productBootstrapSelection.ts')
 // 单实例锁的判定搬到了独立模块（app.ts 只留调用点），断言跟着实现走。
 const singleInstanceLockSource = readSource('runtimeSingleInstanceLock.ts')
 // 启动围栏的判定搬到了独立模块（app.ts 只留一次调用），断言跟着实现走。
@@ -334,10 +336,13 @@ describe('desktop main IPC surface', () => {
   })
 
   it('keeps products and product IPC active in product acceptance mode', () => {
-    expect(appSource).toContain('function resolveBootstrapProductManifests(')
-    expect(appSource).toContain('productManifests: readonly ProductManifest[]')
-    expect(appSource).toContain('taskSmokeEnabled: boolean')
-    expect(appSource).toContain('if (taskSmokeEnabled) return []')
+    // 判定搬到了 `productBootstrapSelection.ts`，但**必须还被 app.ts 用着**：
+    // 只断言模块里有函数会变成永不红的空壳（函数在、没人调）。
+    expect(productBootstrapSelectionSource).toContain('function resolveBootstrapProductManifests(')
+    expect(productBootstrapSelectionSource).toContain('productManifests: readonly ProductManifest[]')
+    expect(productBootstrapSelectionSource).toContain('taskSmokeEnabled: boolean')
+    expect(productBootstrapSelectionSource).toContain('if (taskSmokeEnabled) return []')
+    expect(appSource).toContain('resolveBootstrapProductManifests(')
     expect(appSource).not.toContain('productAcceptanceProfile.enabled ? []')
     expect(appSource).toContain('reportProductAcceptanceRegistration({')
     expect(appSource).toContain('productIds: productManifests.map((manifest) => manifest.id)')

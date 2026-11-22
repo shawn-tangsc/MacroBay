@@ -162,6 +162,8 @@ import {
 } from './workspace/panelWorkspaceStartupReport'
 import { createWorkspaceWindowRegistry } from './workspace/workspaceWindowRegistry'
 import { MAIN_WINDOW_PRELOAD_PATH, createSecureWindowSecurity } from '../window/createMainWindow'
+import { createBriefingPosterCapture, type BriefingPosterCapture } from './window/briefingPosterCapture'
+import { expectedProductIpcMethods, resolveBootstrapProductManifests } from './productBootstrapSelection'
 import { screen } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { safeSendToMainWindow, wireRendererSendGuard } from '../window/safeRendererSend'
@@ -654,21 +656,9 @@ export type DesktopAppBootstrapOptions = {
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
     registerProductCache: ReturnType<typeof createProductCacheRegistrar>
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
+    /** 一次性隐藏窗口：入口 URL、preload 与窗口纪律在 `briefingPosterCapture`；未注入＝不出图。 */
+    captureBriefingPoster?: BriefingPosterCapture
   } & ProductAgentPlatformDeps) => void | Promise<void>
-}
-
-function resolveBootstrapProductManifests(
-  productManifests: readonly ProductManifest[],
-  taskSmokeEnabled: boolean
-): readonly ProductManifest[] {
-  if (taskSmokeEnabled) return []
-  return productManifests
-}
-
-function expectedProductIpcMethods(productManifests: readonly ProductManifest[]): readonly ProductIpcMethod[] {
-  return productManifests.flatMap((manifest) =>
-    manifest.serviceRoutes.map(({ method }) => ({ productId: manifest.id, method }))
-  )
 }
 
 function reportProductAcceptanceRegistration(input: {
@@ -1073,6 +1063,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               registerProductAgentToolHandler,
               registerProductCache,
               registerProductDisposer: productServiceDisposerRegistry.register,
+              captureBriefingPoster: createBriefingPosterCapture({ entryUrl: workspaceDetachedEntryUrl, preload: join(__dirname, MAIN_WINDOW_PRELOAD_PATH) }),
               // 产品能看到的智能体会话面：形状与绑定都在 `productAgentPlatformWiring`，这里只传服务。
               ...composeProductAgentPlatformDeps({
                 agentStore,

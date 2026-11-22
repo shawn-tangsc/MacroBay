@@ -18,6 +18,7 @@ import { marketIntelligenceAgentApprovalFieldLabels } from './desktop/shared/i18
 import { moduleSignalPolicy } from './contracts/moduleSignal'
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
+import { marketIntelligenceSkills } from './contracts/agentSkills'
 
 
 export const marketIntelligenceProductManifest = {
@@ -181,21 +182,7 @@ export const marketIntelligenceProductManifest = {
     { id: 'get_policy_path', title: 'Fed 利率路径', description: '读取下次 FOMC 会议的区间、市场定价、SEP 中位路径与上次票型。', module: './tools/policy-path' },
     { id: 'explain_figure', title: '数字来源与算式', description: '读取某个数的来源、观测时刻与算式（不带参数则列出可查的族）。', module: './tools/provenance-explain' }
   ],
-  skills: [
-    { id: 'market-analysis-skill-v1', title: '市场影响分析', description: '使用可追溯证据生成条件式市场分析。', module: './agents/skills/market-analysis' },
-    {
-      id: 'daily-brief-editor-skill-v1',
-      title: '每日简报 AI 编辑',
-      description: '以交易分析师视角决定日报候选的展示与 why，缺失结论可带来源补查。',
-      module: './agents/skills/daily-brief-editor'
-    },
-    {
-      id: 'intelligence-ops-skill-v1',
-      title: '情报运维',
-      description: '先读后写、一次一改、凭据不经过模型。',
-      module: './agents/skills/intelligence-ops'
-    }
-  ],
+  skills: marketIntelligenceSkills,
   agents: [
     {
       id: 'crypto-market-analyst',

@@ -242,9 +242,10 @@ describe('poster rows follow the edition store cleanup', () => {
     const directory = tempDirectory()
     const files = createBriefingPosterFiles({ directory })
     const dbPath = join(directory, 'daily-briefings.sqlite')
-    const db = openSqliteDatabase(dbPath)
-    const posters = createBriefingPosterStore({ db, files, now: () => '2026-11-22T00:00:00.000Z' })
-    const store = createDailyBriefingSqliteStore(dbPath, { posters })
+    const store = createDailyBriefingSqliteStore(dbPath, { posterFiles: files })
+    // 海报表由版次仓储自己建（同一个连接）：清理只走它暴露出来的这一份。
+    const posters = store.posters
+    if (posters === undefined) throw new Error('poster store missing')
 
     const write = async (date: string, locale: 'zh-CN' | 'en-US') => {
       const bytes = locale === 'zh-CN' ? PNG_1X1 : PNG_ALT

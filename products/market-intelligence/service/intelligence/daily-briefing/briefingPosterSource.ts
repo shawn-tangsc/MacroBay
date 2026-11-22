@@ -28,6 +28,33 @@ export type BriefingPosterSource = Readonly<{
   read: (contentHash: string) => Promise<BriefingPosterSourceResult>
 }>
 
+/**
+ * 通道侧注册口要的那一种形状（`poster-not-found` / `read-failed`），在这里翻译一次。
+ *
+ * 两个词表不合并：通道侧要知道「这张图不许发」还是「拿不到」，而投递层只知道投递失败码。
+ * 翻译只在这一处，调用点不各自判码。
+ */
+export function toBriefingPosterRead(
+  source: BriefingPosterSource
+): (contentHash: string) => Promise<
+  | Readonly<{ ok: true; mime: string; bytes: Uint8Array }>
+  | Readonly<{ ok: false; code: 'poster-not-found'; detail: string }>
+  | Readonly<{ ok: false; code: 'read-failed'; detail: 'missing' | 'read-failed' }>
+> {
+  return async (contentHash) => {
+    const result = await source.read(contentHash)
+    if (result.ok) return result
+    if (result.code === 'delivery-image-source-not-allowed') {
+      return { ok: false, code: 'poster-not-found', detail: result.detail }
+    }
+    return {
+      ok: false,
+      code: 'read-failed',
+      detail: result.detail === 'missing' ? 'missing' : 'read-failed'
+    }
+  }
+}
+
 export function createBriefingPosterSource(input: Readonly<{
   store: Pick<BriefingPosterStore, 'byContentHash'>
   files: Pick<BriefingPosterFiles, 'read'>

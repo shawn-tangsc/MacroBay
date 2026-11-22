@@ -36,7 +36,21 @@ export type DailyBriefingNotice =
    * 完成类：一天一期。`edition` 是读者眼前那一版的身份，落库供「发布频道」核对；`deliver: false`
    * 用于手动重新生成——照常建/合并记录，但不投递任何表面，读者点按钮时才有东西可重投。
    */
-  | Readonly<{ kind: 'ready'; date: string; periodId: string; editionId: string; locale: string; deliver?: boolean; timeLabel?: string; lede?: string }>
+  | Readonly<{
+    kind: 'ready'
+    date: string
+    periodId: string
+    editionId: string
+    locale: string
+    deliver?: boolean
+    timeLabel?: string
+    lede?: string
+    /**
+     * 这一版的海报（内容 hash）。**与正文同一次版次读取产生**：出图先落盘、再提交这条通知，
+     * 所以推送只按记录里的 hash 取图，不会出现「正文旧、海报新」。出图失败/超时就不带。
+     */
+    editionPoster?: { contentHash: string }
+  }>
 
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
@@ -184,6 +198,8 @@ export function buildBriefingNoticeRequest(
       // The record states which edition it carries, so a later manual push can check it is the one on
       // screen; a manual regeneration writes the record without delivering anything.
       edition: { editionId: notice.editionId, locale: notice.locale },
+      // 海报只带 hash：推送那一刻不读当前版次，补图与「发最新版」都不在这条路上。
+      ...(notice.editionPoster === undefined ? {} : { editionPoster: { contentHash: notice.editionPoster.contentHash } }),
       // 正文说的是**哪一期**，不说"今天"：日期 + 时刻 + 这一期的语言；导读接在同一段后面。
       // 只交这一期自己的语言一份——平台按 `edition.locale` 挑，英文界面也整条中文。
       rendered: readyCopy({
