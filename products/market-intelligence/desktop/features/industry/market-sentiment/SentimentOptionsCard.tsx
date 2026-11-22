@@ -89,10 +89,8 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           {/* 三格顺序（用户 2026-11-22）：恐惧贪婪走势 | 仪表 | 偏斜走势——仪表居中，两张走势各一边。 */}
           <div className="mi-defensive-premium__col" data-half="fear-greed">
             <div className="mi-defensive-premium__cell-head">
-              <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}
-                {/* 量程收进行名（用户 2026-11-22 重排）：图里不再有「指数 0–100」那行字。 */}
-                <span className="mi-defensive-premium__range"><span aria-hidden="true"> · </span>{text.fearGreed.axis}</span>
-              </h3>
+              {/* 行名只有格名（用户 2026-11-22）：量程就在刻度上（0/50/100），不再后缀一遍。 */}
+              <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
               <Popover resolveText={dataText} lines={[
                 { labelKey: `${TEXT_PREFIX}.fearGreed.info.volatility` },
                 percentile
@@ -101,9 +99,14 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
               ]} trigger={triggerProps => (
                 <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.fearGreed.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
               )} />
+              {/* 行名行右端：这一格的值在仪表盘那一列，这里只放「偏旧」这类陈旧状态（AC-20 照旧要标）。 */}
+              {fearGreed?.state === 'available' && fearGreed.stale
+                ? <span className="mi-defensive-premium__headline-tail" data-stale="fear-greed">
+                  <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
+                  <span>{fillLabelParams(text.stale.stopsAt, { date: fearGreed.latestDay })}</span>
+                </span>
+                : null}
             </div>
-            {/* 读数行：这一格只有「截至」，没有方向位——分数与档位词归仪表盘那一列（§4.5 第 2 条）。 */}
-            <FearGreedReading section={fearGreed} text={text} dataText={dataText} />
             {/* 图位：曲线、加载空图框、或一块「这一格怎么没数」的状态块——三种都占同一个高度，
                 所以未接入/读不到时那一列不会塌成一行、留一大片空白。 */}
             {cellOff !== undefined
@@ -141,33 +144,33 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
               ]} trigger={triggerProps => (
                 <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
               )} />
-            </div>
-            {skew === undefined && loading ? <>
-              {/* 与正常态同构的占位：读数行、图框；转圈叠在图框里，不另占一行。 */}
-              <p className="mi-defensive-premium__reading" aria-hidden="true">&nbsp;</p>
-              <ChartPlaceholder axisLabel={text.skew.axis} waitingLabel={text.loading} />
-            </>
-              : skew?.state === 'not-connected' ? <>
-                <p className="mi-defensive-premium__reading">&nbsp;</p>
-                <StateSlot tone="missing" sentence={text.skew.notConnected} />
-              </>
-                : skew?.state === 'available' ? <>
-                <p className="mi-defensive-premium__reading">
-                  <strong>{skew.latest.riskReversal.toFixed(1)}</strong> <span>{text.skew.unit}</span>
-                  {/* 方向已知才进读数行：`· 走阔 · 近 5 天 ·`，词在前、窗口在后，不拼进同一个键。 */}
+              {/* 行名行右端就是这一格的读数（用户 2026-11-22）：值 12/650 + 单位 11/muted，右对齐；
+                  方向词与窗口跟着值走，挤的时候折到名称下面一行，名称不许被挤断。 */}
+              {skew?.state === 'available'
+                ? <span className="mi-defensive-premium__headline-tail">
+                  <strong className="mi-defensive-premium__headline-value" data-skew-value>{skew.latest.riskReversal.toFixed(1)}</strong>
+                  <span>{text.skew.unit}</span>
                   {skew.direction.kind === 'unknown' ? null : <>
                     <span aria-hidden="true">·</span>
                     <span data-skew-direction={skew.direction.kind}>{text.skew.direction[skew.direction.kind]} · {text.skew.direction.window}</span>
                   </>}
-                  <span aria-hidden="true">·</span>
-                  <span>{text.skew.asOf} {skew.latestDay}</span>
                   {skew.stale
                     ? <span className="mi-defensive-premium__stale" data-stale="skew">
                       <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
                       <span>{fillLabelParams(text.stale.stopsAt, { date: skew.latestDay })}</span>
                     </span>
                     : null}
-                </p>
+                </span>
+                : null}
+            </div>
+            {skew === undefined && loading ? <>
+              {/* 与正常态同构的占位：读数行、图框；转圈叠在图框里，不另占一行。 */}
+              <ChartPlaceholder axisLabel={text.skew.axis} waitingLabel={text.loading} />
+            </>
+              : skew?.state === 'not-connected' ? <>
+                <StateSlot tone="missing" sentence={text.skew.notConnected} />
+              </>
+                : skew?.state === 'available' ? <>
                 {/* 1–2 个读数**也画点**（不连线）：画成空框读者会以为没采到（用户 2026-11-22）。
                     「还在攒」那句改走说明行，图位留给点；第 3 个读数起才连线（CHART_MIN_POINTS）。 */}
                 {skew.points.length < CHART_MIN_POINTS
@@ -211,13 +214,11 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                         : null}
                   </>}
               </> : skew?.state === 'empty' ? <>
-                <p className="mi-defensive-premium__reading">&nbsp;</p>
                 {/* 偏斜用自己的空态句：借用 `text.empty` 会让这半显示「暂无已采集的恐惧与贪婪指数」。 */}
                 <StateSlot tone="empty" stateAttribute="empty" sentence={text.skew.empty} />
               </>
                 : skew === undefined ? null : <>
-                  <p className="mi-defensive-premium__reading">&nbsp;</p>
-                  <StateSlot tone="unreadable" sentence={skewUnavailableText(skew, text)} />
+                    <StateSlot tone="unreadable" sentence={skewUnavailableText(skew, text)} />
                 </>}
           </div>
         </>}
@@ -229,26 +230,6 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   </section>
 }
 
-/**
- * 恐惧贪婪格的读数行：这一格**没有方向位**，只有一条「截至」。
- * 「为什么没数」不写在这里——它在图位那块状态块里，那一列才不会塌成一行。
- */
-function FearGreedReading({ section, text, dataText }: Readonly<{
-  section: SentimentOptionsCardResult['fearGreed'] | undefined
-  text: DefensivePremiumCardText
-  dataText: (key: string) => string
-}>): React.ReactElement {
-  if (section?.state !== 'available') return <p className="mi-defensive-premium__reading">&nbsp;</p>
-  return <p className="mi-defensive-premium__reading">
-    <span>{text.fearGreed.asOf} {section.latestDay}</span>
-    {section.stale
-      ? <span className="mi-defensive-premium__stale" data-stale="fear-greed">
-        <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
-        <span>{fillLabelParams(text.stale.stopsAt, { date: section.latestDay })}</span>
-      </span>
-      : null}
-  </p>
-}
 
 /**
  * 图位上的状态块：这一格没有数要画时，句子就落在这里，占住与曲线相同的高度。

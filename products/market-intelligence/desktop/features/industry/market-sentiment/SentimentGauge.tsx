@@ -36,8 +36,7 @@ export function SentimentGauge({ state, cellOff, buckets, titleId }: Readonly<{
   return <div className="mi-defensive-premium__col mi-defensive-premium__col--gauge" role="group" aria-labelledby={titleId} data-sentiment-gauge>
     {/* 这一列不需要标题；格头那一行仍留着，三列的格头与图位才在同一水平线上。 */}
     <div className="mi-defensive-premium__cell-head" aria-hidden="true" />
-    {/* 读数行这一列**不写任何字**：那 24 的轨道仍占着，三格的行高才一致（定稿 §4.4）。 */}
-    <div className="mi-defensive-premium__reading" aria-hidden="true" />
+    {/* 这一列没有读数行：图紧接格名。那一行轨道仍由列模板占着，三格的图底才在同一线上。 */}
     <div className="mi-defensive-premium__chart-slot">
       <GaugeChart score={reading?.score} />
       {/* 档位词在整个仪表下面（用户 2026-11-22 定稿）：图位里的 y = 150–168，弧下沿 141、锚点底 145。

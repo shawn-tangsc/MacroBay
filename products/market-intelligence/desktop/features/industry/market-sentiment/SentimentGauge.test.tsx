@@ -55,9 +55,8 @@ describe('the gauge column', () => {
     // 位置：档位词在图位里（图位带 position:relative，词按 inset-inline/bottom 绝对定位在图下方）。
     expect(reading.closest('.mi-defensive-premium__chart-slot')).not.toBeNull()
     expect(reading.parentElement?.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    // 读数行（第 2 行那条轨道）这一列不写字。
-    const track = gauge.querySelector('.mi-defensive-premium__reading')!
-    expect(track.textContent).toBe('')
+    // 这一列没有读数行（用户 2026-11-22 删掉整条读数行）：DOM 里不留空节点。
+    expect(gauge.querySelector('.mi-defensive-premium__reading')).toBeNull()
     // 图是装饰：读屏念的是档位词那一行的名字，不是画布。
     const chart = gauge.querySelector('[data-chart="gauge"]')!
     expect(chart.getAttribute('aria-hidden')).toBe('true')
@@ -129,8 +128,8 @@ describe('the gauge column', () => {
   it('is the card’s middle column: no width of its own, rows come from the shared template', () => {
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
     // 列宽由卡的三列网格给（一个变量），这一列不自己定宽；行模板三列共用。
-    // 五行一列：标题 20（h3 实际行高）/ 读数 / 说明 / 留白 / 图。仪表列也用这一套，图底与另两列齐平。
-    expect(styles).toContain('grid-template-rows: 20px 18px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
+    // 四行一列（2026-11-22 删掉读数行）：格名 20 / 图 168 / 说明 / 列尾留白。仪表列也用这一套，图底与另两列齐平。
+    expect(styles).toContain('grid-template-rows: 20px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
     // 默认 240（用户 2026-11-22 把仪表放到中间后加的宽）；940–995 那档才退回 184。
     // 两处分开断言：只写一个 `toContain(184px)` 会被窄档那条规则满足，主档写错也不红。
     expect(styles).toContain('--mi-defensive-premium-gauge-width: 240px')

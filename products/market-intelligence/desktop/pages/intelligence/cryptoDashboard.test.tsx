@@ -295,8 +295,8 @@ describe('crypto intelligence dashboard', () => {
     expect(gauge.querySelector('[data-chart="gauge"]')?.getAttribute('aria-hidden')).toBe('true')
     // 仪表只回答「落在哪一档」：日期在恐惧贪婪格的读数行上。
     expect(gauge.textContent).not.toContain('2026')
-    expect(band.querySelector('[data-half="fear-greed"] .mi-defensive-premium__reading')?.textContent)
-      .toContain(text.dashboard.defensivePremium.fearGreed.asOf)
+    // 「截至 X」不再写（用户 2026-11-22）：横轴末日期就是它，这一格连读数行都不渲染。
+    expect(band.querySelector('[data-half="fear-greed"] .mi-defensive-premium__reading')).toBeNull()
     expect(band.textContent).not.toContain(text.dashboard.sentiment.observedAt)
 
     const rows = container.querySelectorAll('.mi-crypto-dashboard__positioning-row [data-funding-latest]')
@@ -349,25 +349,24 @@ describe('crypto intelligence dashboard', () => {
     // 一行列五道：标题 20 / 读数 24（6+18）/ 说明 auto / 留白 1fr / 图 178（10+168）。
     // 把间距写成子元素的外边距时，它会溢出固定行、从行间隙里偷走 12——实测图底到分隔线只剩 2px。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 20px 18px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
+      .toContain('grid-template-rows: 20px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
     expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('align-self: end')
     expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('margin: 0')
-    // 图与同类状态块钉在最后一行：不钉的话，没有说明句的那一列会把图自动放进第三行，
-    // 而第四行那条 1fr 会跑到图下面，把「图底到结论 12」改成 12 + 留白。
+    // 图与同类状态块钉在第 2 行（固定 168）：不钉的话，没有说明句的列会把图自动放进第 3 行，
+    // 而列尾那条 1fr 会跑到图上面，把「图紧贴格名」改成一大片留白。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__state-box {'))
-      .toContain('grid-row: 3')
-    // 两句说明装在一个容器里落第三行（auto）：容器里堆叠，这一行才有两行高。
+      .toContain('grid-row: 2')
+    // 说明句装在一个容器里落第 3 行（auto）、在图下面：容器里堆叠，这一行才有几行高。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
-      .toContain('grid-row: 4')
+      .toContain('grid-row: 3')
     // 档位词按绝对定位落在**图位底部居中**（用户 2026-11-22）。这几条是棘轮：
     // 去掉 position/bottom，词就回到文档流里、跟着图往下走；行为红证在 SentimentGauge.test
-    // 的「closest('.mi-defensive-premium__chart-slot')」那条。读数行那一列仍占第 2 行的 24 轨道、不写字。
+    // 的「closest('.mi-defensive-premium__chart-slot')」那条。
     const bucketRule = cssBlock(styles, '.mi-defensive-premium__gauge-bucket {')
     expect(bucketRule).toContain('position: absolute')
     expect(bucketRule).toContain('bottom: 0')
     expect(bucketRule).toContain('inset-inline: 0')
     expect(bucketRule).toContain('text-align: center')
-    expect(styles).toContain('.mi-defensive-premium__col > .mi-defensive-premium__reading { grid-row: 2; }')
   })
 
   it('fails closed instead of crashing when a legacy funding client has no history query', async () => {
@@ -1305,9 +1304,8 @@ describe('host wiring: cells switched off and sources judged', () => {
     const gauge = container.querySelector('[data-sentiment-gauge]')!
     const cell = container.querySelector('.mi-defensive-premium [data-half="fear-greed"]')!
     // 格自带 h3 行名，仪表那一列不再画自己的标题。
-    // 行名后面跟量程（2026-11-22 重排：指数 0–100 从图上挪进行名）。
-    expect(cell.querySelector('h3')?.textContent)
-      .toBe(`${dashboardText.defensivePremium.fearGreed.name} · ${dashboardText.defensivePremium.fearGreed.axis}`)
+    // 行名只有格名（用户 2026-11-22：量程就在刻度上，不再后缀）。
+    expect(cell.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.name)
     // 仪表还在（弧照画），但没有档位词——指针与分数都不指向一个关掉的格子。
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
     expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
@@ -1557,13 +1555,18 @@ describe('the defensive premium band', () => {
     const verdict = card.querySelector('[data-verdict]')!
     expect(skew.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(cssBlock(styles, '.mi-defensive-premium > .mi-defensive-premium__header,')).toContain('grid-column: 1 / -1')
+    // 读数并入行名行（用户 2026-11-22）：整卡没有读数行；右格的值就在行名行里，单位跟着值。
+    expect(card.querySelectorAll('.mi-defensive-premium__reading')).toHaveLength(0)
+    const skewHead = skew.querySelector('.mi-defensive-premium__cell-head')!
+    expect(skewHead.querySelector('[data-skew-value]')?.textContent).toBe('1.8')
+    expect(skewHead.textContent).toContain(dashboardText.defensivePremium.skew.unit)
     // 曲线高度是一个变量（`--mi-defensive-premium-chart-height`），三列共用，不再按比例算；
     // 间距（6 与 10）算在行高里，不让外边距溢出到行外。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 20px 18px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
-    // 短窗那两句说明排在图上之前：位置一换，三列的图底就不再齐平。
+      .toContain('grid-template-rows: 20px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
+    // 说明句落在图下面（第 3 行）：这一行有无内容都不影响图的位置，三列的图底才齐平。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
-      .toContain('grid-row: 4')
+      .toContain('grid-row: 3')
   })
 
   function fearGreedSection(count = 30) {
@@ -1658,7 +1661,7 @@ describe('the defensive premium band', () => {
       fonts: CHART_FONTS_FALLBACK
     })
     expect((option.yAxis as { name?: string }).name).toBeUndefined()
-    expect(band.querySelector('[data-half="skew"] .mi-defensive-premium__reading')?.textContent)
+    expect(band.querySelector('[data-half="skew"] .mi-defensive-premium__headline-tail')?.textContent)
       .toContain(dashboardText.defensivePremium.skew.unit)
 
     const sentence = band.querySelector('[data-skew-direction]')!
@@ -1875,7 +1878,7 @@ describe('the defensive premium band', () => {
     // 方向未知时反过来也一样：结论说没方向，读数行里不许出现方向词（图上那句「不够 5 天」不算读数）。
     const unknown = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 5))
     const unknownBand = unknown.querySelector('.mi-defensive-premium')!
-    expect(unknownBand.querySelector('.mi-defensive-premium__reading [data-skew-direction]')).toBeNull()
+    expect(unknownBand.querySelector('.mi-defensive-premium__headline-tail [data-skew-direction]')).toBeNull()
     expect(unknownBand.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
   })
 
