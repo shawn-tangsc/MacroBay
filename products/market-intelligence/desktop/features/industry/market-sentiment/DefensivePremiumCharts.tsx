@@ -111,25 +111,22 @@ function ChartFrame({ chart, height, label, decorative, fallbackWidth = CHART_FA
   </figure>
 }
 
-export function FearGreedChart({ points, ariaLabel, axisLabel }: Readonly<{
+export function FearGreedChart({ points, ariaLabel }: Readonly<{
   points: readonly FearGreedSeriesPoint[]
   ariaLabel: string
-  axisLabel: string
 }>): React.ReactElement | null {
   if (points.length === 0) return null
   return <ChartFrame chart="fear-greed" height={CHART_HEIGHT} label={ariaLabel}
-    build={theme => fearGreedChartOption({ points, axisName: axisLabel, ...theme })} />
+    build={theme => fearGreedChartOption({ points, ...theme })} />
 }
 
-export function SkewChart({ points, ariaLabel, axis }: Readonly<{
+export function SkewChart({ points, ariaLabel }: Readonly<{
   points: readonly OptionSkewSeriesPoint[]
   ariaLabel: string
-  /** 整句轴说明（名字 + 带括号的单位）：括号是文案的一部分，组件里不拼。 */
-  axis: string
 }>): React.ReactElement | null {
   if (points.length === 0) return null
   return <ChartFrame chart="skew" height={CHART_HEIGHT} label={ariaLabel}
-    build={theme => skewChartOption({ points, axisName: axis, ...theme })} />
+    build={theme => skewChartOption({ points, ...theme })} />
 }
 
 /**

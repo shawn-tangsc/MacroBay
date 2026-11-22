@@ -101,19 +101,20 @@ const CHART_WINDOW_DAYS = 30
 
 const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif'
 
-/** 偏斜：图位 168 下真正能画的区域——扣掉上面 26（单位名）、下面 24（日期），中间 118。 */
+/** 偏斜：图位 168 里扣掉上面 12、下面 24（日期），中间 132 给曲线。
+ *  单位名 2026-11-22 起重排：不再画在图里，改由读数字与行名带出（`10.9 百分点`）。 */
 // 左 32：偏斜格是最右一格、紧挨仪表列，`10.4` 这种四字符标签在 left 8 时会画到框外压到仪表上
 // （ECharts 6 不认 containLabel，只能显式留窝；界面 2026-11-22 要求复核的就是这里）。
-const SKEW_GRID = { left: 32, right: 28, top: 26, bottom: 24, containLabel: true } as const
+const SKEW_GRID = { left: 32, right: 28, top: 12, bottom: 24, containLabel: true } as const
 
 /**
- * 恐惧贪婪的留白：上 34 / 下 26 维持改造前那套，只有左边从 12 加到 32。
+ * 恐惧贪婪的留白：左右下三项维持改造前那套，上 34 → 12（量程 `指数 0–100` 挪到行名后缀，图里不再有那行字）。
  *
  * 用户 2026-11-22 的截图里中列的 `100/50/0` 与首个日期被左列压住：这版 ECharts 6 不认
  * `containLabel`（会警告并要求改用 outerBounds），所以只能显式留出刻度与日期的落脚处——
  * 三个字符的 `100` 加 8 的间距约 32。左列自己也限宽 176，两头一起保证不越界。
  */
-const FEAR_GREED_GRID = { left: 32, right: 28, top: 34, bottom: 26, containLabel: true } as const
+const FEAR_GREED_GRID = { left: 32, right: 28, top: 12, bottom: 26, containLabel: true } as const
 
 function axisLabelFormatter(day: string): string {
   // 源日就是 `YYYY-MM-DD`：只印月-日，不换算时区、不带钟点。
@@ -146,7 +147,6 @@ function lineTooltip(palette: ChartPalette, fonts: ChartFonts, name: string, suf
  */
 export function fearGreedChartOption(input: {
   points: readonly FearGreedSeriesPoint[]
-  axisName: string
   palette: ChartPalette
   fonts: ChartFonts
 }): ChartOption {
@@ -182,10 +182,7 @@ export function fearGreedChartOption(input: {
       min: 0,
       max: 100,
       interval: 50,
-      name: input.axisName,
-      nameLocation: 'end',
-      nameGap: 14,
-      nameTextStyle: { color: palette.muted, fontSize: fonts.meta, fontFamily: FONT, align: 'left' },
+      // 量程说明（`指数 0–100`）是行名后缀的一行字，不再画在轴顶（用户 2026-11-22 重排）。
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: { color: palette.muted, fontSize: fonts.meta, fontFamily: FONT, margin: 8 },
@@ -216,7 +213,6 @@ export function fearGreedChartOption(input: {
 
 export function skewChartOption(input: {
   points: readonly OptionSkewSeriesPoint[]
-  axisName: string
   palette: ChartPalette
   fonts: ChartFonts
 }): ChartOption {
@@ -228,7 +224,6 @@ export function skewChartOption(input: {
     days: input.points.map(point => point.day),
     values,
     name: '偏斜',
-    axisName: input.axisName,
     suffix: ' 百分点',
     palette: input.palette,
     fonts: input.fonts,
@@ -342,7 +337,6 @@ function lineChartOption(input: {
   days: readonly string[]
   values: readonly number[]
   name: string
-  axisName: string
   suffix: string
   palette: ChartPalette
   fonts: ChartFonts
@@ -393,12 +387,7 @@ function lineChartOption(input: {
       min: input.min,
       max: input.max,
       interval: input.interval,
-      // 单位进轴名、画在轴顶：不再压在刻度行上。
-      name: input.axisName,
-      // 单位名贴在轴顶左上角：不再单独占 34 的一行。
-      nameLocation: 'end',
-      nameGap: 8,
-      nameTextStyle: { color: palette.muted, fontSize: fonts.meta, fontFamily: FONT, align: 'left' },
+      // 单位不进图里（用户 2026-11-22 重排）：偏斜的「百分点」在读数字，量程在行名后缀。
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {

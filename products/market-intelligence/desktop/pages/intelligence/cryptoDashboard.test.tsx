@@ -349,16 +349,16 @@ describe('crypto intelligence dashboard', () => {
     // 一行列五道：标题 20 / 读数 24（6+18）/ 说明 auto / 留白 1fr / 图 178（10+168）。
     // 把间距写成子元素的外边距时，它会溢出固定行、从行间隙里偷走 12——实测图底到分隔线只剩 2px。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 20px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
+      .toContain('grid-template-rows: 20px 18px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
     expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('align-self: end')
     expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('margin: 0')
     // 图与同类状态块钉在最后一行：不钉的话，没有说明句的那一列会把图自动放进第三行，
     // 而第四行那条 1fr 会跑到图下面，把「图底到结论 12」改成 12 + 留白。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__state-box {'))
-      .toContain('grid-row: -2 / -1')
+      .toContain('grid-row: 3')
     // 两句说明装在一个容器里落第三行（auto）：容器里堆叠，这一行才有两行高。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
-      .toContain('grid-row: 3')
+      .toContain('grid-row: 4')
     // 档位词按绝对定位落在**图位底部居中**（用户 2026-11-22）。这几条是棘轮：
     // 去掉 position/bottom，词就回到文档流里、跟着图往下走；行为红证在 SentimentGauge.test
     // 的「closest('.mi-defensive-premium__chart-slot')」那条。读数行那一列仍占第 2 行的 24 轨道、不写字。
@@ -1305,7 +1305,9 @@ describe('host wiring: cells switched off and sources judged', () => {
     const gauge = container.querySelector('[data-sentiment-gauge]')!
     const cell = container.querySelector('.mi-defensive-premium [data-half="fear-greed"]')!
     // 格自带 h3 行名，仪表那一列不再画自己的标题。
-    expect(cell.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.name)
+    // 行名后面跟量程（2026-11-22 重排：指数 0–100 从图上挪进行名）。
+    expect(cell.querySelector('h3')?.textContent)
+      .toBe(`${dashboardText.defensivePremium.fearGreed.name} · ${dashboardText.defensivePremium.fearGreed.axis}`)
     // 仪表还在（弧照画），但没有档位词——指针与分数都不指向一个关掉的格子。
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
     expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
@@ -1477,10 +1479,9 @@ describe('the defensive premium band', () => {
     expect(fearGreedAria).toContain('2026-08-04')
     expect(fearGreedAria).toContain(String(fgPoints(30)[29]!.score))
     // 轴名（含单位）来自文案键，画在 Y 轴顶端，不压在刻度行上。
-    expect((fearGreedChartOption({ points: fgPoints(30), axisName: dashboardText.defensivePremium.fearGreed.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-      .yAxis as { name: string; nameLocation: string }).name).toBe(dashboardText.defensivePremium.fearGreed.axis)
-    expect((fearGreedChartOption({ points: fgPoints(30), axisName: dashboardText.defensivePremium.fearGreed.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-      .yAxis as { nameLocation: string }).nameLocation).toBe('end')
+    // 轴名不再画进图里（用户 2026-11-22 重排）：量程是行名后缀，单位在读数行。
+    const axis = fearGreedChartOption({ points: fgPoints(30), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }).yAxis as { name?: string }
+    expect(axis.name).toBeUndefined()
     // 两条线不共用一张图：未接入时右格不画图，只有左格那一张。
     expect(band.querySelector('[data-chart="skew"]')).toBeNull()
     expect(band.querySelectorAll('[data-chart="fear-greed"]')).toHaveLength(1)
@@ -1559,10 +1560,10 @@ describe('the defensive premium band', () => {
     // 曲线高度是一个变量（`--mi-defensive-premium-chart-height`），三列共用，不再按比例算；
     // 间距（6 与 10）算在行高里，不让外边距溢出到行外。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 20px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
+      .toContain('grid-template-rows: 20px 18px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
     // 短窗那两句说明排在图上之前：位置一换，三列的图底就不再齐平。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
-      .toContain('grid-row: 3')
+      .toContain('grid-row: 4')
   })
 
   function fearGreedSection(count = 30) {
@@ -1639,7 +1640,7 @@ describe('the defensive premium band', () => {
     ['insufficient', { kind: 'unknown', reason: 'insufficient' }],
     ['stale', { kind: 'unknown', reason: 'stale' }],
     ['discontinuous', { kind: 'unknown', reason: 'discontinuous' }]
-  ] as const)('draws the skew line on its own axis and names why the direction is %s', async (reason, direction) => {
+  ] as const)('draws the skew line and names why the direction is %s', async (reason, direction) => {
     const container = await renderBand(skewClient(direction))
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
     // 两张图各是一个 ECharts 容器，各自带读屏名；偏斜那张的轴名就是整句 `skew.axis`。
@@ -1650,15 +1651,15 @@ describe('the defensive premium band', () => {
     expect(skewAria).toContain('2026-08-04')
     expect(skewAria).toContain(skewPoints(30)[0]!.riskReversal.toFixed(1))
     expect(band.querySelectorAll('[data-chart="fear-greed"], [data-chart="skew"]')).toHaveLength(2)
-    // 轴名（单位）来自文案键：组件不自己拼括号。
+    // 轴名不再画进图里（用户 2026-11-22 重排）：单位在读数行，图里没有那行字。
     const option = skewChartOption({
       points: skewPoints(30).map((point, index) => ({ day: point.day, observedAt: point.observedAt, riskReversal: point.riskReversal + index * 0 })),
-      axisName: dashboardText.defensivePremium.skew.axis,
       palette: CHART_PALETTE_FIXTURE,
       fonts: CHART_FONTS_FALLBACK
     })
-    expect((option.yAxis as { name: string }).name).toBe(dashboardText.defensivePremium.skew.axis)
-    expect((option.yAxis as { name: string }).name).not.toBe(dashboardText.defensivePremium.skew.unit)
+    expect((option.yAxis as { name?: string }).name).toBeUndefined()
+    expect(band.querySelector('[data-half="skew"] .mi-defensive-premium__reading')?.textContent)
+      .toContain(dashboardText.defensivePremium.skew.unit)
 
     const sentence = band.querySelector('[data-skew-direction]')!
     expect(sentence.getAttribute('data-skew-direction')).toBe(reason)
@@ -1702,7 +1703,7 @@ describe('the defensive premium band', () => {
         observedAt: '2026-11-22T00:00:00.000Z',
         riskReversal
       }))
-      const option = skewChartOption({ points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      const option = skewChartOption({ points, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
       const yAxis = option.yAxis as { min: number; max: number; interval: number }
       const low = Math.min(...values)
       const high = Math.max(...values)
@@ -1731,7 +1732,7 @@ describe('the defensive premium band', () => {
       observedAt: '2026-11-22T00:00:00.000Z',
       riskReversal
     }))
-    const option = skewChartOption({ points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const option = skewChartOption({ points, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const yAxis = option.yAxis as { min: number; max: number; interval: number }
     expect(yAxis.max - yAxis.min).toBeLessThanOrEqual(1)
     expect(yAxis.interval).toBeLessThanOrEqual(0.25)
@@ -1757,10 +1758,11 @@ describe('the defensive premium band', () => {
     // 都会得到 30，那条断言对两种实现都成立，等于没守（架构师 2026-11-22 复核指出是假绿）。
     const points = fearGreedSection(5).points
     const option = fearGreedChartOption({
-      points, axisName: 'x',
+      points,
       palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
     })
-    expect(option.grid).toMatchObject({ left: 32, top: 34, bottom: 26 })
+    // 上留白 34 → 12（2026-11-22 重排：量程挪进行名，图里不再有那行字）；左右下三项没动。
+    expect(option.grid).toMatchObject({ left: 32, top: 12, bottom: 26 })
     // 横轴跟着数据走（不是钉住 30 天的窗口）：5 个读数就只印 5 个刻度，首日就是数据最早那天。
     const axis = (option.xAxis as { data: string[]; axisLabel: { interval: (index: number) => boolean } }).data
     expect(axis).toHaveLength(5)
@@ -1770,7 +1772,7 @@ describe('the defensive premium band', () => {
     expect(labelShown(4)).toBe(true)
     // 30 点那版：末尾的 7 倍序号（后面隔着两天）让位给最后一天。
     const thirtyLabels = (fearGreedChartOption({
-      points: fearGreedSection(30).points, axisName: 'x',
+      points: fearGreedSection(30).points,
       palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
     }).xAxis as { axisLabel: { interval: (index: number) => boolean } }).axisLabel.interval
     expect(thirtyLabels(29)).toBe(true)
@@ -1782,7 +1784,7 @@ describe('the defensive premium band', () => {
   })
 
   it('draws a smooth line with a light area once there are three points', () => {
-    const many = skewChartOption({ points: skewPoints(29), axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const many = skewChartOption({ points: skewPoints(29), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const manySeries = (many.series as Array<{ data: Array<number | null>; smooth: number; lineStyle: { width: number; opacity: number; color: string }; areaStyle?: unknown }>)[0]!
     // 窗口按数据跨度铺满：29 个连续读数就是 29 天，值一个不多一个不少，不补空日也不加 0。
     expect(manySeries.data).toHaveLength(29)
@@ -1793,7 +1795,7 @@ describe('the defensive premium band', () => {
     expect(manySeries.lineStyle.color).toBe(CHART_PALETTE_FIXTURE.line)
     expect(manySeries.areaStyle).toBeDefined()
     // 3 个点起才连线（1–2 个点根本不画图，见卡面用例）。
-    const three = skewChartOption({ points: skewPoints(3), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const three = skewChartOption({ points: skewPoints(3), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const threeSeries = (three.series as Array<{ lineStyle: { opacity: number }; areaStyle?: unknown }>)[0]!
     expect(threeSeries.lineStyle.opacity).toBe(1)
     expect(threeSeries.areaStyle).toBeDefined()
@@ -1803,7 +1805,7 @@ describe('the defensive premium band', () => {
 
   it.each([3, 4, 5, 29, 30])('spans exactly the recorded range (%i days) without inventing points', async (count) => {
     const points = skewPoints(count)
-    const option = skewChartOption({ points, axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const option = skewChartOption({ points, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const axis = (option.xAxis as { data: string[]; splitLine: { show: boolean } })
     const series = (option.series as Array<{ data: Array<number | null> }>)[0]!
     // 窗口跟着数据跨度走（首日…今天），最多 30 天：5 个读数就铺满 5 天，不被钉死的 30 天挤到右边一小条。
@@ -1821,12 +1823,12 @@ describe('the defensive premium band', () => {
     // 规则两张图同一条：>7 不画点、≤7 逐点画；1–2 个读数必须看得见点。
     const symbol = (option: unknown) => (option as { series: Array<{ showSymbol: boolean }> }).series[0]!.showSymbol
     for (const count of [8, 29, 30]) {
-      expect(symbol(fearGreedChartOption({ points: fearGreedSection(count).points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(false)
-      expect(symbol(skewChartOption({ points: skewPoints(count), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(false)
+      expect(symbol(fearGreedChartOption({ points: fearGreedSection(count).points, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(false)
+      expect(symbol(skewChartOption({ points: skewPoints(count), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(false)
     }
     for (const count of [1, 2, 5, 7]) {
-      expect(symbol(fearGreedChartOption({ points: fearGreedSection(count).points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(true)
-      expect(symbol(skewChartOption({ points: skewPoints(Math.max(count, 1)), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(true)
+      expect(symbol(fearGreedChartOption({ points: fearGreedSection(count).points, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(true)
+      expect(symbol(skewChartOption({ points: skewPoints(Math.max(count, 1)), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(true)
     }
   })
 
@@ -1834,13 +1836,13 @@ describe('the defensive premium band', () => {
     // 1 个读数那张：点在界内居中，唯一的日期标签也在中间——不许出现「点在最右、日期在中间」。
     const single = skewChartOption({
       points: [{ day: '2026-11-22', observedAt: '2026-11-22T00:00:00.000Z', riskReversal: 13.2 }],
-      axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
+      palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
     })
     const axis = single.xAxis as { data: string[]; boundaryGap: boolean }
     expect(axis.data).toHaveLength(1)
     expect(axis.boundaryGap).toBe(true)
     // 多于 1 个读数保持原来的形态：点落在首尾两端、日期各自对齐到点。
-    const two = skewChartOption({ points: skewPoints(2), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const two = skewChartOption({ points: skewPoints(2), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     expect((two.xAxis as { boundaryGap: boolean }).boundaryGap).toBe(false)
   })
 
@@ -1851,7 +1853,7 @@ describe('the defensive premium band', () => {
       { day: '2026-08-01', observedAt: '2026-08-01T00:00:00.000Z', riskReversal: 1.5 },
       { day: '2026-07-29', observedAt: '2026-07-29T00:00:00.000Z', riskReversal: 1.2 }
     ]
-    const option = skewChartOption({ points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const option = skewChartOption({ points, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const axis = (option.xAxis as { data: string[] }).data
     const series = (option.series as Array<{ data: Array<number | null> }>)[0]!
     expect(axis).toHaveLength(7)
@@ -1900,9 +1902,9 @@ describe('the defensive premium band', () => {
     expect(actions.map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
   })
 
-  it('keeps the one note above the skew chart, and draws nothing at all for 1–2 points', async () => {
-    // 3 个点起才有图；没满 30 天时**只有一行**说明，且必须在图的之前（DOM 顺序，不是视觉顺序）——
-    // 挂到图后面会落成隐式行，把图底到结论分隔线的 12 顶成 28.5。
+  it('keeps the one note below the skew chart, and draws nothing at all for 1–2 points', async () => {
+    // 3 个点起才有图；没满 30 天时**只有一行**说明，且必须在图的后面（用户 2026-11-22 重排：
+    // 说明是读完图的补充，不是图的标题；DOM 顺序也照这个来，列模板第 4 行）。
     const container = await renderBand(skewClient({ kind: 'steeper' }, 6))
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
     const chart = band.querySelector('[data-chart="skew"]')!
@@ -1912,7 +1914,7 @@ describe('the defensive premium band', () => {
     expect(history.parentElement).toBe(notes)
     // 方向已知时只说攒到哪天，说明行里不再另起一句方向原因（读数行里的「走阔 · 近 5 天」是另一处）。
     expect(notes.querySelector('[data-skew-direction]')).toBeNull()
-    expect(notes.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(chart.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     // 1–2 个读数：图位里画点、不连线，说明行走「还在攒」。
     // 整句按键值比对——只查「文本里出现过数字」的话，`20`、`30` 这种巧合都能过，

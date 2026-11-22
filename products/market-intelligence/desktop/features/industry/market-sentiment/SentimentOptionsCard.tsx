@@ -89,7 +89,10 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           {/* 三格顺序（用户 2026-11-22）：恐惧贪婪走势 | 仪表 | 偏斜走势——仪表居中，两张走势各一边。 */}
           <div className="mi-defensive-premium__col" data-half="fear-greed">
             <div className="mi-defensive-premium__cell-head">
-              <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
+              <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}
+                {/* 量程收进行名（用户 2026-11-22 重排）：图里不再有「指数 0–100」那行字。 */}
+                <span className="mi-defensive-premium__range"><span aria-hidden="true"> · </span>{text.fearGreed.axis}</span>
+              </h3>
               <Popover resolveText={dataText} lines={[
                 { labelKey: `${TEXT_PREFIX}.fearGreed.info.volatility` },
                 percentile
@@ -114,7 +117,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                   : loading
                     ? <ChartPlaceholder axisLabel={text.fearGreed.axis} />
                     : fearGreed?.state === 'available' && fearGreed.points.length > 0
-                      ? <FearGreedChart points={fearGreed.points} axisLabel={text.fearGreed.axis}
+                      ? <FearGreedChart points={fearGreed.points}
                         ariaLabel={chartAria({
                           ariaLabel: text.chart.fearGreedAria, summary: text.chart.fearGreedSummary,
                           days: fearGreed.points.map(point => point.day),
@@ -169,6 +172,13 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                     「还在攒」那句改走说明行，图位留给点；第 3 个读数起才连线（CHART_MIN_POINTS）。 */}
                 {skew.points.length < CHART_MIN_POINTS
                   ? <>
+                    <SkewChart points={skew.points}
+                      ariaLabel={chartAria({
+                        ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
+                        days: skew.points.map(point => point.day),
+                        first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
+                        last: skew.points[0]!.riskReversal.toFixed(1)
+                      })} />
                     <div className="mi-defensive-premium__notes">
                       <p className="mi-defensive-premium__history" data-skew-accumulating>
                         {fillLabelParams(text.skew.accumulating, {
@@ -176,16 +186,16 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                         })}
                       </p>
                     </div>
-                    <SkewChart points={skew.points} axis={text.skew.axis}
+                  </>
+                  : <>
+                    <SkewChart points={skew.points}
                       ariaLabel={chartAria({
                         ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
                         days: skew.points.map(point => point.day),
                         first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
                         last: skew.points[0]!.riskReversal.toFixed(1)
                       })} />
-                  </>
-                  : <>
-                    {/* 图上只留**一行**说明，装在一个容器里落进列模板的第三行（`auto`）：
+                    {/* 图下只留**一行**说明，装在一个容器里落进列模板的第 4 行（`auto`）：
                         方向未知（不足 5 天 / 偏旧 / 断档）说方向，方向已知且窗口未满说攒到哪天。
                         两句同时出就是同一件事说两遍——读者在 1 点那天看到过。 */}
                     {skew.direction.kind === 'unknown'
@@ -199,13 +209,6 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                           </p>
                         </div>
                         : null}
-                    <SkewChart points={skew.points} axis={text.skew.axis}
-                      ariaLabel={chartAria({
-                        ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
-                        days: skew.points.map(point => point.day),
-                        first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
-                        last: skew.points[0]!.riskReversal.toFixed(1)
-                      })} />
                   </>}
               </> : skew?.state === 'empty' ? <>
                 <p className="mi-defensive-premium__reading">&nbsp;</p>

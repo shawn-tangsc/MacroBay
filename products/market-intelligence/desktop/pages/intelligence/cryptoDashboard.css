@@ -165,14 +165,14 @@
 .mi-defensive-premium__header h2 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-card-title); line-height: var(--line-card-title); font-weight: 650; }
 .mi-defensive-premium__refresh { margin-left: auto; }
 .mi-defensive-premium__window { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
-/* 一列 = 五行，**间距算在行高里**：标题 20 / 读数 24（6 间距 + 18）/ 说明 auto / 留白 1fr / 图 178（10 + 168）。
-   第四行是弹性行：没有说明句的那一列用它吸收多出来的高度，于是三列的图底始终齐平（这是布局留白，
-   不是「只占高、没有文本的字段行」）。说明句（`__history` / `__direction`）必须排在**图上之前**——
-   挪到图后面就会落进隐式第六行，把图底到结论的 12 顶成 28.5。
-   行位显式钉住：不钉的话，没有说明句的列会把图自动放进第三行。 */
+/* 一列 = 五行（用户 2026-11-22 重排）：格名 20 / 读数 18 / 图 168 / 说明 auto / 列尾富余 1fr。
+   读数行紧贴格名（去掉原来那 6 的上距）与图紧贴读数行，所以图上不再有一片留白；
+   说明句一律在**图下面**（`__notes` 落第 4 行）：它是读完图的补充，不是图的标题。
+   第五行是弹性行：三列内容不齐时多出来的高度落在列尾，不再把图往下推（这是布局留白，
+   不是「只占高、没有文本的字段行」）。行位显式钉住：不钉的话，没有说明句的列会把图自动放进第三行。 */
 .mi-defensive-premium__col {
   display: grid;
-  grid-template-rows: 20px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px);
+  grid-template-rows: 20px 18px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr);
   align-content: start;
   min-width: 0;
 }
@@ -182,14 +182,16 @@
 .mi-defensive-premium__col > .mi-defensive-premium__reading { grid-column: 1; }
 .mi-defensive-premium__col > .mi-defensive-premium__cell-head { grid-row: 1; }
 .mi-defensive-premium__col > .mi-defensive-premium__reading { grid-row: 2; }
-/* 两句说明装在一个容器里落第三行（`auto`）：容器里正常堆叠，所以有几句这一行就有几行高。
-   两段 `<p>` 各自钉第三行会重叠成一行高；装在容器里才有 259 / 275.5 / 292 三个值。 */
-.mi-defensive-premium__col > .mi-defensive-premium__notes { grid-row: 3; display: flex; flex-direction: column; min-width: 0; }
-/* 图与同类状态块钉在**最后一行**（`-2 / -1` 随模板行数走）：图底下就是结论分隔线，间距恒 12。 */
+/* 说明句装在一个容器里落第 4 行（`auto`）、在**图下面**：容器里正常堆叠，所以有几句这一行就有几行高。
+   两段 `<p>` 各自钉第 4 行会重叠成一行高；装在容器里才有 282 / 300 两个卡高。 */
+.mi-defensive-premium__col > .mi-defensive-premium__notes { grid-row: 4; display: flex; flex-direction: column; min-width: 0; }
+/* 图与同类状态块钉在**第 3 行**（固定 168）：图上面再没有任何文字行，读者一眼就是图。 */
 .mi-defensive-premium__col > .mi-defensive-premium__chart,
 .mi-defensive-premium__col > .mi-defensive-premium__chart-slot,
 .mi-defensive-premium__col > .mi-defensive-premium__state,
-.mi-defensive-premium__col > .mi-defensive-premium__state-box { grid-row: -2 / -1; }
+.mi-defensive-premium__col > .mi-defensive-premium__state-box { grid-row: 3; }
+/* 格名后的量程后缀（`恐惧与贪婪 · 指数 0–100`）：11、muted，跟着标题走、不进图里。 */
+.mi-defensive-premium__range { color: var(--mi-dashboard-muted); }
 .mi-defensive-premium__col h3 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 500; }
 .mi-defensive-premium__cell-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* 读数行：分数 12/650 tabular，方向词与「截至」11/400 muted。 */
