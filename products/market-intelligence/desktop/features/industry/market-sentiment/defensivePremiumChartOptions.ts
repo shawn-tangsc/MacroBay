@@ -363,7 +363,9 @@ function lineChartOption(input: {
     tooltip: lineTooltip(palette, fonts, input.name, input.suffix),
     xAxis: {
       type: 'category',
-      boundaryGap: false,
+      // 只有 1 个读数时让那一档占满整格（boundaryGap: true）：点和它自己的日期都在中间。
+      // 不加这条时点画在最右、日期标签居中，读者会当成两回事（界面 2026-11-22 抓到的）。
+      boundaryGap: window.days.length === 1,
       data: window.days,
       axisLine: { lineStyle: { color: palette.axis } },
       axisTick: { show: false },

@@ -1792,6 +1792,20 @@ describe('the defensive premium band', () => {
     expect(series.data.filter(value => value !== null)).toHaveLength(count)
   })
 
+  it('puts the single reading and its date in the same place', () => {
+    // 1 个读数那张：点在界内居中，唯一的日期标签也在中间——不许出现「点在最右、日期在中间」。
+    const single = skewChartOption({
+      points: [{ day: '2026-11-22', observedAt: '2026-11-22T00:00:00.000Z', riskReversal: 13.2 }],
+      axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
+    })
+    const axis = single.xAxis as { data: string[]; boundaryGap: boolean }
+    expect(axis.data).toHaveLength(1)
+    expect(axis.boundaryGap).toBe(true)
+    // 多于 1 个读数保持原来的形态：点落在首尾两端、日期各自对齐到点。
+    const two = skewChartOption({ points: skewPoints(2), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    expect((two.xAxis as { boundaryGap: boolean }).boundaryGap).toBe(false)
+  })
+
   it('keeps the gaps inside the span instead of shrinking to the number of readings', () => {
     // 断档那几天要留白：窗口是「首日…今天」，不是「有几个读数就几天」。
     const points = [
