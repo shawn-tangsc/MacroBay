@@ -159,7 +159,10 @@ export function fearGreedChartOption(input: {
         fontSize: fonts.meta,
         fontFamily: FONT,
         margin: 10,
-        interval: (index: number) => index === 0 || index === CHART_WINDOW_DAYS - 1 || index % 7 === 0,
+        // 末点那个日期必须印出来：读数写「截至 X」，轴上却停在 X 的前一天，读者只会读成「数据停在昨天」。
+        // 和偏斜同一套索引——离末尾不足 2 天的 7 倍序号丢掉，给最后一天腾位置（ECharts 会为避让隐掉挤在一起的那个）。
+        // 网格、0/100/50、「中性」那条线一概不动（Chief 2026-11-22 点头只改标签索引）。
+        interval: (index: number) => dayLabelIndexes(days.length).has(index),
         formatter: axisLabelFormatter
       }
     },
@@ -219,7 +222,9 @@ export function skewChartOption(input: {
     fonts: input.fonts,
     min: fit.min,
     max: fit.max,
-    interval: fit.interval
+    interval: fit.interval,
+    gridLines: fit.gridLines,
+    areaOpacity: 0.12
   })
 }
 
@@ -234,21 +239,39 @@ export function skewChartOption(input: {
  * 档数因此是**结果**不是约束：小跨度 3 档、宽跨度最多 5 档；间隔取「不超过半个数据跨度」的最大整档，
  * 所以轴跨度最多是数据跨度 + 一个间隔（≤1.5 倍），永远满足 2 倍上限。
  */
-function fitSkewAxis(low: number, high: number): { min: number; max: number; interval: number } {
+function fitSkewAxis(low: number, high: number): { min: number; max: number; interval: number; gridLines: number[] } {
   const dataSpan = high - low
   const span = Math.max(dataSpan, 0.5)
-  let interval: number = NICE_STEPS[0]!
-  for (const step of NICE_STEPS) {
-    if (step <= span / 2) interval = step
-  }
-  // 下界按间隔对齐，上界取到盖住最大值的最近一档：曲线铺满绘图区高度。
-  // 档数**不设上限**——先保证盖住数据，再谈好不好看：12.6–13.4 配 0.2 的间隔必须到 5 档，
-  // 硬压成 4 档就会把最大值裁掉（浮点误差还会让 `floor(12.6 / 0.2)` 落到 62，下界掉半格）。
   const epsilon = 1e-9
-  const min = Math.floor(low / interval + epsilon) * interval
-  const steps = Math.max(2, Math.ceil((high - min) / interval - epsilon))
-  const max = min + steps * interval
-  return { min: round1(min), max: round1(max), interval: round1(interval) }
+  /** 给定间隔时的对齐结果：下界向下取整到间隔，上界盖住最大值。 */
+  const fitWith = (interval: number) => {
+    const min = Math.floor(low / interval + epsilon) * interval
+    const steps = Math.max(2, Math.ceil((high - min) / interval - epsilon))
+    return { interval, min, steps, ticks: steps + 1, total: steps * interval }
+  }
+  // 间隔取 0.2 的整数倍（含小数档）：档数封顶 4，宁可把间隔调细/调粗到 0.2 的倍数，也不放宽到画不出线的程度。
+  const candidates: number[] = []
+  for (let step = 0.2; step <= 20 + epsilon; step = Math.round((step + 0.2) * 10) / 10) candidates.push(step)
+
+  let chosen: ReturnType<typeof fitWith> | undefined
+  for (const interval of candidates) {
+    if (interval > span / 2 + epsilon) break
+    const fit = fitWith(interval)
+    if (fit.ticks <= 4 && fit.total <= span * 2 + epsilon) { chosen = fit; break }
+  }
+  // 极窄/极宽两端找不到「4 档 + 2 倍上限」同时成立的间隔时，先保盖住数据与 2 倍上限，档数退让。
+  chosen ??= candidates.map(fitWith)
+    .filter(fit => fit.total <= span * 2 + epsilon)
+    .sort((a, b) => a.total - b.total)[0] ?? fitWith(candidates[candidates.length - 1]!)
+
+  // 横虚线 = 档数 − 1：只画到倒数第二档，最上面那条边不画（Chief 2026-11-22）。
+  const gridLines = Array.from({ length: chosen.steps }, (_, index) => round1(chosen!.min + index * chosen!.interval))
+  return {
+    min: round1(chosen.min),
+    max: round1(chosen.min + chosen.steps * chosen.interval),
+    interval: round1(chosen.interval),
+    gridLines
+  }
 }
 
 /**
@@ -303,6 +326,10 @@ function lineChartOption(input: {
   min: number
   max: number
   interval: number
+  /** 填充透明度：只有偏斜传 0.12（窄量程里面积太厚，界面 2026-11-22）；恐惧贪婪维持 0.22。 */
+  areaOpacity?: number
+  /** 横向网格线的档位值（不含最上面那条边）：给了就用 markLine 画，Y 轴自己的 splitLine 关掉。 */
+  gridLines?: readonly number[]
   /** 该刻度值带语义标签（目前只有恐惧贪婪的 50 = 中性）。 */
   neutralAt?: number
   neutralLabel?: string
@@ -359,7 +386,9 @@ function lineChartOption(input: {
           ? `${value} · ${input.neutralLabel}`
           : String(value)
       },
-      splitLine: { lineStyle: { color: palette.grid, type: 'dashed' } }
+      splitLine: input.gridLines === undefined
+        ? { lineStyle: { color: palette.grid, type: 'dashed' } }
+        : { show: false }
     },
     series: [{
       type: 'line',
@@ -373,7 +402,16 @@ function lineChartOption(input: {
       lineStyle: { width: drawsLine ? 1.6 : 0, opacity: drawsLine ? 1 : 0, color: palette.line },
       itemStyle: { color: palette.line, borderColor: palette.surface, borderWidth: 1 },
       // 淡面积：同一个线色加透明度，不另造一份品牌色的 rgba。
-      areaStyle: drawsLine ? { color: palette.line, opacity: 0.22 } : undefined
+      areaStyle: drawsLine ? { color: palette.line, opacity: input.areaOpacity ?? 0.22 } : undefined,
+      ...(input.gridLines === undefined ? {} : {
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: { show: false },
+          lineStyle: { color: palette.grid, type: 'dashed' as const, width: 1 },
+          data: input.gridLines.map(value => ({ yAxis: value }))
+        }
+      })
     }]
   }
 }

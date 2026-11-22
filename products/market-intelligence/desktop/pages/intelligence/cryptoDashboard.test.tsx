@@ -1682,10 +1682,19 @@ describe('the defensive premium band', () => {
       const low = Math.min(...values)
       const high = Math.max(...values)
       const span = Math.max(high - low, 0.5)
+      const ySeries = (option.series as Array<{ markLine?: { data: Array<{ yAxis: number }> } }>)[0]!
+      const gridLines = ySeries.markLine!.data.map(entry => entry.yAxis)
+      const ticks = gridLines.length + 1
       expect(yAxis.min).toBeLessThanOrEqual(low)
       expect(yAxis.max).toBeGreaterThanOrEqual(high)
       expect(yAxis.max - yAxis.min).toBeLessThanOrEqual(span * 2 + 1e-9)
       expect(yAxis.interval).toBeLessThanOrEqual(span / 2 + 1e-9)
+      // 档数封顶 4，横虚线 = 档数 − 1（最上面那条边不画），而且线只落在刻度上。
+      expect(ticks).toBeLessThanOrEqual(4)
+      expect((option.yAxis as { splitLine: { show: boolean } }).splitLine.show).toBe(false)
+      for (const line of gridLines) {
+        expect(Math.abs(((line - yAxis.min) / yAxis.interval) - Math.round((line - yAxis.min) / yAxis.interval))).toBeLessThan(1e-6)
+      }
     }
   })
 
@@ -1728,9 +1737,19 @@ describe('the defensive premium band', () => {
     })
     expect(option.grid).toMatchObject({ left: 12, top: 34, bottom: 26 })
     // 横轴跟着数据走（不是钉住 30 天的窗口）：5 个读数就只印 5 个刻度，首日就是数据最早那天。
-    const axis = (option.xAxis as { data: string[] }).data
+    const axis = (option.xAxis as { data: string[]; axisLabel: { interval: (index: number) => boolean } }).data
     expect(axis).toHaveLength(5)
     expect(axis[0]).toBe(points[4]!.day)
+    // 末点日期必须印出来（读数写「截至 X」，轴上不能停在 X 的前一天）。
+    const labelShown = (option.xAxis as { axisLabel: { interval: (index: number) => boolean } }).axisLabel.interval
+    expect(labelShown(4)).toBe(true)
+    // 30 点那版：末尾的 7 倍序号（后面隔着两天）让位给最后一天。
+    const thirtyLabels = (fearGreedChartOption({
+      points: fearGreedSection(30).points, axisName: 'x',
+      palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
+    }).xAxis as { axisLabel: { interval: (index: number) => boolean } }).axisLabel.interval
+    expect(thirtyLabels(29)).toBe(true)
+    expect(thirtyLabels(28)).toBe(false)
     // 50 那条参考线与「中性」仍在：这是改造前的样子。
     const series = (option.series as Array<{ markLine?: { data: Array<{ yAxis: number }> } }>)[0]!
     expect(series.markLine?.data).toEqual([{ yAxis: 50 }])
@@ -1753,6 +1772,8 @@ describe('the defensive premium band', () => {
     const threeSeries = (three.series as Array<{ lineStyle: { opacity: number }; areaStyle?: unknown }>)[0]!
     expect(threeSeries.lineStyle.opacity).toBe(1)
     expect(threeSeries.areaStyle).toBeDefined()
+    // 面积只对偏斜调淡（0.22 → 0.12）：窄量程里面积太厚，会把曲线压住。构造器是两半共用，靠传参区分。
+    expect((threeSeries.areaStyle as { opacity: number }).opacity).toBe(0.12)
   })
 
   it.each([3, 4, 5, 29, 30])('spans exactly the recorded range (%i days) without inventing points', async (count) => {
