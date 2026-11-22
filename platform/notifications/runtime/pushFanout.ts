@@ -9,6 +9,7 @@ import type {
 } from '../contracts/notificationContracts'
 import { aggregatePushDelivery } from '../delivery/aggregatePushDelivery'
 import type { ChannelPushAttempt, ChannelPushHook, ChannelPushTarget } from '../delivery/channelPushPort'
+import type { ChannelPosterPushHook } from '../delivery/channelPosterPushPort'
 import type { PushChannelsResolution } from '../delivery/pushChannelResolution'
 import { recordPushOutcome, shouldSkipPush, type PushDeliveryOutcome } from '../delivery/pushBackoffPolicy'
 import { pushDeliveryState } from '../delivery/pushDeliveryState'
@@ -40,6 +41,8 @@ export async function attemptChannelPush(input: {
   now: () => string
   resolvePushChannels?: () => Promise<PushChannelsResolution>
   pushHook?: ChannelPushHook
+  /** 简报海报（方案 §12.1）：正文受理之后才调；钩子缺席就等于「这一版没有图」那一路。 */
+  pushImageHook?: ChannelPosterPushHook
   diagnostics?: NotificationDiagnosticsSink
 }): Promise<{
   pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
@@ -164,6 +167,49 @@ export async function attemptChannelPush(input: {
     ...(only?.attemptId === undefined ? {} : { messageId: only.attemptId }),
     ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
   }
+  // —— 海报（方案 §12.1/§12.4）：**正文 → 正文受理了才发图** ——
+  //
+  // 顺序与短路是**调用点**的规则，不进投递层契约：投递层仍然「一次调用一条消息」。
+  // 三条不许反过来：
+  // 1. 正文一条都没受理 → 图一张都不发（读者不该只收到一张没有正文的图）；
+  // 2. 图失败**不回头改** `delivery.push`（正文确实到了，标成失败就是假红），只写 `delivery.pushImage`；
+  // 3. 只发给**正文受理的**那几条通道——按通道短路，不让一条正文失败配一张孤图。
+  if (record.editionPoster !== undefined && input.pushImageHook !== undefined) {
+    const acceptedIds = new Set(
+      outcomes.filter((outcome) => outcome.state === 'sent-accepted').map((outcome) => outcome.channelId)
+    )
+    const imageTargets = targets.filter((target) => acceptedIds.has(target.channelId))
+    if (imageTargets.length > 0) {
+      let posterAttempts: readonly import('../delivery/channelPosterPushPort').ChannelPosterPushAttempt[] = []
+      try {
+        posterAttempts = await input.pushImageHook({ ...record, delivery }, imageTargets)
+      } catch {
+        // 与正文端口同一口径：端口承诺不抛；真抛了也只当「这一版图没发出去」。
+        posterAttempts = []
+      }
+      const posterById = new Map(posterAttempts.map((attempt) => [attempt.channelId, attempt]))
+      const posterOutcomes: PushChannelOutcome[] = imageTargets.map((target) => {
+        const result = posterById.get(target.channelId)?.result ?? { ok: false, reason: 'channel-rejected' }
+        const mapped = pushDeliveryState(result)
+        return {
+          channelId: target.channelId,
+          channelName: target.channelName,
+          state: mapped.state,
+          ...(mapped.reason === undefined ? {} : { reason: mapped.reason }),
+          ...(result.messageId === undefined ? {} : { attemptId: result.messageId }),
+          at
+        }
+      })
+      const posterAggregate = aggregatePushDelivery(posterOutcomes)
+      delivery.pushImage = {
+        state: posterAggregate.state,
+        ...(posterAggregate.reason === undefined ? {} : { reason: posterAggregate.reason }),
+        at,
+        channels: posterOutcomes
+      }
+    }
+  }
+
   return { pushBackoff: changed ? nextBackoff : pushBackoff, ...(transition === undefined ? {} : { transition }) }
 }
 

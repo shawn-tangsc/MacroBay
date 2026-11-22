@@ -67,6 +67,14 @@ export type NotificationSubmitRequest = {
   deliver?: boolean
   /** 读者眼前那一版；落库供 `redeliverPush` 核对。 */
   edition?: { editionId: string; locale: string }
+  /**
+   * 这一版**海报**的内容 hash（方案 §12.3）：与 `edition` **同一次版次读取**产生，正文与图必须同版。
+   * 推送时只按它取图，**不读「当前版次」**（否则出现「正文旧、海报新」）。
+   *
+   * 缺席 = 这一版没有海报（出图失败/超时/旧版次）：那种记录只发正文，不补图、不猜。
+   * 它**绝不进 `dedupeVars`**——同一天重生成不该多提醒一次。
+   */
+  editionPoster?: { contentHash: string }
   dedupeVars: NotificationDedupeVars
   /**
    * 记录上的**展示严重度**（`NotificationSeverity`）。以前提交计划器把它写死成 `info`，

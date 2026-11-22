@@ -164,8 +164,13 @@ export type NotificationRecord = {
   eventTypeId: string
   /** 合并进来的其它事件类型（含首条，契约 §16.2）。 */
   mergedEventTypes?: string[]
-  /** 每个表面的投递证据（契约 §8）。旧记录归一化为空对象。 */
-  delivery: Partial<Record<'toast' | 'popup' | 'desktop' | 'push', NotificationDeliveryState>>
+  /**
+   * 每个表面的投递证据（契约 §8）。旧记录归一化为空对象。
+   *
+   * `pushImage` 只给**简报海报**那一条（方案 §12.1）：正文那档仍写 `push`，海报单独记账——
+   * 图没发出去不能把「正文发出去了」说成失败，也不能把「图没发」藏起来。
+   */
+  delivery: Partial<Record<'toast' | 'popup' | 'desktop' | 'push' | 'pushImage', NotificationDeliveryState>>
   /**
    * 老形状：标题文案键 + 参数，读取时按语言解析。**新记录不再写它**（写成品句子），
    * 双形状兼容到「库里 `titleKey` 非空记录数 = 0」为止（契约 v2.56 §3.3）。
@@ -195,6 +200,11 @@ export type NotificationRecord = {
   safeMetadata?: Record<string, unknown>
   /** 读者眼前那一版的标识（`redeliverPush` 靠它核对）；**历史记录没有它，一律按不匹配处理**。 */
   edition?: { editionId: string; locale: string }
+  /**
+   * 这一版海报的内容 hash（方案 §12.3）：推送时**只按它**取图，不读「当前版次」。
+   * 缺席 = 这一版没有海报（出图失败/超时/旧版次），只发正文。合并时**带了才覆盖**，不带不清空。
+   */
+  editionPoster?: { contentHash: string }
   occurrenceCount: number
   /** 熔断折叠掉的原文条数；只有聚合记录有。原文不落库，但这个事实必须留下。 */
   collapsedCount?: number
@@ -289,6 +299,8 @@ export type NotificationRequest = {
   expiresAt?: string
   /** 读者眼前那一版；合并时**带了才覆盖**，没带就保持记录原样（不许清空）。 */
   edition?: { editionId: string; locale: string }
+  /** 这一版海报的内容 hash；与 `edition` 同一口径——带了才覆盖，没带不清空（否则手动重投会抹掉海报）。 */
+  editionPoster?: { contentHash: string }
 }
 
 export type NotificationListQuery = {

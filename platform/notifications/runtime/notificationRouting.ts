@@ -2,6 +2,7 @@ import { isInsideQuietHours } from './quietHours'
 import type { NotificationChannel, NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationRecord } from '../contracts/notificationContracts'
 import type { ChannelPushHook } from '../delivery/channelPushPort'
+import type { ChannelPosterPushHook } from '../delivery/channelPosterPushPort'
 import type { NotificationDeeplink, NotificationRequest } from '../contracts/notificationContracts'
 
 export type DeliveryAttempt = {
@@ -41,6 +42,11 @@ export type DeliveryHooks = {
    * **一次调用扇出到被点名的全部目标**，逐目标回执：N 条通道 = N 行结果，仍是一条记录。
    */
   push?: ChannelPushHook
+  /**
+   * 简报海报（方案 §12.1）：正文受理之后才调。与 `push` 分开，因为账要分开记
+   * （`delivery.push` 记正文，`delivery.pushImage` 记海报），失败也互不覆盖。
+   */
+  pushImage?: ChannelPosterPushHook
 }
 
 /**

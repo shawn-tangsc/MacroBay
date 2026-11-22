@@ -327,6 +327,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       now: input.now,
       ...(input.resolvePushChannels === undefined ? {} : { resolvePushChannels: input.resolvePushChannels }),
       ...(input.deliveryHooks?.push === undefined ? {} : { pushHook: input.deliveryHooks.push }),
+      ...(input.deliveryHooks?.pushImage === undefined ? {} : { pushImageHook: input.deliveryHooks.pushImage }),
       ...(input.diagnostics === undefined ? {} : { diagnostics: input.diagnostics })
     })
   }

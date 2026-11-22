@@ -23,6 +23,8 @@ let notificationDiagnostics: NotificationDiagnosticsSink | null = null
 let updateNotificationSettings: ((patch: Partial<NotificationRuntimeSettings>) => Promise<void>) | null = null
 let getNotificationPushTargets: (() => Promise<readonly unknown[]>) | null = null
 let notificationPushHook: DeliveryHooks['push'] | null = null
+/** 简报海报（方案 §12.1）：与正文端口分开存，缺席＝这一版只发正文。 */
+let notificationPosterPushHook: DeliveryHooks['pushImage'] | null = null
 let notificationProducerOwnership: NotificationProducerOwnership | null = null
 let notificationProductIds: readonly string[] | null = null
 /**
@@ -52,6 +54,8 @@ export function configureNotificationRuntime(deps: {
   /** 目标通道的唯一派生（技术方案 §1）。 */
   resolvePushChannels?: () => Promise<PushChannelsResolution>
   push?: DeliveryHooks['push']
+  /** 简报海报端口（方案 §12.1）；不装就只有正文。 */
+  pushImage?: DeliveryHooks['pushImage']
   producerOwnership?: NotificationProducerOwnership
   productIds?: readonly string[]
   /** 读者时区与当前时刻。**必传**：缺省成 UTC 会把「不知道」当成「用户在格林尼治」（`MI-11-R68`）。 */
@@ -73,6 +77,7 @@ export function configureNotificationRuntime(deps: {
   getNotificationPushTargets = deps.getPushTargets ?? null
   notificationPushResolver = deps.resolvePushChannels ?? null
   notificationPushHook = deps.push ?? null
+  notificationPosterPushHook = deps.pushImage ?? null
   notificationProducerOwnership = deps.producerOwnership ?? null
   notificationProductIds = deps.productIds ?? null
   notificationRuntimeConfigured = true
@@ -163,7 +168,8 @@ export function getNotificationRuntime() {
             title: content.title,
             ...(content.body.length === 0 ? {} : { body: content.body })
           }),
-        ...(notificationPushHook === null ? {} : { push: notificationPushHook })
+        ...(notificationPushHook === null ? {} : { push: notificationPushHook }),
+        ...(notificationPosterPushHook === null ? {} : { pushImage: notificationPosterPushHook })
       },
       readDesktopPermission: () => desktopAdapter.readPermission(),
       onChanged: broadcastNotificationChanged
@@ -183,6 +189,7 @@ export function resetNotificationRuntimeForTests(): void {
   updateNotificationSettings = null
   getNotificationPushTargets = null
   notificationPushHook = null
+  notificationPosterPushHook = null
   notificationProducerOwnership = null
   notificationProductIds = null
   notificationPushResolver = null

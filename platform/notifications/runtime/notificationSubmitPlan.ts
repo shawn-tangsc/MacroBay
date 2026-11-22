@@ -320,7 +320,8 @@ function toLegacyRequest(
     ...(request.deeplink === undefined ? {} : { deeplink: request.deeplink }),
     dedupeKey,
     ...(request.correlationId === undefined ? {} : { correlationId: request.correlationId }),
-    ...(request.edition === undefined ? {} : { edition: request.edition })
+    ...(request.edition === undefined ? {} : { edition: request.edition }),
+    ...(request.editionPoster === undefined ? {} : { editionPoster: request.editionPoster })
   }
 }
 
@@ -373,6 +374,7 @@ function createRecord(
     dedupeKey,
     ...(request.correlationId === undefined ? {} : { correlationId: request.correlationId }),
     ...(request.edition === undefined ? {} : { edition: request.edition }),
+    ...(request.editionPoster === undefined ? {} : { editionPoster: request.editionPoster }),
     occurrenceCount: 1,
     createdAt: now,
     updatedAt: now
