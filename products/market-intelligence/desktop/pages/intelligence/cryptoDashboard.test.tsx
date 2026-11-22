@@ -1419,17 +1419,19 @@ describe('the defensive premium band', () => {
     return container
   }
 
-  it('sits between the same-start return panel and the money band, as one full-width row', async () => {
+  it('sits above the macro row as the first full-width row, still a sibling of the money band', async () => {
     const container = await renderBand()
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const macro = container.querySelector('.mi-crypto-dashboard__macro-row')!
     const crossAsset = container.querySelector('[data-cross-asset-workspace]')!
     const capital = container.querySelector('.mi-crypto-dashboard__capital-positioning-row')!
     const positioning = container.querySelector('.mi-crypto-dashboard__positioning-row')!
 
-    // 位置：同起点收益率之后、资金面之前，而且是三带的兄弟节点——不许塞进某一带里当第二列。
+    // 位置（用户 2026-11-22）：看板最上面、钟表那排之前；仍是各带的兄弟节点——不许塞进某一带里当第二列。
     expect(band).not.toBeNull()
-    expect(crossAsset.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(band.compareDocumentPosition(capital) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(band.compareDocumentPosition(macro) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(macro.compareDocumentPosition(crossAsset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(crossAsset.compareDocumentPosition(capital) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(capital.compareDocumentPosition(positioning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(band.parentElement).toBe(capital.parentElement)
 
