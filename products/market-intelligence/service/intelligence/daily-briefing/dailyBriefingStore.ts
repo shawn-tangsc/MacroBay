@@ -12,6 +12,7 @@ import type {
   DailyBriefingStore,
   DailyBriefingStoredEdition
 } from './dailyBriefingService'
+import type { BriefingPosterStore } from './briefingPosterStore'
 import { parseRun, type RunRow } from './dailyBriefingRunRow'
 import { parseRow, type Row } from './dailyBriefingStoreRow'
 import {
@@ -41,7 +42,10 @@ export const dailyBriefingStoragePolicy = Object.freeze({
  * their briefs, and `upgradeState` says what happened. Writing a column the old table does not have
  * is never attempted; the single issue is implied instead.
  */
-export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingStore {
+export function createDailyBriefingSqliteStore(
+  filePath: string,
+  options?: Readonly<{ posters?: BriefingPosterStore }>
+): DailyBriefingStore {
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
   const db = openSqliteDatabase(filePath)
   db.exec('pragma synchronous = full;')
@@ -364,7 +368,10 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     },
     async prune(beforeDate) {
       statements.prune(beforeDate)
+      // 海报跟着版次的保留期走。**只在这一处**：调用点各写一遍，迟早漏一条（文档 §12.3）。
+      await options?.posters?.pruneDate(beforeDate)
     },
+    ...(options?.posters === undefined ? {} : { posters: options.posters }),
     async getPeriodRun(date, periodId, locale) {
       return statements.periodRun(date, periodId ?? DEFAULT_PERIOD_ID, locale)
     },
@@ -427,6 +434,9 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
             .run(date, periodId).changes ?? 0)
         }
       }
+      // 海报跟着这一次删除走，按 (日期, 期号, 语言) 三种全删（重生成的每一版都算）。
+      // 与 `prune` 同一个仓储层入口，调用点不各写一遍。
+      await options?.posters?.deleteEdition({ date, periodId, locale })
       return Object.freeze({
         editions: Number(editions.changes ?? 0),
         attempts,
