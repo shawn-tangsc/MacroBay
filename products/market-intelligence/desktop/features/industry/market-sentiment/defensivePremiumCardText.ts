@@ -22,6 +22,8 @@ export type DefensivePremiumCardText = {
     notConnected: string
     /** 偏斜自己的空态句：复用恐惧贪婪那句会变成「暂无已采集的恐惧与贪婪指数」。 */
     empty: string
+    /** 1–2 个点不画图，图位里写这句；参数 `collected` / `remaining`（窗口 30 天）。 */
+    accumulating: string
     infoLabel: string
     info: { definition: string; relative: string; since: string }
     asOf: string
@@ -54,6 +56,7 @@ type Source = {
       name: string
       notConnected: string
       empty: string
+      accumulating: string
       infoLabel: string
       asOf: string
       unit: string

@@ -86,14 +86,23 @@ export function readChartPalette(element: Element | null): ChartPalette {
   return { ...palette, bands: [bands[0]!, bands[1]!, bands[2]!, bands[3]!, bands[4]!] }
 }
 
-/** 少于 5 个点只画点、不连线：几个点连起来会被读成「趋势」，而方向判定恰恰说这时不够判。 */
-export const CHART_LINE_MIN_POINTS = 5
+/**
+ * 图从第 3 个点起才画：1–2 个点连不成线，坐标轴还会塌成一条（实测刻度竖排、网格铺满整格）。
+ * 同一个数也决定「连线」的门槛：3 个点起就画折线。
+ */
+export const CHART_MIN_POINTS = 3
+
+/** 恐惧贪婪那条线的门槛维持原值：这一半不改。 */
+const CHART_LINE_MIN_POINTS = 5
 const CHART_WINDOW_DAYS = 30
 
 const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif'
 
-// right 留 28：最后一个日期写在轴的右端、居中对齐，留窄了会被裁掉半个。
-const BASE_GRID = { left: 12, right: 28, top: 34, bottom: 26, containLabel: true } as const
+/** 偏斜：图位 168 下真正能画的区域——扣掉上面 26（单位名）、下面 24（日期），中间 118。 */
+const SKEW_GRID = { left: 8, right: 28, top: 26, bottom: 24, containLabel: true } as const
+
+/** 恐惧贪婪维持改造前那套留白（top 34 / bottom 26），一个字不动。 */
+const FEAR_GREED_GRID = { left: 12, right: 28, top: 34, bottom: 26, containLabel: true } as const
 
 function axisLabelFormatter(day: string): string {
   // 源日就是 `YYYY-MM-DD`：只印月-日，不换算时区、不带钟点。
@@ -119,27 +128,75 @@ function lineTooltip(palette: ChartPalette, fonts: ChartFonts, name: string, suf
   }
 }
 
+/**
+ * 恐惧贪婪这张图**维持改造前的样子**：数据驱动的横轴、0/100 固定量程、50 那条参考线与「中性」。
+ * 2026-11-22 用户指出这一半本来就是现成的，不该被新规矩带着改——所以它和偏斜**不共用**
+ * 任何坐标轴配置，将来改偏斜也不会再碰到它。
+ */
 export function fearGreedChartOption(input: {
   points: readonly FearGreedSeriesPoint[]
   axisName: string
   palette: ChartPalette
   fonts: ChartFonts
 }): ChartOption {
-  return lineChartOption({
-    days: input.points.map(point => point.day),
-    values: input.points.map(point => point.score),
-    name: '恐惧与贪婪',
-    axisName: input.axisName,
-    suffix: '',
-    palette: input.palette,
-    fonts: input.fonts,
-    // 指数天生 0–100：轴固定满量程，读者才知道 12 分在整条尺子上有多低。
-    min: 0,
-    max: 100,
-    interval: 50,
-    // 中性线：一条参考线比多画几条网格更能说清「现在在哪一侧」。
-    markLineAt: 50
-  })
+  const { palette, fonts } = input
+  const days = input.points.map(point => point.day)
+  const values = input.points.map(point => point.score)
+  const drawsLine = values.length >= CHART_LINE_MIN_POINTS
+  return {
+    animation: false,
+    aria: { enabled: false },
+    grid: { ...FEAR_GREED_GRID },
+    tooltip: lineTooltip(palette, fonts, '恐惧与贪婪', ''),
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: [...days].reverse(),
+      axisLine: { lineStyle: { color: palette.axis } },
+      axisTick: { show: false },
+      axisLabel: {
+        color: palette.muted,
+        fontSize: fonts.meta,
+        fontFamily: FONT,
+        margin: 10,
+        interval: (index: number) => index === 0 || index === CHART_WINDOW_DAYS - 1 || index % 7 === 0,
+        formatter: axisLabelFormatter
+      }
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: 100,
+      interval: 50,
+      name: input.axisName,
+      nameLocation: 'end',
+      nameGap: 14,
+      nameTextStyle: { color: palette.muted, fontSize: fonts.meta, fontFamily: FONT, align: 'left' },
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: palette.muted, fontSize: fonts.meta, fontFamily: FONT, margin: 8 },
+      splitLine: { lineStyle: { color: palette.grid, type: 'dashed' } }
+    },
+    series: [{
+      type: 'line',
+      name: '恐惧与贪婪',
+      data: [...values].reverse(),
+      smooth: 0.22,
+      symbol: 'circle',
+      symbolSize: 4,
+      showSymbol: true,
+      lineStyle: { width: drawsLine ? 1.6 : 0, opacity: drawsLine ? 1 : 0, color: palette.line },
+      itemStyle: { color: palette.line, borderColor: palette.surface, borderWidth: 1 },
+      areaStyle: drawsLine ? { color: palette.line, opacity: 0.22 } : undefined,
+      markLine: {
+        silent: true,
+        symbol: 'none',
+        lineStyle: { color: palette.axis, type: 'dashed' as const, width: 1 },
+        label: { show: true, position: 'insideEndTop' as const, formatter: '中性', color: palette.muted, fontSize: fonts.meta, fontFamily: FONT },
+        data: [{ yAxis: 50 }]
+      }
+    }]
+  }
 }
 
 export function skewChartOption(input: {
@@ -151,8 +208,19 @@ export function skewChartOption(input: {
   const values = input.points.map(point => point.riskReversal)
   const low = values.length > 0 ? Math.min(...values) : 0
   const high = values.length > 0 ? Math.max(...values) : 1
-  // 一条水平线（或只有一个点）也要给它一圈上下限，否则坐标轴塌成一条线。
-  const span = high - low < 0.1 ? 0.1 : high - low
+  // 偏斜没有「满量程」这回事：轴按本窗端点缩放。但跨度必须给下限——几个点几乎同值时，
+  // 端点间距会小到让 ECharts 把轴压成一条、刻度竖排（1 个点那一版就是这样坏掉的）。
+  const span = Math.max(high - low, 1)
+  const pad = span * 0.25
+  // 4 档刻度（3 个间隔）必须**盖住**本窗的最小/最大值：下沿按刻度取整会把它推低，
+  // 间隔不够时上沿就落在数据下面，曲线被裁成一块填满的色块（第一版就是这样）。
+  let interval = niceStepAtLeast(span / 3)
+  let min = Math.floor((low - pad) / interval) * interval
+  for (let attempt = 0; attempt < 5 && min + interval * 3 < high + pad; attempt += 1) {
+    interval = nextNiceStep(interval)
+    min = Math.floor((low - pad) / interval) * interval
+  }
+  const max = round1(min + interval * 3)
   return lineChartOption({
     days: input.points.map(point => point.day),
     values,
@@ -161,24 +229,55 @@ export function skewChartOption(input: {
     suffix: ' 百分点',
     palette: input.palette,
     fonts: input.fonts,
-    // 偏斜没有「满量程」这回事：轴按本窗端点缩放，读者只看它自己的起伏。
-    min: round1(low - span * 0.2),
-    max: round1(high + span * 0.2),
-    interval: niceInterval(span),
-    markLineAt: undefined
+    min: round1(min),
+    max,
+    interval: round1(interval)
   })
+}
+
+/**
+ * 30 天的日期轴 + 按日对齐的取值；窗口里没有数据的日子是 `null`（缺口就是缺口，不补 0）。
+ * 无法解析最新一天时退回原样，让图至少能画出来。
+ */
+function pinnedWindow(days: readonly string[], values: readonly number[]): { days: string[]; values: Array<number | null> } {
+  const newest = days[0]
+  const newestMs = newest === undefined ? Number.NaN : Date.parse(`${newest}T00:00:00.000Z`)
+  if (!Number.isFinite(newestMs)) return { days: [...days].reverse(), values: [...values].reverse() }
+  const byDay = new Map(days.map((day, index) => [day, values[index]]))
+  const windowDays: string[] = []
+  const windowValues: Array<number | null> = []
+  for (let offset = CHART_WINDOW_DAYS - 1; offset >= 0; offset -= 1) {
+    const day = new Date(newestMs - offset * 86_400_000).toISOString().slice(0, 10)
+    windowDays.push(day)
+    const value = byDay.get(day)
+    windowValues.push(value === undefined ? null : value)
+  }
+  return { days: windowDays, values: windowValues }
+}
+
+/** 日期轴上要印的序号：首、尾、以及每隔 7 天（离末尾不足 2 天的那个丢掉）。 */
+function dayLabelIndexes(length: number): Set<number> {
+  const indexes = new Set<number>([0, length - 1])
+  for (let index = 7; index < length - 2; index += 7) indexes.add(index)
+  return indexes
 }
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10
 }
 
-/** 刻度间隔跟着窗口跨度走，不让标签挤成一团。 */
-function niceInterval(span: number): number {
-  if (span <= 0.6) return 0.2
-  if (span <= 3) return 0.5
-  if (span <= 8) return 1
-  return 2
+const NICE_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10] as const
+
+/** 不小于给定间隔的最小整档：4 档刻度 = 3 个间隔，向上取整才盖得住整段数据。 */
+function niceStepAtLeast(gap: number): number {
+  for (const step of NICE_STEPS) {
+    if (gap <= step) return step
+  }
+  return Math.ceil(gap / 10) * 10
+}
+
+function nextNiceStep(step: number): number {
+  return NICE_STEPS.find(candidate => candidate > step) ?? step * 2
 }
 
 function lineChartOption(input: {
@@ -192,19 +291,24 @@ function lineChartOption(input: {
   min: number
   max: number
   interval: number
-  markLineAt: number | undefined
+  /** 该刻度值带语义标签（目前只有恐惧贪婪的 50 = 中性）。 */
+  neutralAt?: number
+  neutralLabel?: string
 }): ChartOption {
   const { palette, fonts } = input
-  const drawsLine = input.values.length >= CHART_LINE_MIN_POINTS
+  const drawsLine = input.values.length >= CHART_MIN_POINTS
+  // X 轴钉住**整个 30 天窗口**：窗口首日 = 最新一天往前 29 天。跟着数据收缩会让 3 个点铺满整格，
+  // 一格当 30 天读；1 个点时范围缩到 0，竖线糊满屏就是这么来的。缺的日子留空，不补值。
+  const window = pinnedWindow(input.days, input.values)
   return {
     animation: false,
     aria: { enabled: false },
-    grid: { ...BASE_GRID },
+    grid: { ...SKEW_GRID },
     tooltip: lineTooltip(palette, fonts, input.name, input.suffix),
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: [...input.days].reverse(),
+      data: window.days,
       axisLine: { lineStyle: { color: palette.axis } },
       axisTick: { show: false },
       axisLabel: {
@@ -212,10 +316,13 @@ function lineChartOption(input: {
         fontSize: fonts.meta,
         fontFamily: FONT,
         margin: 10,
-        // 首尾 + 每 7 天一个，够读又不挤。
-        interval: (index: number) => index === 0 || index === CHART_WINDOW_DAYS - 1 || index % 7 === 0,
+        // 首尾 + 每 7 天一个，够读又不挤。落在末尾两天内的那个 7 倍序号要丢掉，
+        // 否则它和「最后一天」挤在一起、ECharts 会把最后一天藏起来（读者看不到截至那天）。
+        interval: (index: number) => dayLabelIndexes(window.days.length).has(index),
         formatter: axisLabelFormatter
-      }
+      },
+      // 竖向网格线一条都不要：日期轴上的竖线只会和曲线抢注意力。
+      splitLine: { show: false }
     },
     yAxis: {
       type: 'value',
@@ -224,18 +331,28 @@ function lineChartOption(input: {
       interval: input.interval,
       // 单位进轴名、画在轴顶：不再压在刻度行上。
       name: input.axisName,
+      // 单位名贴在轴顶左上角：不再单独占 34 的一行。
       nameLocation: 'end',
-      nameGap: 14,
+      nameGap: 8,
       nameTextStyle: { color: palette.muted, fontSize: fonts.meta, fontFamily: FONT, align: 'left' },
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: palette.muted, fontSize: fonts.meta, fontFamily: FONT, margin: 8 },
+      axisLabel: {
+        color: palette.muted,
+        fontSize: fonts.meta,
+        fontFamily: FONT,
+        margin: 8,
+        // 中性那一档直接把语义写进标签，避免同一件事在一张图里说两遍。
+        formatter: (value: number) => input.neutralAt !== undefined && value === input.neutralAt && input.neutralLabel
+          ? `${value} · ${input.neutralLabel}`
+          : String(value)
+      },
       splitLine: { lineStyle: { color: palette.grid, type: 'dashed' } }
     },
     series: [{
       type: 'line',
       name: input.name,
-      data: [...input.values].reverse(),
+      data: window.values,
       // 点少时把线隐掉（只留点），一个点都不编。
       smooth: 0.22,
       symbol: 'circle',
@@ -244,16 +361,7 @@ function lineChartOption(input: {
       lineStyle: { width: drawsLine ? 1.6 : 0, opacity: drawsLine ? 1 : 0, color: palette.line },
       itemStyle: { color: palette.line, borderColor: palette.surface, borderWidth: 1 },
       // 淡面积：同一个线色加透明度，不另造一份品牌色的 rgba。
-      areaStyle: drawsLine ? { color: palette.line, opacity: 0.22 } : undefined,
-      ...(input.markLineAt === undefined ? {} : {
-        markLine: {
-          silent: true,
-          symbol: 'none',
-          lineStyle: { color: palette.axis, type: 'dashed' as const, width: 1 },
-          label: { show: true, position: 'insideEndTop' as const, formatter: '中性', color: palette.muted, fontSize: fonts.meta, fontFamily: FONT },
-          data: [{ yAxis: input.markLineAt }]
-        }
-      })
+      areaStyle: drawsLine ? { color: palette.line, opacity: 0.22 } : undefined
     }]
   }
 }

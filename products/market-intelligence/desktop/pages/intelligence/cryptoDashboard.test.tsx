@@ -341,10 +341,10 @@ describe('crypto intelligence dashboard', () => {
     expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
     expect(cardRule).toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
-    // 一行列五道：标题 17 / 读数 24（6+18）/ 说明 auto / 留白 1fr / 图 142（10+132）。
+    // 一行列五道：标题 20 / 读数 24（6+18）/ 说明 auto / 留白 1fr / 图 178（10+168）。
     // 把间距写成子元素的外边距时，它会溢出固定行、从行间隙里偷走 12——实测图底到分隔线只剩 2px。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 17px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
+      .toContain('grid-template-rows: 20px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
     expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('align-self: end')
     expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('margin: 0')
     // 图与同类状态块钉在最后一行：不钉的话，没有说明句的那一列会把图自动放进第三行，
@@ -535,7 +535,8 @@ describe('crypto intelligence dashboard', () => {
 
   it('keeps the sentiment zone compact and stacks the funding-history panel at narrow widths', () => {
     const sentimentRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment {')
-    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
+    // 这张卡的堆叠阈值是 939（三列下限 940），别的带子仍是 899。
+    const stackStyles = cssBlock(styles, '@container (max-width: 939px)')
 
     expect(sentimentRule).toContain('container-type: inline-size')
     expect(sentimentRule).toContain('container-name: mi-sentiment-positioning')
@@ -1501,7 +1502,7 @@ describe('the defensive premium band', () => {
     // 列宽与图高各只有一处定义（两个变量），三列都用它们。
     const cardRule = cssBlock(styles, '.mi-defensive-premium {')
     expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
-    expect(cardRule).toContain('--mi-defensive-premium-chart-height: 132px')
+    expect(cardRule).toContain('--mi-defensive-premium-chart-height: 168px')
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
     // 标题行的动作与文字按钮同档（24）：图标按钮用 md，换态时不跳 2px。
     expect(band.querySelector('.mi-defensive-premium__refresh')?.className).toContain('icon-button--md')
@@ -1532,7 +1533,7 @@ describe('the defensive premium band', () => {
     // 曲线高度是一个变量（`--mi-defensive-premium-chart-height`），三列共用，不再按比例算；
     // 间距（6 与 10）算在行高里，不让外边距溢出到行外。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 17px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
+      .toContain('grid-template-rows: 20px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
     // 短窗那两句说明排在图上之前：位置一换，三列的图底就不再齐平。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
       .toContain('grid-row: 3')
@@ -1664,36 +1665,83 @@ describe('the defensive premium band', () => {
     expect(skewColumn.querySelector('[data-chart="skew"]')).toBeNull()
   })
 
-  it('draws a smooth line with a light area only when there are enough points', () => {
+  it('never clips the skew line: the four ticks always cover the data', () => {
+    // 第一版把间隔向下取整，上沿低于数据最大值，整条曲线被裁成一块填满的色块。
+    // 现在 4 档刻度的首尾必须包住本窗的最小/最大值——平坦、极值、大跨度都要成立。
+    for (const values of [[12.9], [12.9, 12.9, 12.9], [11.8, 13.2], [11.8, 15.0], [-4.2, 9.6], [40, 41]]) {
+      const points = values.map((riskReversal, index) => ({
+        day: new Date(Date.parse('2026-11-22T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10),
+        observedAt: '2026-11-22T00:00:00.000Z',
+        riskReversal
+      }))
+      const option = skewChartOption({ points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      const yAxis = option.yAxis as { min: number; max: number; interval: number }
+      expect(yAxis.min).toBeLessThanOrEqual(Math.min(...values))
+      expect(yAxis.max).toBeGreaterThanOrEqual(Math.max(...values))
+      // 4 档刻度 = 3 个间隔，上沿正好落在最后一档上。
+      expect(yAxis.max).toBeCloseTo(yAxis.min + yAxis.interval * 3, 5)
+    }
+  })
+
+  it('stacks below 940 and caps the gauge there, so nothing folds into the next track', () => {
+    // 三列下限 = 184 + 24 + 2×366 = 940：再窄一格英文读数折两行（41 > 24 的读数轨）压进图行。
+    const stacked = cssBlock(styles, '@container (max-width: 939px) {')
+    expect(stacked).toContain('.mi-defensive-premium { grid-template-columns: minmax(0, 1fr); }')
+    // 这张卡只在 939 以下堆叠；899 那条留给别的带子，不许再管这张卡（900–939 必须已经堆叠）。
+    const legacy = cssBlock(styles, '@container (max-width: 899px) {')
+    expect(legacy).not.toContain('.mi-defensive-premium')
+    // 堆叠后仪表独占一行：不限宽会被拉成 800×168 的扁半圆。
+    expect(stacked).toContain('.mi-defensive-premium__col--gauge { width: min(240px, 100%); justify-self: center; }')
+  })
+
+  it('leaves the fear-greed chart exactly as it was before the skew rework', () => {
+    // 用户 2026-11-22：这一半本来就是现成的，不该被偏斜的新规矩带着改。它有自己的网格与横轴，
+    // 与偏斜不共用坐标轴配置——这里钉住三条事实，防止下次再被顺手改到。
+    const option = fearGreedChartOption({
+      points: fearGreedSection(30).points, axisName: 'x',
+      palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
+    })
+    expect(option.grid).toMatchObject({ left: 12, top: 34, bottom: 26 })
+    // 横轴跟着数据走（不是钉住 30 天的窗口）。
+    expect((option.xAxis as { data: string[] }).data).toHaveLength(30)
+    // 50 那条参考线与「中性」仍在：这是改造前的样子。
+    const series = (option.series as Array<{ markLine?: { data: Array<{ yAxis: number }> } }>)[0]!
+    expect(series.markLine?.data).toEqual([{ yAxis: 50 }])
+    expect(option.yAxis as { min: number; max: number; interval: number }).toMatchObject({ min: 0, max: 100, interval: 50 })
+  })
+
+  it('draws a smooth line with a light area once there are three points', () => {
     const many = skewChartOption({ points: skewPoints(29), axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-    const manySeries = (many.series as Array<{ data: unknown[]; smooth: number; lineStyle: { width: number; opacity: number; color: string }; areaStyle?: unknown }>)[0]!
-    // 29 个点：一条平滑线 + 淡面积，点数一个不多一个不少。
-    expect(manySeries.data).toHaveLength(29)
+    const manySeries = (many.series as Array<{ data: Array<number | null>; smooth: number; lineStyle: { width: number; opacity: number; color: string }; areaStyle?: unknown }>)[0]!
+    // 轴钉 30 天：29 个读数 + 一个空日，值一个不多一个不少，空的那天是 null 不是 0。
+    expect(manySeries.data).toHaveLength(30)
+    expect(manySeries.data.filter(value => value !== null)).toHaveLength(29)
+    expect(manySeries.data[0]).toBeNull()
     expect(manySeries.smooth).toBe(0.22)
     expect(manySeries.lineStyle.width).toBe(1.6)
     expect(manySeries.lineStyle.opacity).toBe(1)
     expect(manySeries.lineStyle.color).toBe(CHART_PALETTE_FIXTURE.line)
     expect(manySeries.areaStyle).toBeDefined()
-    // 少于 5 个点只画点、不连线：线宽 0、透明度 0，也不铺面积。
-    for (const count of [1, 4]) {
-      const few = skewChartOption({ points: skewPoints(count), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-      const fewSeries = (few.series as Array<{ lineStyle: { width: number; opacity: number }; areaStyle?: unknown }>)[0]!
-      expect(fewSeries.lineStyle.opacity).toBe(0)
-      expect(fewSeries.areaStyle).toBeUndefined()
-    }
+    // 3 个点起才连线（1–2 个点根本不画图，见卡面用例）。
+    const three = skewChartOption({ points: skewPoints(3), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const threeSeries = (three.series as Array<{ lineStyle: { opacity: number }; areaStyle?: unknown }>)[0]!
+    expect(threeSeries.lineStyle.opacity).toBe(1)
+    expect(threeSeries.areaStyle).toBeDefined()
   })
 
-  it.each([1, 4, 5, 29, 30])('covers the %i-day edge of the skew window without inventing points', async (count) => {
+  it.each([3, 4, 5, 29, 30])('pins the %i-day data to a full 30-day axis without inventing points', async (count) => {
     const points = skewPoints(count)
     const option = skewChartOption({ points, axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-    const series = (option.series as Array<{ data: number[] }>)[0]!
-    // 点一个不多一个不少；横轴就是这 count 天（新在前、画的时候反过来），不补假点。
-    expect(series.data).toHaveLength(count)
-    expect((option.xAxis as { data: string[] }).data).toHaveLength(count)
-    expect((option.xAxis as { data: string[] }).data[0]).toBe([...points].reverse()[0]!.day)
-    // 少于 5 个点不连线，5 个起才连（判据是点数，不是「有没有数据」）。
-    const lineStyle = (option.series as Array<{ lineStyle: { opacity: number } }>)[0]!.lineStyle
-    expect(lineStyle.opacity).toBe(count >= 5 ? 1 : 0)
+    const axis = (option.xAxis as { data: string[]; splitLine: { show: boolean } })
+    const series = (option.series as Array<{ data: Array<number | null> }>)[0]!
+    // 横轴永远是整 30 天：末位是最新一天，首位是它往前 29 天。数据少也不把窗口压窄。
+    expect(axis.data).toHaveLength(30)
+    expect(axis.data[29]).toBe(points[0]!.day)
+    expect(axis.data[0]).toBe(new Date(Date.parse(`${points[0]!.day}T00:00:00.000Z`) - 29 * 86_400_000).toISOString().slice(0, 10))
+    // 竖向网格线一条都没有。
+    expect(axis.splitLine.show).toBe(false)
+    // 有数的日子才有值，其余是 null（缺口就是缺口）。
+    expect(series.data.filter(value => value !== null)).toHaveLength(count)
   })
 
   it('names the direction with the 5-day window, and leaves one action in the header when not connected', async () => {
@@ -1719,24 +1767,33 @@ describe('the defensive premium band', () => {
     expect(actions.map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
   })
 
-  it('keeps both short-window notes above the skew chart', async () => {
-    // 1 个点那天的形状：说明句与「还差几个」都不缺席。它们必须在图的**之前**（DOM 顺序，
-    // 不是视觉顺序）——挂到图后面就会落成隐式行，把图底到结论分隔线的 12 顶成 28.5。
-    const container = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 1))
+  it('keeps the one note above the skew chart, and draws nothing at all for 1–2 points', async () => {
+    // 3 个点起才有图；没满 30 天时**只有一行**说明，且必须在图的之前（DOM 顺序，不是视觉顺序）——
+    // 挂到图后面会落成隐式行，把图底到结论分隔线的 12 顶成 28.5。
+    const container = await renderBand(skewClient({ kind: 'steeper' }, 6))
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
     const chart = band.querySelector('[data-chart="skew"]')!
-    const history = band.querySelector('[data-skew-history]')!
-    const sentence = band.querySelector('[data-skew-direction="insufficient"]')!
-    expect(chart).not.toBeNull()
-    expect(history).not.toBeNull()
-    expect(sentence).not.toBeNull()
-    // 必须是**同一个容器**里的两句：两段散着挂进同一行会重叠成一行高，卡高就会少 16.5。
     const notes = band.querySelector('.mi-defensive-premium__notes')!
-    expect(notes.contains(history)).toBe(true)
-    expect(notes.contains(sentence)).toBe(true)
+    const history = band.querySelector('[data-skew-history]')!
+    expect(chart).not.toBeNull()
     expect(history.parentElement).toBe(notes)
-    expect(sentence.parentElement).toBe(notes)
+    // 方向已知时只说攒到哪天，说明行里不再另起一句方向原因（读数行里的「走阔 · 近 5 天」是另一处）。
+    expect(notes.querySelector('[data-skew-direction]')).toBeNull()
     expect(notes.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // 1 个点：图位是一句话的状态块，不是一张塌成一行的图。
+    for (const count of [1, 2]) {
+      const early = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, count))
+      const column = early.querySelector('[data-half="skew"]')!
+      expect(column.querySelector('[data-chart="skew"]')).toBeNull()
+      expect(column.querySelector('.mi-defensive-premium__notes')).toBeNull()
+      const block = column.querySelector('.mi-defensive-premium__state-box')!
+      expect(block.textContent).toContain(String(count))
+      expect(block.textContent).toContain(String(30 - count))
+      expect(column.querySelector('[data-skew-direction]')).toBeNull()
+      expect(block.getAttribute('data-state')).toBe('missing')
+    }
+
     // 满窗那版没有说明句：图仍是同一列的最后一行。
     const full = await renderBand(skewClient({ kind: 'steeper' }, 30))
     expect(full.querySelector('[data-skew-history]')).toBeNull()

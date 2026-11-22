@@ -30,7 +30,7 @@ echarts.use([...CHART_MODULES])
  */
 
 /** 曲线区高度（px）。与 CSS 里的 `--mi-defensive-premium-chart-height` 是同一个数，有用例对账。 */
-export const CHART_HEIGHT = 132
+export const CHART_HEIGHT = 168
 
 /** 没有布局时（happy-dom 用例、离屏首帧）用来出图的宽度；有布局时永远用真实宽度。 */
 const FALLBACK_WIDTH = 416

@@ -105,8 +105,8 @@ describe('the gauge column', () => {
   it('is the card’s first column: no width of its own, rows come from the shared template', () => {
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
     // 列宽由卡的三列网格给（一个变量），这一列不自己定宽；行模板三列共用。
-    // 五行一列：标题 / 读数 / 说明 / 留白 / 图。仪表列也用这一套，所以它的图底与另两列齐平。
-    expect(styles).toContain('grid-template-rows: 17px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
+    // 五行一列：标题 20（h3 实际行高）/ 读数 / 说明 / 留白 / 图。仪表列也用这一套，图底与另两列齐平。
+    expect(styles).toContain('grid-template-rows: 20px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
     expect(styles).toContain('--mi-defensive-premium-gauge-width: 184px')
   })
 })
