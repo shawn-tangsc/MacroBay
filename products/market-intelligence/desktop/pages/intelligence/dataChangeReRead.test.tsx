@@ -152,7 +152,7 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     const before = counts()
     // 六个读口都真的读过一轮（门禁放行后才会有这次读）。
     expect(before).toEqual({ sentimentOptions: 1, fundingRate: 1, openInterest: 1, divergence: 1, capital: 1, policyPath: 1, calendar: 1 })
-    const cardBefore = container.querySelector('.mi-crypto-dashboard__sentiment')
+    const cardBefore = container.querySelector('.mi-defensive-premium')
     expect(cardBefore).not.toBeNull()
 
     await deliverDataChanged({ panels: ['dashboard'], sources: ['alternative-fear-greed', 'binance-futures'] })
@@ -170,7 +170,7 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     // 日历月不是 `dashboard` 面板：这一条不许把它一起带走。
     expect(counts().calendar).toBe(before.calendar)
     // 重读不是重挂载：同一个 DOM 节点还在原处（换掉订阅那一行就会红）。
-    expect(container.querySelector('.mi-crypto-dashboard__sentiment')).toBe(cardBefore)
+    expect(container.querySelector('.mi-defensive-premium')).toBe(cardBefore)
   })
 
   it('ignores a calendar write for the dashboard read points, and re-reads the month for it', async () => {

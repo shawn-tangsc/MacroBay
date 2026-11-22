@@ -286,11 +286,14 @@ describe('crypto intelligence dashboard', () => {
     // 仪表只此一副，住在卡的第一列；资金面与持仓两条带里都没有它。
     expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__positioning-row [data-sentiment-gauge]')).toBeNull()
-    expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    // 读数是「分数 + 档位词」的文字；画布本身不进可访问树，读屏念的是这行字。
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('22极度恐惧')
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-gauge svg')).not.toBeNull()
+    // 回到手绘仪表：分数在圆盘里、档位词在它下面，画布本身不进可访问树（用户 2026-11-22：别重画）。
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-dial strong')?.textContent).toBe('22')
+    expect(gauge.querySelector('[data-gauge-bucket-text]')?.textContent).toBe('极度恐惧')
     expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
-    expect(gauge.querySelector('[data-chart="gauge"]')?.getAttribute('aria-hidden')).toBe('true')
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-gauge svg')?.getAttribute('aria-hidden')).toBe('true')
+    // 仪表自带分数与档位词，新卡的读数行不再重复写一遍。
+    expect(gauge.querySelector('.mi-defensive-premium__reading')?.textContent?.trim()).toBe('')
     // 仪表只回答「落在哪一档」：日期在恐惧贪婪格的读数行上。
     expect(gauge.textContent).not.toContain('2026')
     expect(band.querySelector('[data-half="fear-greed"] .mi-defensive-premium__reading')?.textContent)
@@ -330,7 +333,8 @@ describe('crypto intelligence dashboard', () => {
     ] as const) {
       const { gauge, dispose } = await renderSentimentGauge(score, bucket)
       expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe(bucket)
-      expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe(`${score}${text.dashboard.fearGreed.buckets[bucket]}`)
+      expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-dial strong')?.textContent).toBe(String(score))
+      expect(gauge.querySelector('[data-gauge-bucket-text]')?.textContent).toBe(text.dashboard.fearGreed.buckets[bucket])
       await dispose()
     }
   })
@@ -1150,7 +1154,8 @@ describe('host wiring: cells switched off and sources judged', () => {
     expect(cell.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['alternative-fear-greed'])
     // 页面上只有一副仪表；源关着时那一列只有弧，没有分数与档位词。
     expect(container.querySelectorAll('[data-sentiment-gauge]')).toHaveLength(1)
-    expect(container.querySelector('[data-sentiment-gauge] [data-gauge-reading]')?.textContent).toBe('')
+    expect(container.querySelector('[data-sentiment-gauge] .mi-crypto-dashboard__sentiment-dial strong')).toBeNull()
+    expect(container.querySelector('[data-sentiment-gauge] [data-gauge-bucket-text]')).toBeNull()
   })
 
   /** 市场状态表逐行也要点名（2026-11-12 第二处残留）：源关了说源，格关了说格。 */
@@ -1294,8 +1299,9 @@ describe('host wiring: cells switched off and sources judged', () => {
     // 格自带 h3 行名，仪表那一列不再画自己的标题。
     expect(cell.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.name)
     // 仪表还在（弧照画），但读数行是空的——指针与分数都不指向一个关掉的格子。
-    expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-gauge svg')).not.toBeNull()
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-dial strong')).toBeNull()
+    expect(gauge.querySelector('[data-gauge-bucket-text]')).toBeNull()
     const row = cell.querySelector('[data-sentiment-state]')!
     expect(row.getAttribute('data-sentiment-state')).toBe('disabled')
     expect(row.textContent).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
@@ -1342,19 +1348,21 @@ describe('host wiring: cells switched off and sources judged', () => {
     expect(refresh?.getAttribute('aria-label')).toBe(dashboardText.defensivePremium.action.refresh)
     expect(dataText.retry).not.toBe('')
     // 仪表仍画着弧，但没有读数；旧的整块 `StateView` 也不回来。
-    expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-gauge svg')).not.toBeNull()
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-dial strong')).toBeNull()
+    expect(gauge.querySelector('[data-gauge-bucket-text]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__defensive-premium-row .state-view')).toBeNull()
   })
 
   it('cell on and readable: the gauge shows its reading, and no state row', async () => {
     const container = await renderCells({}, { sentimentOptionsClient: sentimentOptionsClient(readableSentiment as never) })
-    await settle(container, '[data-gauge-reading] strong')
+    await settle(container, '.mi-crypto-dashboard__sentiment-dial strong')
     const gauge = container.querySelector('[data-sentiment-gauge]')!
     // 有数据时没有那一行：状态句只在没读数时出现。
     expect(gauge.querySelector('[data-sentiment-state]')).toBeNull()
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('22极度恐惧')
-    expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-dial strong')?.textContent).toBe('22')
+    expect(gauge.querySelector('[data-gauge-bucket-text]')?.textContent).toBe('极度恐惧')
+    expect(gauge.querySelector('.mi-crypto-dashboard__sentiment-gauge svg')).not.toBeNull()
   })
 })
 
@@ -1735,7 +1743,7 @@ describe('the defensive premium band', () => {
       points, axisName: 'x',
       palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
     })
-    expect(option.grid).toMatchObject({ left: 12, top: 34, bottom: 26 })
+    expect(option.grid).toMatchObject({ left: 32, top: 34, bottom: 26 })
     // 横轴跟着数据走（不是钉住 30 天的窗口）：5 个读数就只印 5 个刻度，首日就是数据最早那天。
     const axis = (option.xAxis as { data: string[]; axisLabel: { interval: (index: number) => boolean } }).data
     expect(axis).toHaveLength(5)
@@ -1861,7 +1869,7 @@ describe('the defensive premium band', () => {
     expect(notes.querySelector('[data-skew-direction]')).toBeNull()
     expect(notes.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
-    // 1–2 个读数：图位整块是一句话的状态块，不是一张塌成一行的图。
+    // 1–2 个读数：图位里画点、不连线，说明行走「还在攒」。
     // 整句按键值比对——只查「文本里出现过数字」的话，`20`、`30` 这种巧合都能过，
     // 阈值改回 5 或这段分支被删掉，图位空着用例也照样绿。
     const accumulating = (collected: number) => fillLabelParams(
@@ -1871,13 +1879,13 @@ describe('the defensive premium band', () => {
     for (const count of [1, 2]) {
       const early = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, count))
       const column = early.querySelector('[data-half="skew"]')!
-      expect(column.querySelector('[data-chart="skew"]')).toBeNull()
-      expect(column.querySelector('figure')).toBeNull()
-      expect(column.querySelector('.mi-defensive-premium__notes')).toBeNull()
-      const block = column.querySelector('.mi-defensive-premium__state-box')!
-      expect(block.textContent).toBe(accumulating(count))
+      // 用户 2026-11-22：1 个读数也要把点画出来，画成空框会让人以为没采到。
+      expect(column.querySelector('[data-chart="skew"]')).not.toBeNull()
+      expect(column.querySelector('figure')).not.toBeNull()
+      expect(column.querySelector('.mi-defensive-premium__state-box')).toBeNull()
+      const note = column.querySelector('[data-skew-accumulating]')!
+      expect(note.textContent).toBe(accumulating(count))
       expect(column.querySelector('[data-skew-direction]')).toBeNull()
-      expect(block.getAttribute('data-state')).toBe('missing')
     }
 
     // 第 3 个读数起换成图，状态块退场：阈值一动（3→4、3→5）这条就红。
@@ -1948,8 +1956,10 @@ describe('the defensive premium band', () => {
     expect([...placeholders].map(placeholder => placeholder.querySelector('.mi-defensive-premium__chart-axis')?.textContent))
       .toEqual([dashboardText.defensivePremium.fearGreed.axis, dashboardText.defensivePremium.skew.axis])
     // 仪表那一列照旧画弧（还没有读数，所以没有指针与分数）。
-    expect(band.querySelector('[data-sentiment-gauge] [data-chart="gauge"]')).not.toBeNull()
-    expect(band.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(band.querySelector('[data-sentiment-gauge] .mi-crypto-dashboard__sentiment-gauge svg')).not.toBeNull()
+    // 还没有读数：不画指针、不写分数；档位词那行留空占位，换态时这一列不缩。
+    expect(band.querySelector('[data-sentiment-gauge] .mi-crypto-dashboard__sentiment-dial strong')).toBeNull()
+    expect(band.querySelector('[data-sentiment-gauge] [data-gauge-bucket-text]')?.textContent?.trim()).toBe('')
   })
 
   it('overlays each wait on the frame it replaces, so loading adds no row', async () => {
@@ -1959,7 +1969,7 @@ describe('the defensive premium band', () => {
     const skewWait = band.querySelector('[data-half="skew"] [data-loading-state]')!
     // 环叠在仪表那一列、加载态叠在偏斜格的空图框里，都不当网格里独立的一行：
     // 当独立行时加载态比正常态整整高一行，换态卡就跳。
-    expect(gaugeWait.closest('.mi-defensive-premium__col-wait')).not.toBeNull()
+    expect(gaugeWait.closest('.mi-crypto-dashboard__sentiment-dial-wait')).not.toBeNull()
     expect(skewWait.closest('[data-chart-placeholder]')).not.toBeNull()
     // 播报只在偏斜格那一处：仪表那颗只是装饰环。
     expect(gaugeWait.getAttribute('aria-hidden')).toBe('true')

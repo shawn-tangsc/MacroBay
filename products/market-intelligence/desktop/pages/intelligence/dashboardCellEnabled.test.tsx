@@ -131,7 +131,7 @@ describe('dashboard cells read only when the reader left them on', () => {
     // 被关掉的是左半的读数，由下面那行「没启用」说出来，不是不发请求。
     expect(off.sentimentOptionsQuery).toHaveBeenCalled()
     // 卡仍在（用户 2026-11-11：不能因为没启用就不渲染），读数区被遮罩盖住。
-    const card = off.container.querySelector('.mi-crypto-dashboard__sentiment')
+    const card = off.container.querySelector('.mi-defensive-premium')
     expect(card).not.toBeNull()
     // 关掉的格不再盖遮罩（界面设计 2026-11-11）：图照画，图下方那一行说「没启用」。
     expect(card!.querySelector('.mi-source-veil')).toBeNull()

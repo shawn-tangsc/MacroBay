@@ -164,12 +164,25 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                     </span>
                     : null}
                 </p>
-                {/* 1–2 个点不画图：只有一个点连不成线，坐标轴还会塌成一条（实测刻度竖排、网格铺满）。
-                    图位里出状态块，写明已经攒了几个、还差几个；第 3 个点起才画。 */}
+                {/* 1–2 个读数**也画点**（不连线）：画成空框读者会以为没采到（用户 2026-11-22）。
+                    「还在攒」那句改走说明行，图位留给点；第 3 个读数起才连线（CHART_MIN_POINTS）。 */}
                 {skew.points.length < CHART_MIN_POINTS
-                  ? <StateSlot tone="missing" stateAttribute="empty" sentence={fillLabelParams(text.skew.accumulating, {
-                    collected: String(skew.points.length), remaining: String(30 - skew.points.length)
-                  })} />
+                  ? <>
+                    <div className="mi-defensive-premium__notes">
+                      <p className="mi-defensive-premium__history" data-skew-accumulating>
+                        {fillLabelParams(text.skew.accumulating, {
+                          collected: String(skew.points.length), remaining: String(30 - skew.points.length)
+                        })}
+                      </p>
+                    </div>
+                    <SkewChart points={skew.points} axis={text.skew.axis}
+                      ariaLabel={chartAria({
+                        ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
+                        days: skew.points.map(point => point.day),
+                        first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
+                        last: skew.points[0]!.riskReversal.toFixed(1)
+                      })} />
+                  </>
                   : <>
                     {/* 图上只留**一行**说明，装在一个容器里落进列模板的第三行（`auto`）：
                         方向未知（不足 5 天 / 偏旧 / 断档）说方向，方向已知且窗口未满说攒到哪天。

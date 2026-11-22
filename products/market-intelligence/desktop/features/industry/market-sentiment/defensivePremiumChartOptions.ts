@@ -101,8 +101,14 @@ const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue"
 /** 偏斜：图位 168 下真正能画的区域——扣掉上面 26（单位名）、下面 24（日期），中间 118。 */
 const SKEW_GRID = { left: 8, right: 28, top: 26, bottom: 24, containLabel: true } as const
 
-/** 恐惧贪婪维持改造前那套留白（top 34 / bottom 26），一个字不动。 */
-const FEAR_GREED_GRID = { left: 12, right: 28, top: 34, bottom: 26, containLabel: true } as const
+/**
+ * 恐惧贪婪的留白：上 34 / 下 26 维持改造前那套，只有左边从 12 加到 32。
+ *
+ * 用户 2026-11-22 的截图里中列的 `100/50/0` 与首个日期被左列压住：这版 ECharts 6 不认
+ * `containLabel`（会警告并要求改用 outerBounds），所以只能显式留出刻度与日期的落脚处——
+ * 三个字符的 `100` 加 8 的间距约 32。左列自己也限宽 176，两头一起保证不越界。
+ */
+const FEAR_GREED_GRID = { left: 32, right: 28, top: 34, bottom: 26, containLabel: true } as const
 
 function axisLabelFormatter(day: string): string {
   // 源日就是 `YYYY-MM-DD`：只印月-日，不换算时区、不带钟点。
@@ -245,7 +251,9 @@ function fitSkewAxis(low: number, high: number): { min: number; max: number; int
   const epsilon = 1e-9
   /** 给定间隔时的对齐结果：下界向下取整到间隔，上界盖住最大值。 */
   const fitWith = (interval: number) => {
-    const min = Math.floor(low / interval + epsilon) * interval
+    let min = Math.floor(low / interval + epsilon) * interval
+    // 读数几乎同值时，下界会被对齐到最小值本身，点就贴死在轴底；往下让一格，点落在中间才看得出「有个读数」。
+    if (high - min < interval - epsilon) min -= interval
     const steps = Math.max(2, Math.ceil((high - min) / interval - epsilon))
     return { interval, min, steps, ticks: steps + 1, total: steps * interval }
   }
