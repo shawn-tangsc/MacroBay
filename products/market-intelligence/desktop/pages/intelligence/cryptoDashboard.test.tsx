@@ -1804,6 +1804,20 @@ describe('the defensive premium band', () => {
     expect(series.data.filter(value => value !== null)).toHaveLength(count)
   })
 
+  it('draws a clean line without per-point dots once there are more than seven readings', () => {
+    // 30 个点每个都画圆点，连起来像「虚线」，读者以为是另一种线型（用户 2026-11-22）。
+    // 规则两张图同一条：>7 不画点、≤7 逐点画；1–2 个读数必须看得见点。
+    const symbol = (option: unknown) => (option as { series: Array<{ showSymbol: boolean }> }).series[0]!.showSymbol
+    for (const count of [8, 29, 30]) {
+      expect(symbol(fearGreedChartOption({ points: fearGreedSection(count).points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(false)
+      expect(symbol(skewChartOption({ points: skewPoints(count), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(false)
+    }
+    for (const count of [1, 2, 5, 7]) {
+      expect(symbol(fearGreedChartOption({ points: fearGreedSection(count).points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(true)
+      expect(symbol(skewChartOption({ points: skewPoints(Math.max(count, 1)), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK }))).toBe(true)
+    }
+  })
+
   it('puts the single reading and its date in the same place', () => {
     // 1 个读数那张：点在界内居中，唯一的日期标签也在中间——不许出现「点在最右、日期在中间」。
     const single = skewChartOption({

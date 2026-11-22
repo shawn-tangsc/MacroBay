@@ -92,6 +92,9 @@ export function readChartPalette(element: Element | null): ChartPalette {
  */
 export const CHART_MIN_POINTS = 3
 
+/** 超过这个点数就不画圆点：点挨得太密会连成「虚线」，读者以为那是另一种线型。 */
+export const CHART_SYMBOL_MAX_POINTS = 7
+
 /** 恐惧贪婪那条线的门槛维持原值：这一半不改。 */
 const CHART_LINE_MIN_POINTS = 5
 const CHART_WINDOW_DAYS = 30
@@ -195,7 +198,8 @@ export function fearGreedChartOption(input: {
       smooth: 0.22,
       symbol: 'circle',
       symbolSize: 4,
-      showSymbol: true,
+      // 点数一多，每个点都画出来会连成「虚线」；>7 只留线，≤7 才逐点画（用户 2026-11-22）。
+      showSymbol: values.length <= CHART_SYMBOL_MAX_POINTS,
       lineStyle: { width: drawsLine ? 1.6 : 0, opacity: drawsLine ? 1 : 0, color: palette.line },
       itemStyle: { color: palette.line, borderColor: palette.surface, borderWidth: 1 },
       areaStyle: drawsLine ? { color: palette.line, opacity: 0.22 } : undefined,
@@ -419,7 +423,8 @@ function lineChartOption(input: {
       smooth: 0.22,
       symbol: 'circle',
       symbolSize: 4,
-      showSymbol: true,
+      // 点数一多，每个点都画出来会连成「虚线」；>7 只留线，≤7 才逐点画（用户 2026-11-22）。
+      showSymbol: input.values.length <= CHART_SYMBOL_MAX_POINTS,
       lineStyle: { width: drawsLine ? 1.6 : 0, opacity: drawsLine ? 1 : 0, color: palette.line },
       itemStyle: { color: palette.line, borderColor: palette.surface, borderWidth: 1 },
       // 淡面积：同一个线色加透明度，不另造一份品牌色的 rgba。
