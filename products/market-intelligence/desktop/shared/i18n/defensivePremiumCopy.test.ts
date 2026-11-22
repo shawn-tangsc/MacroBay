@@ -47,6 +47,7 @@ const REQUIRED_PATHS = [
   'skew.unit',
   'skew.axis',
   'skew.notConnected',
+  'skew.empty',
   'skew.unavailable.connection',
   'skew.unavailable.source',
   'skew.unavailable.read',
@@ -231,6 +232,24 @@ describe('fear & greed + downside premium card copy', () => {
       expect(axis, `${locale}: skew.axis must carry the unit in brackets`).toContain(
         locale === 'zh-CN' ? `（${unit}）` : `(${unit})`
       )
+    }
+  })
+
+  it('gives each half its own empty sentence, so neither shows the other half\'s words', () => {
+    // 用户 2026-11-22 真机看到的：偏斜那半印着「暂无已采集的恐惧与贪婪指数」——借用了左半那句。
+    // 判据断在值上：偏斜的空态必须自己一句，且不许提到恐惧贪婪（那半的名字），两半句子也不许相同。
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const skewEmpty = valueOf(locale, 'skew.empty')
+      // 左半的空态句在隔壁那张卡的块里（卡片装配读的是 `dashboard.fearGreed.empty`）。
+      let node: unknown = productText[locale]
+      for (const key of ['pages', 'intelligence', 'portal', 'dashboard', 'fearGreed', 'empty']) {
+        node = (node as Record<string, unknown> | undefined)?.[key]
+      }
+      const fearGreedEmpty = typeof node === 'string' ? node : ''
+      expect(skewEmpty, `${locale}: skew.empty missing`).not.toBe('')
+      expect(fearGreedEmpty, `${locale}: fearGreed.empty missing`).not.toBe('')
+      expect(skewEmpty, `${locale}: skew half must not print the fear-greed sentence`).not.toBe(fearGreedEmpty)
+      expect(skewEmpty, `${locale}: skew half must not name the other half`).not.toMatch(locale === 'zh-CN' ? /恐惧与贪婪/u : /fear\s*&\s*greed/iu)
     }
   })
 
