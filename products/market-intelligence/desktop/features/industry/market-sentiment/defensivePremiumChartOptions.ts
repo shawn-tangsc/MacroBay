@@ -256,8 +256,17 @@ function fitSkewAxis(low: number, high: number): { min: number; max: number; int
   let chosen: ReturnType<typeof fitWith> | undefined
   for (const interval of candidates) {
     if (interval > span / 2 + epsilon) break
-    const fit = fitWith(interval)
-    if (fit.ticks <= 4 && fit.total <= span * 2 + epsilon) { chosen = fit; break }
+    // 先试「下界对齐到间隔整数倍」（刻度值好看），不行再试「下界只比最小值低 0.2」——
+    // 后者能保住更细的间隔：满窗 11.8–15.0 用 1.2 时，对齐是 10.8 起会出 5 档，退 0.2 就是 11.6/12.8/14/15.2 四档。
+    const nudgedMin = Math.round((Math.floor((low - 0.2) * 10) / 10) * 10) / 10
+    const nudged = {
+      interval,
+      min: nudgedMin,
+      steps: Math.max(2, Math.ceil((high - nudgedMin) / interval - epsilon))
+    }
+    const options = [fitWith(interval), { ...nudged, ticks: nudged.steps + 1, total: nudged.steps * interval }]
+    const fit = options.find(candidate => candidate.ticks <= 4 && candidate.total <= span * 2 + epsilon)
+    if (fit !== undefined) { chosen = fit; break }
   }
   // 极窄/极宽两端找不到「4 档 + 2 倍上限」同时成立的间隔时，先保盖住数据与 2 倍上限，档数退让。
   chosen ??= candidates.map(fitWith)
