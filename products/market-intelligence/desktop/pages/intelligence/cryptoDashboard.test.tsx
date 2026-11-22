@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { productText } from '../../shared/i18n/productText'
 import { CHART_HEIGHT } from '../../features/industry/market-sentiment/DefensivePremiumCharts'
 import { CHART_PALETTE_FIXTURE } from '../../features/industry/market-sentiment/defensivePremiumChartPalette.fixture'
@@ -1697,13 +1698,18 @@ describe('the defensive premium band', () => {
   it('leaves the fear-greed chart exactly as it was before the skew rework', () => {
     // 用户 2026-11-22：这一半本来就是现成的，不该被偏斜的新规矩带着改。它有自己的网格与横轴，
     // 与偏斜不共用坐标轴配置——这里钉住三条事实，防止下次再被顺手改到。
+    // 夹具必须**少于 30 个点**：拿 30 点的样例断言长度 30，「跟着数据走」和「钉死 30 天窗口」
+    // 都会得到 30，那条断言对两种实现都成立，等于没守（架构师 2026-11-22 复核指出是假绿）。
+    const points = fearGreedSection(5).points
     const option = fearGreedChartOption({
-      points: fearGreedSection(30).points, axisName: 'x',
+      points, axisName: 'x',
       palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
     })
     expect(option.grid).toMatchObject({ left: 12, top: 34, bottom: 26 })
-    // 横轴跟着数据走（不是钉住 30 天的窗口）。
-    expect((option.xAxis as { data: string[] }).data).toHaveLength(30)
+    // 横轴跟着数据走（不是钉住 30 天的窗口）：5 个读数就只印 5 个刻度，首日就是数据最早那天。
+    const axis = (option.xAxis as { data: string[] }).data
+    expect(axis).toHaveLength(5)
+    expect(axis[0]).toBe(points[4]!.day)
     // 50 那条参考线与「中性」仍在：这是改造前的样子。
     const series = (option.series as Array<{ markLine?: { data: Array<{ yAxis: number }> } }>)[0]!
     expect(series.markLine?.data).toEqual([{ yAxis: 50 }])
@@ -1781,18 +1787,31 @@ describe('the defensive premium band', () => {
     expect(notes.querySelector('[data-skew-direction]')).toBeNull()
     expect(notes.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
-    // 1 个点：图位是一句话的状态块，不是一张塌成一行的图。
+    // 1–2 个读数：图位整块是一句话的状态块，不是一张塌成一行的图。
+    // 整句按键值比对——只查「文本里出现过数字」的话，`20`、`30` 这种巧合都能过，
+    // 阈值改回 5 或这段分支被删掉，图位空着用例也照样绿。
+    const accumulating = (collected: number) => fillLabelParams(
+      dashboardText.defensivePremium.skew.accumulating,
+      { collected: String(collected), remaining: String(30 - collected) }
+    )
     for (const count of [1, 2]) {
       const early = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, count))
       const column = early.querySelector('[data-half="skew"]')!
       expect(column.querySelector('[data-chart="skew"]')).toBeNull()
+      expect(column.querySelector('figure')).toBeNull()
       expect(column.querySelector('.mi-defensive-premium__notes')).toBeNull()
       const block = column.querySelector('.mi-defensive-premium__state-box')!
-      expect(block.textContent).toContain(String(count))
-      expect(block.textContent).toContain(String(30 - count))
+      expect(block.textContent).toBe(accumulating(count))
       expect(column.querySelector('[data-skew-direction]')).toBeNull()
       expect(block.getAttribute('data-state')).toBe('missing')
     }
+
+    // 第 3 个读数起换成图，状态块退场：阈值一动（3→4、3→5）这条就红。
+    const third = (await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 3)))
+      .querySelector('[data-half="skew"]')!
+    expect(third.querySelector('.mi-defensive-premium__state-box')).toBeNull()
+    expect(third.querySelector('figure')).not.toBeNull()
+    expect(third.querySelector('[data-chart="skew"]')).not.toBeNull()
 
     // 满窗那版没有说明句：图仍是同一列的最后一行。
     const full = await renderBand(skewClient({ kind: 'steeper' }, 30))
