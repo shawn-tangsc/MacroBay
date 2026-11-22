@@ -241,9 +241,12 @@ function fitSkewAxis(low: number, high: number): { min: number; max: number; int
   for (const step of NICE_STEPS) {
     if (step <= span / 2) interval = step
   }
-  // 下界按间隔对齐（不再额外留白），上界取到盖住最大值的最近一档：曲线因此铺满绘图区高度。
-  const min = Math.floor(low / interval) * interval
-  const steps = Math.min(4, Math.max(2, Math.ceil((high - min) / interval)))
+  // 下界按间隔对齐，上界取到盖住最大值的最近一档：曲线铺满绘图区高度。
+  // 档数**不设上限**——先保证盖住数据，再谈好不好看：12.6–13.4 配 0.2 的间隔必须到 5 档，
+  // 硬压成 4 档就会把最大值裁掉（浮点误差还会让 `floor(12.6 / 0.2)` 落到 62，下界掉半格）。
+  const epsilon = 1e-9
+  const min = Math.floor(low / interval + epsilon) * interval
+  const steps = Math.max(2, Math.ceil((high - min) / interval - epsilon))
   const max = min + steps * interval
   return { min: round1(min), max: round1(max), interval: round1(interval) }
 }
