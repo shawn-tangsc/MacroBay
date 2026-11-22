@@ -52,7 +52,18 @@ export type ChannelDeliveryTransportResult =
    */
   | { kind: 'delivered'; detail?: string }
   /** `detail` 是通道自己给的一句话（已脱敏截断），只用于日志排查，不参与判定。 */
-  | { kind: 'failed'; code: ChannelDeliveryFailureCode; detail?: string }
+  | {
+    kind: 'failed'
+    code: ChannelDeliveryFailureCode
+    detail?: string
+    /**
+     * 上游自己说的「等多少毫秒再试」（`delivery-rate-limited` 才有，抓不到就没有）。
+     *
+     * 只作**调用点内联重发一次**的依据：上游说等多久就等多久，绝不自己编一个退避数字
+     * ——编出来的数字在上游还限流时会立刻换来第二次 429，然后被误记成「通道坏了」。
+     */
+    retryAfterMs?: number
+  }
   | { kind: 'unknown-after-send'; detail?: string }
 
 export type ChannelDeliveryFailureCode =
@@ -99,6 +110,8 @@ export type ChannelDeliveryResult = {
   status: ChannelDeliveryStatus
   attemptId: string | null
   errorCode: string | null
+  /** 上游给的「等多久再试」；只有 `delivery-rate-limited` 可能带，调用点据此内联重发一次。 */
+  retryAfterMs?: number
 }
 
 export type ChannelDeliveryAttemptView = {
@@ -194,4 +207,15 @@ export function channelPosterTextSourceId(recordId: string): string {
 
 export function channelImageBareSourceId(recordId: string): string {
   return `${recordId}:image:bare`
+}
+
+/**
+ * 简报海报**随推送**发出的 `sourceId`：`<recordId>:image:<contentHash>`（方案 §12.4）。
+ *
+ * **必须带内容版本**，否则同一把键会被两版海报共用：重生成后要么命中旧那条终态、海报永远发不出去，
+ * 要么被当成同一条尝试。带 hash 之后，同一张图重投仍是同一个键（幂等），换了一张图就是新键。
+ * 聊天里那张生成图不带版本（它不会重生成），所以那两个键不合并。
+ */
+export function channelPosterPushSourceId(recordId: string, contentHash: string): string {
+  return `${recordId}:image:${contentHash}`
 }

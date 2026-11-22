@@ -32,6 +32,7 @@ import { resolveActiveProxy } from '../../../network/activeProxyState'
 import { createChannelImageWiring } from './channelImageWiring'
 import { channelAttachmentTurnText } from '../channelAttachmentTurnText'
 import { configurePosterPublish } from '../../../ai/agent-platform/channels/channelPosterPublishRegistry'
+import { configureChannelPosterPushSource } from '../../../ai/agent-platform/channels/channelPosterPushRegistry'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { pruneChannelRuntimeAudits } from '../../../ai/agent-platform/channels/channelRuntimeAuditPrune'
@@ -202,6 +203,15 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
   const channelImageSend = channelImageWiring
   // 同一份校验/投递也负责日报海报（按通道能力选形态，图 + 导读一条）。
   configurePosterPublish(channelImageWiring.posterPublish)
+  // 简报**随推送**发海报（方案 §12.1）：推送执行器在通知运行时里，装配期只把两个开关交出去。
+  // 没注册时那条链路自动退回「只发正文」。
+  configureChannelPosterPushSource({
+    resolve: (contentHash) => channelImageWiring.resolvePoster(contentHash),
+    // 目标解析已经保证「恰好一条会话」，所以逐个取第一条；空结果如实记「没目标」，不猜。
+    deliverImage: async (request) =>
+      (await channelDeliveryService.deliverImageToEnabledTargets(request))[0]
+      ?? { status: 'failed', attemptId: null, errorCode: 'delivery-no-target-bound' }
+  })
   // 设置页「发一条测试消息」要走真投递：装在这儿而不是 app.ts（那是只减不增的基线文件）。
   channelManagementService.setDelivery(channelDeliveryService)
   // 运行审计的批量裁剪（0.4.3 B3）：库句柄在这里，保留期任务在别处注册——经槽传过去，

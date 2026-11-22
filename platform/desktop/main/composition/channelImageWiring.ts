@@ -4,6 +4,7 @@ import { createChannelImageSource } from '../channelImageSource'
 import { createChannelPosterSend } from '../channelPosterSend'
 import { getChannelPosterOutbox } from '../../../storage/channelPosterOutbox'
 import type { PosterPublish } from '../../../ai/agent-platform/channels/channelPosterPublishRegistry'
+import { getBriefingPosterRead } from '../../../ai/agent-platform/channels/briefingPosterReadRegistry'
 
 /**
  * 「把助手聊天里的图消息发到频道」的装配分片（多通道方案 §4b 定稿 A）。
@@ -27,6 +28,11 @@ export type ChannelImageWiring = {
   send: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) => Promise<ChannelImageSendResult>
   /** 日报海报：按通道能力选形态（图 + 导读 / 纯导读），逐通道结果写回同一条记录。 */
   posterPublish: PosterPublish
+  /** 简报**随推送**的海报取图入口（方案 §12.1）：只按记录里的内容 hash 取，给不出路径。 */
+  resolvePoster: (contentHash: string) => Promise<
+    | { ok: true; mime: string; bytes: Uint8Array }
+    | { ok: false; code: 'delivery-image-unavailable' | 'delivery-image-source-not-allowed'; detail: string }
+  >
 }
 
 type MessageLike = { data?: { parts?: unknown } }
@@ -50,12 +56,12 @@ export function createChannelImageWiring(deps: {
   const channelImageSource = createChannelImageSource({
     read: (fileName) => deps.readImage(fileName),
     getMessage,
-    // 日报海报那一支：读的是进程内同一个暂存区（没装配就如实说「没有」，不猜、不扫目录）。
-    readPoster: (edition) => {
-      const outbox = getChannelPosterOutbox()
-      return outbox === null
-        ? Promise.resolve({ ok: false as const, code: 'delivery-image-unavailable' as const, detail: 'poster-outbox-unavailable' })
-        : outbox.read(edition)
+    // 简报海报那一支：只按记录里的内容 hash 取图，读入口由简报侧注册（没注册 = 如实说拿不到，不猜、不扫目录）。
+    readBriefingPoster: (contentHash) => {
+      const read = getBriefingPosterRead()
+      return read === null
+        ? Promise.resolve({ ok: false as const, code: 'poster-not-found' as const, detail: 'poster-reader-unconfigured' })
+        : read(contentHash)
     }
   })
   const send = createChannelImageSend({
@@ -127,7 +133,8 @@ export function createChannelImageWiring(deps: {
       return channels.length === 0 ? null : { channels }
     },
     send,
-    posterPublish
+    posterPublish,
+    resolvePoster: (contentHash) => channelImageSource.resolve({ kind: 'briefing-poster', contentHash })
   }
 }
 
