@@ -86,10 +86,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
       action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />
       : wholeCardState === 'empty' ? <StateView state="empty" reasonCode="not-yet" />
         : <>
-          {/* 第一列：仪表盘只回答「落在哪一档」，日期与状态词都在旁边那一格（定稿 §4.4 / §4.5）。 */}
-          <SentimentGauge state={toGaugeState(fearGreed)} buckets={text.fearGreed.buckets} titleId={FEAR_GREED_HEADING_ID}
-            {...(cellOff === undefined ? {} : { cellOff })} />
-
+          {/* 三格顺序（用户 2026-11-22）：恐惧贪婪走势 | 仪表 | 偏斜走势——仪表居中，两张走势各一边。 */}
           <div className="mi-defensive-premium__col" data-half="fear-greed">
             <div className="mi-defensive-premium__cell-head">
               <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
@@ -126,6 +123,10 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                         })} />
                       : null}
           </div>
+
+          {/* 中间那一列：仪表只回答「落在哪一档」，日期与状态词在各自那一格的读数行上（定稿 §4.4 / §4.5）。 */}
+          <SentimentGauge state={toGaugeState(fearGreed)} buckets={text.fearGreed.buckets} titleId={FEAR_GREED_HEADING_ID}
+            {...(cellOff === undefined ? {} : { cellOff })} />
 
           <div className="mi-defensive-premium__col" data-half="skew">
             <div className="mi-defensive-premium__cell-head">

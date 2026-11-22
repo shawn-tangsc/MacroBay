@@ -99,7 +99,9 @@ const CHART_WINDOW_DAYS = 30
 const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif'
 
 /** 偏斜：图位 168 下真正能画的区域——扣掉上面 26（单位名）、下面 24（日期），中间 118。 */
-const SKEW_GRID = { left: 8, right: 28, top: 26, bottom: 24, containLabel: true } as const
+// 左 32：偏斜格是最右一格、紧挨仪表列，`10.4` 这种四字符标签在 left 8 时会画到框外压到仪表上
+// （ECharts 6 不认 containLabel，只能显式留窝；界面 2026-11-22 要求复核的就是这里）。
+const SKEW_GRID = { left: 32, right: 28, top: 26, bottom: 24, containLabel: true } as const
 
 /**
  * 恐惧贪婪的留白：上 34 / 下 26 维持改造前那套，只有左边从 12 加到 32。

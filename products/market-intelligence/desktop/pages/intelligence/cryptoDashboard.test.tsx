@@ -340,9 +340,9 @@ describe('crypto intelligence dashboard', () => {
     const cardRule = cssBlock(styles, '.mi-defensive-premium {')
     // 图高与列宽各只有一处定义：这里、以及 ChartFrame 的 init 高度，两处必须相等。
     expect(cardRule).toContain(`--mi-defensive-premium-chart-height: ${CHART_HEIGHT}px`)
-    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
+    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 240px')
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
-    expect(cardRule).toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
+    expect(cardRule).toContain('grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr)')
     // 一行列五道：标题 20 / 读数 24（6+18）/ 说明 auto / 留白 1fr / 图 178（10+168）。
     // 把间距写成子元素的外边距时，它会溢出固定行、从行间隙里偷走 12——实测图底到分隔线只剩 2px。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
@@ -618,7 +618,7 @@ describe('crypto intelligence dashboard', () => {
     expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 15fr')
     // 整行卡自己三列并排：仪表盘 112 + 两个 1fr（定稿 §4.2），结论跨全宽。
     expect(cssBlock(styles, '.mi-defensive-premium {'))
-      .toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
+      .toContain('grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr)')
     // 列间距 12：(1040 − 112 − 2×12) / 2 = 452，两格正好是定稿的曲线宽。
     expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('column-gap: 12px')
     expect(sourceRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
@@ -1491,11 +1491,11 @@ describe('the defensive premium band', () => {
     // 样式：带是整行一条；内容行三列（112 + 两个 1fr），窄处靠 minmax 收缩，不会挤成负宽。
     expect(cssBlock(styles, '.mi-crypto-dashboard__defensive-premium-row {')).not.toContain('grid-template-columns')
     expect(cssBlock(styles, '.mi-defensive-premium {'))
-      .toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
+      .toContain('grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr)')
     expect(cssBlock(styles, '.mi-defensive-premium {')).not.toContain('repeat(2')
   })
 
-  it('keeps the card at the designed sizes: no source line, 184px gauge column, one 24px action', async () => {
+  it('keeps the card at the designed sizes: no source line, 240px gauge column, one 24px action', async () => {
     const container = await renderBand(skewClient({ kind: 'steeper' }))
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
     // 卡上没有来源行：来源身份在卡头 ⓘ 与两格的行名上说。
@@ -1503,7 +1503,7 @@ describe('the defensive premium band', () => {
     expect(band.textContent).not.toContain('Alternative.me')
     // 列宽与图高各只有一处定义（两个变量），三列都用它们。
     const cardRule = cssBlock(styles, '.mi-defensive-premium {')
-    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
+    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 240px')
     expect(cardRule).toContain('--mi-defensive-premium-chart-height: 168px')
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
     // 标题行的动作与文字按钮同档（24）：图标按钮用 md，换态时不跳 2px。
@@ -1517,6 +1517,18 @@ describe('the defensive premium band', () => {
     }
   })
 
+  it('sizes every canvas from its own column, never by borrowing another column', async () => {
+    // 真机事故（用户 2026-11-22）：真实布局还没量到时仪表按曲线的 416 出了一张图，弧横着压到中列。
+    // 判据：没有布局（happy-dom 的 clientWidth = 0）时，每张图用**本列**名义宽兜底——
+    // 仪表 240（1040 下中列）、两侧走势各 388；416 不是任何一列的真实宽度，谁都不许再用。
+    const container = await renderBand(skewClient({ kind: 'steeper' }))
+    const width = (selector: string) => container.querySelector(selector)?.getAttribute('width')
+    expect(width('[data-sentiment-gauge] svg')).toBe('240')
+    expect(width('[data-half="fear-greed"] [data-chart="fear-greed"] svg')).toBe('388')
+    expect(width('[data-half="skew"] [data-chart="skew"] svg')).toBe('388')
+    expect(container.querySelectorAll('svg[width="416"]')).toHaveLength(0)
+  })
+
   it('lays the content row out as three columns, with the conclusion spanning all of them', async () => {
     const container = await renderBand(skewClient({ kind: 'steeper' }))
     const card = container.querySelector('.mi-defensive-premium')!
@@ -1524,8 +1536,8 @@ describe('the defensive premium band', () => {
     const gauge = children.find(child => child.hasAttribute('data-sentiment-gauge') || child.querySelector('[data-sentiment-gauge]') !== null)!
     const fearGreed = children.find(child => child.getAttribute('data-half') === 'fear-greed')!
     const skew = children.find(child => child.getAttribute('data-half') === 'skew')!
-    // 读者看到的顺序：仪表盘 → 恐惧贪婪格 → 偏斜格；仪表是独立一列，不在任何一格里。
-    expect(gauge.compareDocumentPosition(fearGreed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // 读者看到的顺序（用户 2026-11-22 定）：恐惧贪婪走势 → 仪表 → 偏斜走势；仪表是独立一列，不在任何一格里。
+    expect(fearGreed.compareDocumentPosition(gauge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(fearGreed.compareDocumentPosition(skew) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(gauge.closest('[data-half]')).toBeNull()
     // 结论在三列之后，并且跨全宽（`grid-column: 1 / -1`）。

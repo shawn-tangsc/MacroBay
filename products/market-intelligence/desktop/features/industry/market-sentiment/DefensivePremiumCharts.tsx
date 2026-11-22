@@ -32,8 +32,18 @@ echarts.use([...CHART_MODULES])
 /** 曲线区高度（px）。与 CSS 里的 `--mi-defensive-premium-chart-height` 是同一个数，有用例对账。 */
 export const CHART_HEIGHT = 168
 
-/** 没有布局时（happy-dom 用例、离屏首帧）用来出图的宽度；有布局时永远用真实宽度。 */
-const FALLBACK_WIDTH = 416
+/**
+ * 走势格的兜底宽：1040 内容宽下两格各 388。
+ * **416 不是任何一列的真实宽度**——它就是那次「仪表按 416 画、弧压到中列」的来源（用户 2026-11-22）。
+ */
+const CHART_FALLBACK_WIDTH = 388
+
+/**
+ * 仪表的兜底宽：它是**一列 184 的格子**，绝不能借曲线那 416。
+ * 借了的下场是真实布局还没量到时按 416 画一张弧，弧横着压到中列图上
+ * （用户 2026-11-22 的截图：`11-14`、`11-22` 和右轴标题都被盖住）。
+ */
+const GAUGE_FALLBACK_WIDTH = 240
 
 /** 图的主题：颜色与字号都从宿主的 CSS 变量读，读不到才用兜底值。 */
 function readChartTheme(element: Element): { palette: ChartPalette; fonts: ChartFonts } {
@@ -47,46 +57,53 @@ type ChartFrameProps = Readonly<{
   label: string
   /** 装饰性的图（读数已经以文字出现在旁边）：不进可访问树。 */
   decorative?: boolean
+  /** 量不到宽度时的兜底宽：按**本列**宽度给，不许跨列借用。 */
+  fallbackWidth?: number
   build: (theme: { palette: ChartPalette; fonts: ChartFonts }, size: { width: number; height: number }) => ChartOption
 }>
 
-function ChartFrame({ chart, height, label, decorative, build }: ChartFrameProps): React.ReactElement {
+function ChartFrame({ chart, height, label, decorative, fallbackWidth = CHART_FALLBACK_WIDTH, build }: ChartFrameProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null)
   const instance = useRef<echarts.ECharts | null>(null)
 
   useEffect(() => {
     const element = host.current
     if (!element) return undefined
-    const width = element.clientWidth || FALLBACK_WIDTH
+    const width = element.clientWidth || fallbackWidth
     // 不用 `ssr: true`：那种模式只产出 SVG 字符串、**不往元素里挂**，卡片会是一块空白，
     // 而且不接指针事件（十字光标与 tooltip 就没了）。SVG renderer 在 happy-dom 里同样能跑，
-    // 所以这里始终用可挂载的模式，只把宽高显式给出来（无布局环境用兜底宽）。
+    // 所以这里始终用可挂载的模式，只把宽高显式给出来（无布局环境用**本列**兜底宽）。
     const created = echarts.init(element, undefined, { renderer: 'svg', width, height })
     instance.current = created
     created.setOption(build(readChartTheme(element), { width, height }), true)
-    const observer = typeof ResizeObserver === 'undefined'
-      ? undefined
-      : new ResizeObserver(() => {
-        const next = element.clientWidth || FALLBACK_WIDTH
-        created.resize({ width: next, height })
-        created.setOption(build(readChartTheme(element), { width: next, height }), true)
-      })
+    /** 量到真实宽度就按它重画；量不到（0）说明还没布局，等下一拍或等 ResizeObserver。 */
+    const redraw = (): void => {
+      const next = element.clientWidth
+      if (next <= 0) return
+      created.resize({ width: next, height })
+      created.setOption(build(readChartTheme(element), { width: next, height }), true)
+    }
+    // 首次布局可能晚于这次 effect：下一帧再量一次（ResizeObserver 只在尺寸**变化**时回调，
+    // 从「兜底宽」到「真实宽」如果没触发回调，这里兜住）。
+    const frame = typeof requestAnimationFrame === 'undefined' ? undefined : requestAnimationFrame(redraw)
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(redraw)
     observer?.observe(element)
     return () => {
+      if (frame !== undefined) cancelAnimationFrame(frame)
       observer?.disconnect()
       created.dispose()
       instance.current = null
     }
     // 初始化只做一次；换数据由下面那个 effect 处理。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [height])
+  }, [height, fallbackWidth])
 
   useEffect(() => {
     const element = host.current
     if (!element || instance.current === null) return
-    const width = element.clientWidth || FALLBACK_WIDTH
+    const width = element.clientWidth || fallbackWidth
     instance.current.setOption(build(readChartTheme(element), { width, height }), true)
-  }, [build, height])
+  }, [build, height, fallbackWidth])
 
   return <figure className="mi-defensive-premium__chart" data-chart={chart} style={{ height }}
     {...(decorative ? { 'aria-hidden': 'true' } : { role: 'img', 'aria-label': label })}>
@@ -135,6 +152,6 @@ export function ChartPlaceholder({ axisLabel, waitingLabel }: Readonly<{ axisLab
  * 装饰性：分数与档位词以文字出现在它上面的读数行里，读屏不需要再念一遍这块画布。
  */
 export function GaugeChart({ score }: Readonly<{ score: number | undefined }>): React.ReactElement {
-  return <ChartFrame chart="gauge" height={CHART_HEIGHT} label="" decorative
+  return <ChartFrame chart="gauge" height={CHART_HEIGHT} label="" decorative fallbackWidth={GAUGE_FALLBACK_WIDTH}
     build={(theme, size) => gaugeChartOption({ score, width: size.width, height: size.height, ...theme })} />
 }

@@ -142,16 +142,16 @@
 /* 恐惧与防跌溢价：整行一条带。宽度跟着看板容器走（1080 视口下是 1040），两半各自 minmax(0,1fr)，
    所以窄到哪里都不会把曲线挤成负宽。 */
 .mi-crypto-dashboard__defensive-premium-row { min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-/* 三列并排：仪表一列（按内容给 184，不再死守 112）、两格均分剩余；间距 12。
+/* 三列并排（用户 2026-11-22）：恐惧贪婪走势 | 仪表 | 偏斜走势——仪表居中、两侧均分；间距 12。
    三列共用同一套行（标题 17 / 读数 18 / 图 132），所以标题、读数、图各自对齐。
-   尺寸收在两个变量里：`--mi-defensive-premium-gauge-width` 与 `--mi-defensive-premium-chart-height`，
+   尺寸收在两个变量里：`--mi-defensive-premium-gauge-width`（中间那列）与 `--mi-defensive-premium-chart-height`，
    用例按这两个名字对账，不在三处各写一遍。 */
 .mi-defensive-premium {
-  --mi-defensive-premium-gauge-width: 184px;
+  --mi-defensive-premium-gauge-width: 240px;
   --mi-defensive-premium-column-gap: 12px;
   --mi-defensive-premium-chart-height: 168px;
   display: grid;
-  grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr);
   column-gap: var(--mi-defensive-premium-column-gap);
   row-gap: 12px;
   min-width: 0;
@@ -447,6 +447,12 @@
  * 读数行就折成两行、41px 压进固定的 24px 读数轨，把图那一行顶下去。只给这张卡，别的带子
  * 仍按 899 堆叠——它们的下限不是 940，跟着改会连带它们提前换版式。
  */
+/* 940–995 这一档：仪表列退回 184（两格 366–372），996 起才用 240——
+   240 那档两侧各要 388，两格低于 366 英文读数就折行压图（界面 2026-11-22 定的）。 */
+@container (min-width: 940px) and (max-width: 995px) {
+  .mi-defensive-premium { --mi-defensive-premium-gauge-width: 184px; }
+}
+
 @container (max-width: 939px) {
   /* 窄处三列上下排：仪表一列、两格各占满一行；每列 minmax(0,1fr)，图表不会因为剩 40px 被压成负宽。 */
   .mi-defensive-premium { grid-template-columns: minmax(0, 1fr); }
