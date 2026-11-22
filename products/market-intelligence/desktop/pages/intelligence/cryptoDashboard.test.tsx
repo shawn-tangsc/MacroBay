@@ -1666,10 +1666,12 @@ describe('the defensive premium band', () => {
     expect(skewColumn.querySelector('[data-chart="skew"]')).toBeNull()
   })
 
-  it('never clips the skew line: the four ticks always cover the data', () => {
-    // 第一版把间隔向下取整，上沿低于数据最大值，整条曲线被裁成一块填满的色块。
-    // 现在 4 档刻度的首尾必须包住本窗的最小/最大值——平坦、极值、大跨度都要成立。
-    for (const values of [[12.9], [12.9, 12.9, 12.9], [11.8, 13.2], [11.8, 15.0], [-4.2, 9.6], [40, 41]]) {
+  it('fits the skew axis to the data instead of padding it to four fixed ticks', () => {
+    // 第一版把间隔向下取整，上沿低于数据最大值，整条曲线被裁成一块填满的色块；
+    // 改完又走了另一个极端：凑满四档把 12.8–13.2 撑到 12–15，曲线只占六分之一高。
+    // 界面 2026-11-22 的判据：轴跨度 ≤ 数据跨度的 2 倍（不足 0.5 按 0.5），
+    // 刻度间隔 ≤ 数据跨度的 1/2，上下界盖住数据但不为了凑档数撑开。
+    for (const values of [[12.9], [12.8, 13.2], [12.9, 12.9, 12.9], [11.8, 13.2], [11.8, 15.0], [-4.2, 9.6], [40, 41]]) {
       const points = values.map((riskReversal, index) => ({
         day: new Date(Date.parse('2026-11-22T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10),
         observedAt: '2026-11-22T00:00:00.000Z',
@@ -1677,11 +1679,30 @@ describe('the defensive premium band', () => {
       }))
       const option = skewChartOption({ points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
       const yAxis = option.yAxis as { min: number; max: number; interval: number }
-      expect(yAxis.min).toBeLessThanOrEqual(Math.min(...values))
-      expect(yAxis.max).toBeGreaterThanOrEqual(Math.max(...values))
-      // 4 档刻度 = 3 个间隔，上沿正好落在最后一档上。
-      expect(yAxis.max).toBeCloseTo(yAxis.min + yAxis.interval * 3, 5)
+      const low = Math.min(...values)
+      const high = Math.max(...values)
+      const span = Math.max(high - low, 0.5)
+      expect(yAxis.min).toBeLessThanOrEqual(low)
+      expect(yAxis.max).toBeGreaterThanOrEqual(high)
+      expect(yAxis.max - yAxis.min).toBeLessThanOrEqual(span * 2 + 1e-9)
+      expect(yAxis.interval).toBeLessThanOrEqual(span / 2 + 1e-9)
     }
+  })
+
+  it('keeps the 5-reading skew curve tall: 12.8–13.2 gets an axis no wider than 1.0', () => {
+    // 这张图的读者判断「走阔还是收窄」靠曲线斜率，轴一撑开斜率就被压平了。
+    const values = [12.8, 13.0, 12.9, 13.1, 13.2]
+    const points = values.map((riskReversal, index) => ({
+      day: new Date(Date.parse('2026-11-22T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10),
+      observedAt: '2026-11-22T00:00:00.000Z',
+      riskReversal
+    }))
+    const option = skewChartOption({ points, axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const yAxis = option.yAxis as { min: number; max: number; interval: number }
+    expect(yAxis.max - yAxis.min).toBeLessThanOrEqual(1)
+    expect(yAxis.interval).toBeLessThanOrEqual(0.25)
+    // 数据至少占到轴高的一半，否则又回到「一条平线」。
+    expect((13.2 - 12.8) / (yAxis.max - yAxis.min)).toBeGreaterThanOrEqual(0.5 - 1e-9)
   })
 
   it('stacks below 940 and caps the gauge there, so nothing folds into the next track', () => {

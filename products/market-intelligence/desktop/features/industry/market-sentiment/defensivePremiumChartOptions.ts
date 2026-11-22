@@ -208,19 +208,7 @@ export function skewChartOption(input: {
   const values = input.points.map(point => point.riskReversal)
   const low = values.length > 0 ? Math.min(...values) : 0
   const high = values.length > 0 ? Math.max(...values) : 1
-  // 偏斜没有「满量程」这回事：轴按本窗端点缩放。但跨度必须给下限——几个点几乎同值时，
-  // 端点间距会小到让 ECharts 把轴压成一条、刻度竖排（1 个点那一版就是这样坏掉的）。
-  const span = Math.max(high - low, 1)
-  const pad = span * 0.25
-  // 4 档刻度（3 个间隔）必须**盖住**本窗的最小/最大值：下沿按刻度取整会把它推低，
-  // 间隔不够时上沿就落在数据下面，曲线被裁成一块填满的色块（第一版就是这样）。
-  let interval = niceStepAtLeast(span / 3)
-  let min = Math.floor((low - pad) / interval) * interval
-  for (let attempt = 0; attempt < 5 && min + interval * 3 < high + pad; attempt += 1) {
-    interval = nextNiceStep(interval)
-    min = Math.floor((low - pad) / interval) * interval
-  }
-  const max = round1(min + interval * 3)
+  const fit = fitSkewAxis(low, high)
   return lineChartOption({
     days: input.points.map(point => point.day),
     values,
@@ -229,10 +217,35 @@ export function skewChartOption(input: {
     suffix: ' 百分点',
     palette: input.palette,
     fonts: input.fonts,
-    min: round1(min),
-    max,
-    interval: round1(interval)
+    min: fit.min,
+    max: fit.max,
+    interval: fit.interval
   })
+}
+
+/**
+ * 偏斜 Y 轴贴合本窗数据（界面 2026-11-22 的判据）：
+ *
+ * - 轴跨度**不超过数据跨度的 2 倍**（数据跨度不足 0.5 按 0.5 算，否则几个几乎同值的点会把轴压成一条）；
+ * - 刻度间隔**不超过数据跨度的 1/2**；
+ * - 上下界盖住数据，但不为了「凑四档」把轴撑开——第一版取整凑四档，12.8–13.2 的数据被摊到 12–15，
+ *   曲线只用了六分之一高，看着还是一条平线。
+ *
+ * 档数因此是**结果**不是约束：小跨度 3 档、宽跨度最多 5 档；间隔取「不超过半个数据跨度」的最大整档，
+ * 所以轴跨度最多是数据跨度 + 一个间隔（≤1.5 倍），永远满足 2 倍上限。
+ */
+function fitSkewAxis(low: number, high: number): { min: number; max: number; interval: number } {
+  const dataSpan = high - low
+  const span = Math.max(dataSpan, 0.5)
+  let interval: number = NICE_STEPS[0]!
+  for (const step of NICE_STEPS) {
+    if (step <= span / 2) interval = step
+  }
+  // 下界按间隔对齐（不再额外留白），上界取到盖住最大值的最近一档：曲线因此铺满绘图区高度。
+  const min = Math.floor(low / interval) * interval
+  const steps = Math.min(4, Math.max(2, Math.ceil((high - min) / interval)))
+  const max = min + steps * interval
+  return { min: round1(min), max: round1(max), interval: round1(interval) }
 }
 
 /**
@@ -275,18 +288,6 @@ function round1(value: number): number {
 }
 
 const NICE_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10] as const
-
-/** 不小于给定间隔的最小整档：4 档刻度 = 3 个间隔，向上取整才盖得住整段数据。 */
-function niceStepAtLeast(gap: number): number {
-  for (const step of NICE_STEPS) {
-    if (gap <= step) return step
-  }
-  return Math.ceil(gap / 10) * 10
-}
-
-function nextNiceStep(step: number): number {
-  return NICE_STEPS.find(candidate => candidate > step) ?? step * 2
-}
 
 function lineChartOption(input: {
   days: readonly string[]
