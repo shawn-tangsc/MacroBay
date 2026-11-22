@@ -287,9 +287,10 @@ describe('crypto intelligence dashboard', () => {
     expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    // 定版是 ECharts 仪表（用户 2026-11-22 看过手绘版后改口）：读数行走「分数 + 档位词」，
-    // 画布本身不进可访问树，读屏念的是这行字。
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('22极度恐惧')
+    // 定版是 ECharts 仪表（用户 2026-11-22 看过手绘版后改口）：分数在盘里、档位词在整个仪表下面那一行，
+    // 画布本身不进可访问树，读屏念的是档位词那一行的名字。
+    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe(text.dashboard.fearGreed.buckets['extreme-fear'])
+    expect(gauge.querySelector('[data-gauge-reading]')?.getAttribute('aria-label')).toBe(`22 ${text.dashboard.fearGreed.buckets['extreme-fear']}`)
     expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
     expect(gauge.querySelector('[data-chart="gauge"]')?.getAttribute('aria-hidden')).toBe('true')
     // 仪表只回答「落在哪一档」：日期在恐惧贪婪格的读数行上。
@@ -331,7 +332,9 @@ describe('crypto intelligence dashboard', () => {
     ] as const) {
       const { gauge, dispose } = await renderSentimentGauge(score, bucket)
       expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe(bucket)
-      expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe(`${score}${text.dashboard.fearGreed.buckets[bucket]}`)
+      const reading = gauge.querySelector('[data-gauge-reading]')!
+      expect(reading.textContent).toBe(text.dashboard.fearGreed.buckets[bucket])
+      expect(reading.getAttribute('aria-label')).toBe(`${score} ${text.dashboard.fearGreed.buckets[bucket]}`)
       await dispose()
     }
   })
@@ -356,6 +359,15 @@ describe('crypto intelligence dashboard', () => {
     // 两句说明装在一个容器里落第三行（auto）：容器里堆叠，这一行才有两行高。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
       .toContain('grid-row: 3')
+    // 档位词按绝对定位落在**图位底部居中**（用户 2026-11-22）。这几条是棘轮：
+    // 去掉 position/bottom，词就回到文档流里、跟着图往下走；行为红证在 SentimentGauge.test
+    // 的「closest('.mi-defensive-premium__chart-slot')」那条。读数行那一列仍占第 2 行的 24 轨道、不写字。
+    const bucketRule = cssBlock(styles, '.mi-defensive-premium__gauge-bucket {')
+    expect(bucketRule).toContain('position: absolute')
+    expect(bucketRule).toContain('bottom: 0')
+    expect(bucketRule).toContain('inset-inline: 0')
+    expect(bucketRule).toContain('text-align: center')
+    expect(styles).toContain('.mi-defensive-premium__col > .mi-defensive-premium__reading { grid-row: 2; }')
   })
 
   it('fails closed instead of crashing when a legacy funding client has no history query', async () => {
@@ -1151,7 +1163,7 @@ describe('host wiring: cells switched off and sources judged', () => {
     expect(cell.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['alternative-fear-greed'])
     // 页面上只有一副仪表；源关着时那一列只有弧，没有分数与档位词。
     expect(container.querySelectorAll('[data-sentiment-gauge]')).toHaveLength(1)
-    expect(container.querySelector('[data-sentiment-gauge] [data-gauge-reading]')?.textContent).toBe('')
+    expect(container.querySelector('[data-sentiment-gauge] [data-gauge-reading]')).toBeNull()
   })
 
   /** 市场状态表逐行也要点名（2026-11-12 第二处残留）：源关了说源，格关了说格。 */
@@ -1294,9 +1306,9 @@ describe('host wiring: cells switched off and sources judged', () => {
     const cell = container.querySelector('.mi-defensive-premium [data-half="fear-greed"]')!
     // 格自带 h3 行名，仪表那一列不再画自己的标题。
     expect(cell.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.name)
-    // 仪表还在（弧照画），但读数行是空的——指针与分数都不指向一个关掉的格子。
+    // 仪表还在（弧照画），但没有档位词——指针与分数都不指向一个关掉的格子。
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
     const row = cell.querySelector('[data-sentiment-state]')!
     expect(row.getAttribute('data-sentiment-state')).toBe('disabled')
     expect(row.textContent).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
@@ -1344,17 +1356,17 @@ describe('host wiring: cells switched off and sources judged', () => {
     expect(dataText.retry).not.toBe('')
     // 仪表仍画着弧，但没有读数；旧的整块 `StateView` 也不回来。
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__defensive-premium-row .state-view')).toBeNull()
   })
 
   it('cell on and readable: the gauge shows its reading, and no state row', async () => {
     const container = await renderCells({}, { sentimentOptionsClient: sentimentOptionsClient(readableSentiment as never) })
-    await settle(container, '[data-gauge-reading] strong')
+    await settle(container, '[data-gauge-reading]')
     const gauge = container.querySelector('[data-sentiment-gauge]')!
     // 有数据时没有那一行：状态句只在没读数时出现。
     expect(gauge.querySelector('[data-sentiment-state]')).toBeNull()
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('22极度恐惧')
+    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe(dashboardText.fearGreed.buckets['extreme-fear'])
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
   })
 })
@@ -1990,7 +2002,7 @@ describe('the defensive premium band', () => {
       .toEqual([dashboardText.defensivePremium.fearGreed.axis, dashboardText.defensivePremium.skew.axis])
     // 仪表那一列照旧画弧（还没有读数，所以没有指针与分数）。
     expect(band.querySelector('[data-sentiment-gauge] [data-chart="gauge"]')).not.toBeNull()
-    expect(band.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(band.querySelector('[data-gauge-reading]')).toBeNull()
   })
 
   it('overlays each wait on the frame it replaces, so loading adds no row', async () => {

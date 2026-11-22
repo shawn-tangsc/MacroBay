@@ -15,7 +15,8 @@ import { CHART_HEIGHT } from './DefensivePremiumCharts'
 /**
  * 仪表那一列：只回答「落在哪一档」。
  *
- * 读数（分数 + 档位词）是**文字**，出现在这一列的读数行上；图是 ECharts 画的装饰（aria-hidden），
+ * 读数里的分数在盘里（画布内容），档位词是**文字**，落在整个仪表下面那一行（图位底部）；
+ * 图是 ECharts 画的装饰（aria-hidden），所以档位词那一行自带读屏名「22 极度恐惧」。
  * 日期、状态词、三个区间标签都不在这里——日期与状态词归恐惧贪婪格的读数行。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard
@@ -44,11 +45,20 @@ async function render(state: DashboardFearGreedState, cellOff?: typeof openSourc
 }
 
 describe('the gauge column', () => {
-  it('shows the score and the bucket word as text, with the chart as decoration', async () => {
+  it('puts the bucket word under the whole gauge, with the score carried by its accessible name', async () => {
     const gauge = await render(available)
-    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('22极度恐惧')
-    expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
-    // 图是装饰：读屏念的是上面那行文字，不是画布。
+    const reading = gauge.querySelector('[data-gauge-reading]')!
+    // 视觉只有档位词；分数在盘里（画布），读屏名把两段合成一句。
+    expect(reading.textContent).toBe(buckets['extreme-fear'])
+    expect(reading.getAttribute('aria-label')).toBe(`22 ${buckets['extreme-fear']}`)
+    expect(reading.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
+    // 位置：档位词在图位里（图位带 position:relative，词按 inset-inline/bottom 绝对定位在图下方）。
+    expect(reading.closest('.mi-defensive-premium__chart-slot')).not.toBeNull()
+    expect(reading.parentElement?.querySelector('[data-chart="gauge"]')).not.toBeNull()
+    // 读数行（第 2 行那条轨道）这一列不写字。
+    const track = gauge.querySelector('.mi-defensive-premium__reading')!
+    expect(track.textContent).toBe('')
+    // 图是装饰：读屏念的是档位词那一行的名字，不是画布。
     const chart = gauge.querySelector('[data-chart="gauge"]')!
     expect(chart.getAttribute('aria-hidden')).toBe('true')
     expect(chart.hasAttribute('role')).toBe(false)
@@ -77,11 +87,12 @@ describe('the gauge column', () => {
       const gauge = await render(state)
       // 弧照画（图一直在），但没有读数。
       expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-      expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+      // 没有读数时整行不渲染（不是一行空字）。
+      expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
     }
-    // 被关掉时连旧读数也不画：分数与档位词都不出现，弧还在。
+    // 被关掉时连旧读数也不画：档位词不出现，弧还在。
     const off = await render(available, openSources)
-    expect(off.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(off.querySelector('[data-gauge-reading]')).toBeNull()
     expect(off.querySelector('[data-chart="gauge"]')).not.toBeNull()
   })
 
@@ -90,6 +101,19 @@ describe('the gauge column', () => {
     expect(gauge.querySelector('.loading-spinner')).not.toBeNull()
     expect(gauge.querySelectorAll('[role="status"]')).toHaveLength(0)
     expect(gauge.querySelector('[aria-live]')).toBeNull()
+  })
+
+  it('keeps the arc above the bucket word: center 84%, radius formula untouched', () => {
+    // 84% 不是随手改的：168 高的图位里 y = 141.1，弧下沿就在这条线上；锚点底约 145，
+    // 档位词的盒顶是 150（18 高，贴图位底）——中间那 5 就是这么来的。88% 会让锚点压到词的顶上。
+    for (const width of [184, 240]) {
+      const option = gaugeChartOption({ score: 22, width, height: CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      const series = (option.series as Array<{ center: [string, string]; radius: number }>)[0]!
+      expect(series.center).toEqual(['50%', '84%'])
+      const centerY = (0.84 * CHART_HEIGHT)
+      expect(centerY).toBeLessThan(CHART_HEIGHT - 18)
+      expect(series.radius).toBe(Math.max(24, Math.min(width / 2 - 10, CHART_HEIGHT - 22)))
+    }
   })
 
   it('gives the needle a value only when there is a score', () => {

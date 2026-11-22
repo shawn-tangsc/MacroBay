@@ -442,7 +442,9 @@ function lineChartOption(input: {
   }
 }
 
-/** 仪表：五段弧 + 指针 + 圆盘里的分数；没有档位词（档位词是那一列的读数行）。 */
+/** 仪表：五段弧 + 指针 + 圆盘里的分数；没有档位词（档位词在图位底部那一行，不在图里）。
+ *  圆心 84%（不是 88%）：档位词要落进图位里 y = 150–168，弧下沿得抬到 141、锚点底约 145，
+ *  与词的盒顶 150 之间才留得住 5（用户 2026-11-22 定稿；真机上词与弧太挤先动这个数 84 → 82）。 */
 export function gaugeChartOption(input: {
   score: number | undefined
   width: number
@@ -462,7 +464,7 @@ export function gaugeChartOption(input: {
       endAngle: 0,
       min: 0,
       max: 100,
-      center: ['50%', '88%'],
+      center: ['50%', '84%'],
       radius,
       axisLine: {
         lineStyle: {

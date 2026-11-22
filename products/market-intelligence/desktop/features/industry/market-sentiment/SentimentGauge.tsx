@@ -6,8 +6,9 @@ import type { SourceCellOff } from '../shared/sourceCellOff'
 import { GaugeChart } from './DefensivePremiumCharts'
 
 /**
- * 仪表那一列（定稿 §4.4）：**ECharts 仪表**（`b56f86a8c` 那套）——五段弧、指针、圆盘里的分数，
- * 读数行写「11 极度恐惧」。
+ * 仪表那一列（定稿 §4.4）：**ECharts 仪表**（`b56f86a8c` 那套）——五段弧、指针、圆盘里的分数。
+ * 档位词「极度恐惧」在**整个仪表下面**一行（用户 2026-11-22 改口两次后的定版：先说要放中间数字下面，
+ * 随即改成放整个仪表下面）；盘里只有分数，这一列的读数行不写字、只留那 24 的轨道。
  *
  * 用户 2026-11-22 先要回手绘、看完截图又改口「手绘太丑」，定版是这一版；以后要再换先问用户。
  * 手绘那版试过、已否，别再拿回来。
@@ -33,18 +34,20 @@ export function SentimentGauge({ state, cellOff, buckets, titleId }: Readonly<{
   const waiting = cellOff === undefined && reading === undefined && state.state === 'loading'
 
   return <div className="mi-defensive-premium__col mi-defensive-premium__col--gauge" role="group" aria-labelledby={titleId} data-sentiment-gauge>
-    {/* 与另两列共用同一套行（标题 / 读数 / 图），这三列才会对齐；这一列不需要标题。 */}
+    {/* 这一列不需要标题；格头那一行仍留着，三列的格头与图位才在同一水平线上。 */}
     <div className="mi-defensive-premium__cell-head" aria-hidden="true" />
-    <p className="mi-defensive-premium__reading" data-gauge-reading>
-      {reading
-        ? <>
-          <strong>{reading.score}</strong>
-          <span data-gauge-bucket-text={reading.bucket}>{buckets[reading.bucket]}</span>
-        </>
-        : null}
-    </p>
+    {/* 读数行这一列**不写任何字**：那 24 的轨道仍占着，三格的行高才一致（定稿 §4.4）。 */}
+    <div className="mi-defensive-premium__reading" aria-hidden="true" />
     <div className="mi-defensive-premium__chart-slot">
       <GaugeChart score={reading?.score} />
+      {/* 档位词在整个仪表下面（用户 2026-11-22 定稿）：图位里的 y = 150–168，弧下沿 141、锚点底 145。
+          分数只在盘里（画布内容），所以这一行的读屏名自带分数——视觉只有档位词，读屏读数行照旧「11 极度恐惧」。
+          没有读数、这一格被关掉时整行不渲染：弧与刻度照画，不画一句指向不存在的分数的话。 */}
+      {reading
+        ? <p className="mi-defensive-premium__gauge-bucket" data-gauge-reading
+          data-gauge-bucket-text={reading.bucket}
+          aria-label={`${reading.score} ${buckets[reading.bucket]}`}>{buckets[reading.bucket]}</p>
+        : null}
       {/* 还在读：环叠在图上，不另占一行，也**不播报**——整卡一次加载只许一处 role=status。 */}
       {waiting ? <span className="mi-defensive-premium__col-wait"><LoadingSpinner /></span> : null}
     </div>
