@@ -192,7 +192,8 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                   : null}
               </> : skew?.state === 'empty' ? <>
                 <p className="mi-defensive-premium__reading">&nbsp;</p>
-                <StateSlot tone="empty" sentence={text.empty} />
+                {/* 偏斜用自己的空态句：借用 `text.empty` 会让这半显示「暂无已采集的恐惧与贪婪指数」。 */}
+                <StateSlot tone="empty" stateAttribute="empty" sentence={text.skew.empty} />
               </>
                 : skew === undefined ? null : <>
                   <p className="mi-defensive-premium__reading">&nbsp;</p>

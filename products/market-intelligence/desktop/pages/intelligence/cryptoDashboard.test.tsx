@@ -1645,6 +1645,25 @@ describe('the defensive premium band', () => {
     expect(band.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
   })
 
+  it('says the skew half is empty in its own words, not the fear-greed sentence', async () => {
+    // 两半各说各的空态。借用 `text.empty`（恐惧贪婪那句）时，右半会显示「暂无已采集的恐惧与贪婪指数」——
+    // 用户就是被这句张冠李戴的话当成「有数据但没显示」。
+    const client = { query: async (input: { asOf: string; timeZone: string }) => ({
+      asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+      fearGreed: fearGreedSection(30),
+      optionSkew: { state: 'empty' as const }
+    }) }
+    const container = await renderBand(client)
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const skewColumn = band.querySelector('[data-half="skew"]')!
+    const sentence = skewColumn.querySelector('[data-state="empty"]')!
+    expect(sentence.textContent).toBe(dashboardText.defensivePremium.skew.empty)
+    expect(sentence.textContent).not.toBe(dashboardText.fearGreed.empty)
+    // 左半照常画它的曲线：空的是偏斜那半，不是整卡。
+    expect(band.querySelector('[data-chart="fear-greed"]')).not.toBeNull()
+    expect(skewColumn.querySelector('[data-chart="skew"]')).toBeNull()
+  })
+
   it('draws a smooth line with a light area only when there are enough points', () => {
     const many = skewChartOption({ points: skewPoints(29), axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const manySeries = (many.series as Array<{ data: unknown[]; smooth: number; lineStyle: { width: number; opacity: number; color: string }; areaStyle?: unknown }>)[0]!

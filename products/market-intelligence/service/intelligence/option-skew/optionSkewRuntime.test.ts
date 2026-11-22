@@ -4,7 +4,7 @@ import { buildOptionSkewChainFixture } from './optionSkewChainFixture'
 import type { DeribitChainSnapshot, DeribitOptionsClient } from './deribitOptionsClient'
 import type { OptionSkewPointStore } from './optionSkewPointStore'
 import type { OptionSkewPoint } from './optionSkewPolicy'
-import { createOptionSkewRuntime } from './optionSkewRuntime'
+import { createOptionSkewRuntime, needsStartupCatchUp } from './optionSkewRuntime'
 
 const NOW_MS = Date.parse('2026-11-22T07:00:00.000Z')
 
@@ -28,6 +28,26 @@ function clientReturning(snapshot: DeribitChainSnapshot): DeribitOptionsClient {
 function jobRuntimeStub() {
   return { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn() }
 }
+
+describe('needsStartupCatchUp', () => {
+  const state = (days: readonly string[]) => ({
+    schemaVersion: 1 as const,
+    points: days.map((day) => ({ day, observedAt: `${day}T05:00:00.000Z`, riskReversal: 1, putIv25: 60, callIv25: 59, tenorDays: 30 as const, expiries: ['a', 'b'] as const, underlyingPrice: 1 })),
+    consecutiveFailures: 0
+  })
+
+  it('asks for a round when the store has no day yet', () => {
+    expect(needsStartupCatchUp({ state: state([]), nowMs: NOW_MS })).toBe(true)
+  })
+
+  it('asks for a round when the newest day is older than today', () => {
+    expect(needsStartupCatchUp({ state: state(['2026-11-20', '2026-11-21']), nowMs: NOW_MS })).toBe(true)
+  })
+
+  it('stays quiet once today already has a point', () => {
+    expect(needsStartupCatchUp({ state: state(['2026-11-21', '2026-11-22']), nowMs: NOW_MS })).toBe(false)
+  })
+})
 
 describe('option skew runtime', () => {
   it('writes one 30-day point per round', async () => {

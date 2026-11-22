@@ -3,12 +3,23 @@ import type { JobRuntime } from '@platform/jobs'
 import { computeOptionSkew } from './optionSkewCalculator'
 import type { DeribitOptionsClient } from './deribitOptionsClient'
 import type { OptionSkewPointStore } from './optionSkewPointStore'
-import { optionSkewPolicy, utcDayOf, type OptionSkewPoint } from './optionSkewPolicy'
+import { optionSkewPolicy, utcDayOf, type OptionSkewPoint, type OptionSkewStoreState } from './optionSkewPolicy'
 
 export type OptionSkewRunResult =
   | Readonly<{ state: 'disabled' }>
   | Readonly<{ state: 'recorded'; day: string; riskReversal: number }>
   | Readonly<{ state: 'skipped'; failureCode: string }>
+
+/**
+ * Startup catch-up: the reader switched the source on, restarted the app, and the hourly job has
+ * not fired yet — the card would sit empty for up to an hour. If today has no point yet, one round
+ * runs at startup. Same-day reads already replace each other, so this cannot double-write a day.
+ */
+export function needsStartupCatchUp(input: { state: OptionSkewStoreState; nowMs: number }): boolean {
+  const today = utcDayOf(new Date(input.nowMs).toISOString())
+  const newestDay = input.state.points[input.state.points.length - 1]?.day
+  return newestDay === undefined || newestDay < today
+}
 
 export type OptionSkewRuntime = Readonly<{
   run: (nowMs?: number) => Promise<OptionSkewRunResult>

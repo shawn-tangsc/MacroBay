@@ -20,6 +20,8 @@ export type DefensivePremiumCardText = {
   skew: {
     name: string
     notConnected: string
+    /** 偏斜自己的空态句：复用恐惧贪婪那句会变成「暂无已采集的恐惧与贪婪指数」。 */
+    empty: string
     infoLabel: string
     info: { definition: string; relative: string; since: string }
     asOf: string
@@ -51,6 +53,7 @@ type Source = {
     skew: {
       name: string
       notConnected: string
+      empty: string
       infoLabel: string
       asOf: string
       unit: string

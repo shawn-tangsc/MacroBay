@@ -5,7 +5,7 @@ import type { JobRuntime } from '@platform/jobs'
 import { createDeribitOptionsClient } from './deribitOptionsClient'
 import { createOptionSkewPointStore, type OptionSkewStoreRead } from './optionSkewPointStore'
 import { OPTION_SKEW_COLLECT_JOB_ID } from './optionSkewJobId'
-import { createOptionSkewRuntime } from './optionSkewRuntime'
+import { createOptionSkewRuntime, needsStartupCatchUp } from './optionSkewRuntime'
 
 /**
  * 期权偏斜采集的**唯一装配点**：创建存储与运行时，把读口接给公开查询、把探针接给「测试连接」。
@@ -16,6 +16,8 @@ import { createOptionSkewRuntime } from './optionSkewRuntime'
  * - 读口只在加载成功后接上：加载失败就是「读不到」，不是「没有」。
  */
 export type OptionSkewWiring = Readonly<{
+  /** 加载 + 启动排期 + 启动补跑都结束（含失败）。装配方不需要等它，用例靠它免去 sleep。 */
+  ready: Promise<void>
   /**
    * 读者拨开关后调它：按源 profile 排期或撤期。加载完成前调用会被排队，不会丢。
    * `collectNow` 只在「拨开」那一侧传：拨开就先跑一轮（这一轮就是真探测）。
@@ -42,14 +44,27 @@ export function wireOptionSkew(deps: {
     isEnabled: deps.isEnabled
   })
   const ready = store.load()
-    .then(() => {
+    .then(async () => {
       deps.onReady({ readSnapshot: () => store.readSnapshot(), probe: () => runtime.probe() })
       /* **排期只有一条路径**：`runtime.start()` 末尾自己会 `sync()` 一次（按已存开关排期，
          否则重启后源会显示「未注册自动任务」）。这里不再补一次——两条路径以后容易不一致。 */
       runtime.start()
+      /* 启动补跑：读者已启用、今天还没有点，就别让他盯着空卡等满一小时。
+         存储读不出来时**不补跑**：那种情况该显示「读不到」，补跑只会把一份读不懂的文件覆盖掉。 */
+      let startupCatchUp = false
+      try {
+        startupCatchUp = needsStartupCatchUp({ state: store.readState(), nowMs: Date.now() })
+        store.readSnapshot()
+      } catch {
+        startupCatchUp = false
+      }
+      if (startupCatchUp && (await deps.isEnabled())) {
+        await deps.jobRuntime.enqueueManual(OPTION_SKEW_COLLECT_JOB_ID).catch(() => undefined)
+      }
     })
     .catch(() => undefined)
   return {
+    ready,
     sync: (options?: Readonly<{ collectNow?: boolean }>) => {
       void ready.then(async () => {
         await runtime.sync()
