@@ -532,7 +532,11 @@ button {
   padding: var(--notice-bleed) 0 8px;
   /* 黏住后下面滚过的行会从这条提示背后经过，必须给它自己的底色。
      **取不到抽屉正文那一个 token**：正文底色是 antd 的 `colorBgElevated`（走 CSS-in-JS，
-     不落成 CSS 变量），CSS 侧最接近的是 `--surface-strong`（深色与它同色，浅色差一档）。 */
+     不落成 CSS 变量），CSS 侧最接近的是 `--surface-strong`（深色与它同色，浅色差一档）。
+     浅色这一档是**上限、不许再加暗**：提示文字是 `--muted`，在这一档上对比度 4.96:1；
+     再暗一档（`--surface-soft`）掉到 4.6:1，再暗就跌破 4.5:1。
+     翻案条件只有一条：真机上浅色那条看着像脏底，就改成浅色用 `--surface`（与抽屉底同色）——
+     那是加一条 `:root[data-theme="light"]` 覆盖，不新造 token（新造等于把 antd 那份手抄一遍）。 */
   background: var(--surface-strong);
   font-size: 11.5px;
   color: var(--muted);
