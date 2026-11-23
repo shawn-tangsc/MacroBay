@@ -133,6 +133,10 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     /**
      * 成品挑选（契约 v2.56 + Chief 2026-11-06 拍定的三条顺序）：
      * ① 记录上有 `edition.locale` 且那一份在 → **用它**（中心与手机同一份，否则同一条通知两处说两种语言）；
+     * ①' 记录**没有** `edition` 而成品只有**一版** → 那一版就是这条记录自己的语言（老记录补指认）：
+     *    2026-11-23 之前落库的英文版日报通知没有 `edition`、只带 en-US 一份，于是中文界面按第②步
+     *    找不到自己那一份，整条降级成「有一条新通知」+ 空正文——读到了却说没读到。
+     *    只在**恰好一版**时认；两版都在就没有「它自己那一版」这回事，交给第②步，不猜。
      * ② 否则用读者当前语言那一份；
      * ③ 都没有 → 兜底句 + `copy-unresolved`，**不许拿另一种顶上**（顶上就是语言对不上）。
      *
@@ -147,6 +151,10 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       const editionLanguage = record.edition?.locale
       const order: NotificationCopyLanguage[] = []
       if (editionLanguage === 'zh-CN' || editionLanguage === 'en-US') order.push(editionLanguage)
+      if (order.length === 0) {
+        const present = (['zh-CN', 'en-US'] as const).filter((candidate) => record.rendered?.[candidate] !== undefined)
+        if (present.length === 1) order.push(present[0]!)
+      }
       if (!order.includes(language)) order.push(language)
       const picked = order.map((candidate) => record.rendered?.[candidate]).find((entry) => entry !== undefined)
 
