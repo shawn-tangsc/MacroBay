@@ -10,7 +10,7 @@ import type { DashboardFearGreedState } from '../../../pages/intelligence/dashbo
 import { SentimentGauge } from './SentimentGauge'
 import { CHART_PALETTE_FIXTURE } from './defensivePremiumChartPalette.fixture'
 import { CHART_FONTS_FALLBACK, gaugeChartOption } from './defensivePremiumChartOptions'
-import { CHART_HEIGHT } from './DefensivePremiumCharts'
+import { CHART_HEIGHT, GAUGE_CHART_HEIGHT } from './DefensivePremiumCharts'
 
 /**
  * 仪表那一列：只回答「落在哪一档」。
@@ -102,16 +102,18 @@ describe('the gauge column', () => {
     expect(gauge.querySelector('[aria-live]')).toBeNull()
   })
 
-  it('keeps the arc above the bucket word: center 84%, radius formula untouched', () => {
-    // 84% 不是随手改的：168 高的图位里 y = 141.1，弧下沿就在这条线上；锚点底约 145，
-    // 档位词的盒顶是 150（18 高，贴图位底）——中间那 5 就是这么来的。88% 会让锚点压到词的顶上。
+  it('keeps the arc above the bucket word: 127-high canvas, center 92%, radius formula untouched', () => {
+    // 168 的图位里给档位词留 41（词高 18 + 词底距 23，词与两侧日期同一条底线），所以弧只画在上面 127 里：
+    // 圆心 92% → y = 116.8，弧下沿就在这条线上、描边到约 121.8；词的盒顶在 127，中间留 5。
+    // 圆心再往下压（92 → 95）锚点就会压到词上；词与弧太挤则往上抬（92 → 90）。
+    expect(GAUGE_CHART_HEIGHT).toBe(CHART_HEIGHT - 41)
     for (const width of [184, 240]) {
-      const option = gaugeChartOption({ score: 22, width, height: CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      const option = gaugeChartOption({ score: 22, width, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
       const series = (option.series as Array<{ center: [string, string]; radius: number }>)[0]!
-      expect(series.center).toEqual(['50%', '84%'])
-      const centerY = (0.84 * CHART_HEIGHT)
-      expect(centerY).toBeLessThan(CHART_HEIGHT - 18)
-      expect(series.radius).toBe(Math.max(24, Math.min(width / 2 - 10, CHART_HEIGHT - 22)))
+      expect(series.center).toEqual(['50%', '92%'])
+      const centerY = 0.92 * GAUGE_CHART_HEIGHT
+      expect(centerY + 5).toBeLessThan(GAUGE_CHART_HEIGHT)
+      expect(series.radius).toBe(Math.max(24, Math.min(width / 2 - 10, GAUGE_CHART_HEIGHT - 22)))
     }
   })
 

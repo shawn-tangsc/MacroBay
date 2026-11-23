@@ -33,6 +33,12 @@ echarts.use([...CHART_MODULES])
 export const CHART_HEIGHT = 168
 
 /**
+ * 仪表**画布**的高度：168 的图位里要留出档位词的位置（词高 18 + 词底距 23 = 41），
+ * 所以弧只画在上面 127 里——否则词抬到与两侧日期同一条底线时，会横穿指针（Chief 2026-11-23 量到的那 13px）。
+ */
+export const GAUGE_CHART_HEIGHT = 127
+
+/**
  * 走势格的兜底宽：1040 内容宽下两格各 388。
  * **416 不是任何一列的真实宽度**——它就是那次「仪表按 416 画、弧压到中列」的来源（用户 2026-11-22）。
  */
@@ -149,6 +155,6 @@ export function ChartPlaceholder({ axisLabel, waitingLabel }: Readonly<{ axisLab
  * 装饰性：分数与档位词以文字出现在它上面的读数行里，读屏不需要再念一遍这块画布。
  */
 export function GaugeChart({ score }: Readonly<{ score: number | undefined }>): React.ReactElement {
-  return <ChartFrame chart="gauge" height={CHART_HEIGHT} label="" decorative fallbackWidth={GAUGE_FALLBACK_WIDTH}
+  return <ChartFrame chart="gauge" height={GAUGE_CHART_HEIGHT} label="" decorative fallbackWidth={GAUGE_FALLBACK_WIDTH}
     build={(theme, size) => gaugeChartOption({ score, width: size.width, height: size.height, ...theme })} />
 }

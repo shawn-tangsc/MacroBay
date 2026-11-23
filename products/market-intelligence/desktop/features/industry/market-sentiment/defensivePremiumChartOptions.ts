@@ -55,7 +55,7 @@ const SKEW_GRID = { left: 32, right: 28, top: 12, bottom: 24, containLabel: true
  * `containLabel`（会警告并要求改用 outerBounds），所以只能显式留出刻度与日期的落脚处——
  * 三个字符的 `100` 加 8 的间距约 32。左列自己也限宽 176，两头一起保证不越界。
  */
-const FEAR_GREED_GRID = { left: 32, right: 28, top: 12, bottom: 26, containLabel: true } as const
+const FEAR_GREED_GRID = { left: 32, right: 28, top: 12, bottom: 24, containLabel: true } as const
 
 function axisLabelFormatter(day: string): string {
   // 源日就是 `YYYY-MM-DD`：只印月-日，不换算时区、不带钟点。
@@ -317,8 +317,9 @@ function lineChartOption(input: {
 }
 
 /** 仪表：五段弧 + 指针 + 圆盘里的分数；没有档位词（档位词在图位底部那一行，不在图里）。
- *  圆心 84%（不是 88%）：档位词要落进图位里 y = 150–168，弧下沿得抬到 141、锚点底约 145，
- *  与词的盒顶 150 之间才留得住 5（用户 2026-11-22 定稿；真机上词与弧太挤先动这个数 84 → 82）。 */
+ *  圆心 92%（图上只有 127 高：168 的图位里给档位词留了 41）——弧下沿 116.8、锚点底约 121，
+ *  词盒顶 127，中间留 5。词与两侧日期同一条底线（日期文字底距图位底 23）。
+ *  真机上词与弧太挤，先动圆心（92 → 90），别动 127 的仪表画布和 168 的图位。 */
 export function gaugeChartOption(input: {
   score: number | undefined
   width: number
@@ -338,7 +339,7 @@ export function gaugeChartOption(input: {
       endAngle: 0,
       min: 0,
       max: 100,
-      center: ['50%', '84%'],
+      center: ['50%', '92%'],
       radius,
       axisLine: {
         lineStyle: {

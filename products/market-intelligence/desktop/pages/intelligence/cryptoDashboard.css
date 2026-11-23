@@ -203,7 +203,7 @@
    仪表圆心随之下移（`gaugeChartOption` 的 88% → 84%，240 列下 y = 141）：弧下沿 141、锚点底约 145，
    与词的盒顶 150 之间留 5。词的读屏名是「11 极度恐惧」（分数在画布上，图本身 aria-hidden）。 */
 .mi-defensive-premium__gauge-bucket {
-  position: absolute; inset-inline: 0; bottom: 0; margin: 0; text-align: center;
+  position: absolute; inset-inline: 0; bottom: 23px; margin: 0; text-align: center;
   font-size: var(--font-body); line-height: var(--line-body); font-weight: 650;
 }
 .mi-defensive-premium__verdict { margin: 0; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }

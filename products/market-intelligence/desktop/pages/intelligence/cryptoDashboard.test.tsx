@@ -364,7 +364,8 @@ describe('crypto intelligence dashboard', () => {
     // 的「closest('.mi-defensive-premium__chart-slot')」那条。
     const bucketRule = cssBlock(styles, '.mi-defensive-premium__gauge-bucket {')
     expect(bucketRule).toContain('position: absolute')
-    expect(bucketRule).toContain('bottom: 0')
+    // 词盒抬到与两侧「日期文字」同一条底线（探针实测三列 spread = 0）：图位 168、词盒底距图位底 23。
+    expect(bucketRule).toContain('bottom: 23px')
     expect(bucketRule).toContain('inset-inline: 0')
     expect(bucketRule).toContain('text-align: center')
   })
@@ -1820,8 +1821,16 @@ describe('the defensive premium band', () => {
       points,
       palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK
     })
-    // 上留白 34 → 12（2026-11-22 重排：量程挪进行名，图里不再有那行字）；左右下三项没动。
-    expect(option.grid).toMatchObject({ left: 32, top: 12, bottom: 26 })
+    // 上留白 34 → 12（2026-11-22 重排：量程挪进行名，图里不再有那行字）；
+    // 下留白 26 → 24，与偏斜那张一致：两张图的日期行才在同一条线上（Chief 2026-11-23 量到差 4px）。
+    expect(option.grid).toMatchObject({ left: 32, top: 12, bottom: 24 })
+    // 判据是「两张图的绘图区左右下三边同一套」：任一边被单独改掉，两个日期行就错开。
+    const skewGrid = skewChartOption({ points: skewPoints(30), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      .grid as { left: number; right: number; bottom: number }
+    expect(skewGrid).toMatchObject({ left: 32, right: 28, bottom: 24 })
+    expect(skewGrid.bottom).toBe((option.grid as { bottom: number }).bottom)
+    expect(skewGrid.left).toBe((option.grid as { left: number }).left)
+    expect(skewGrid.right).toBe((option.grid as { right: number }).right)
     // 横轴跟着数据走（不是钉住 30 天的窗口）：5 个读数就只印 5 个刻度，首日就是数据最早那天。
     const axis = (option.xAxis as { data: string[]; axisLabel: { interval: (index: number) => boolean } }).data
     expect(axis).toHaveLength(5)
