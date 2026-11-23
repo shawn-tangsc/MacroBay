@@ -60,7 +60,8 @@ function fakeSource(overrides: Partial<NotificationCenterSource> = {}): Notifica
 async function mount(
   source: NotificationCenterSource,
   onOpenDeeplink: (d: unknown) => void = () => undefined,
-  language: 'zh-CN' | 'en-US' = 'zh-CN'
+  language: 'zh-CN' | 'en-US' = 'zh-CN',
+  onOpenExternal?: (url: string) => void
 ): Promise<void> {
   const host = document.createElement('div')
   document.body.append(host)
@@ -72,6 +73,7 @@ async function mount(
         onClose={() => undefined}
         labels={platformText[language].notifications}
         onOpenDeeplink={onOpenDeeplink}
+        {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
         source={source}
       />
     )
@@ -150,6 +152,49 @@ describe('通知中心的分组与空态', () => {
     const recorded = groups.at(-1)!
     expect(recorded.querySelectorAll('button')).toHaveLength(0)
     expect(rows().map((row) => row.getAttribute('data-state'))).toEqual(['unread', 'read', 'unread'])
+  })
+
+  it('外链动作（看原文）也画按钮：只认落点时这类动作永远点不到', async () => {
+    const onOpenDeeplink = vi.fn()
+    const onOpenExternal = vi.fn()
+    const source = fakeSource({
+      list: async () => ({
+        items: [record({
+          id: 'news-alert',
+          title: '【中】CoinDesk: …',
+          actions: [{ id: 'open-original', kind: 'open-external' as const, label: '看原文', url: 'https://example.test/a' }]
+        })]
+      })
+    })
+    await mount(source, onOpenDeeplink, 'zh-CN', onOpenExternal)
+
+    // 有外链也算「有地方可去」：它进主位（未读组），不是「仅记录」。
+    const group = document.body.querySelector('.notification-center-group')
+    expect(group?.querySelector('.notification-center-group-title')?.textContent).toBe(labels.centerUnreadGroup)
+
+    const button = [...document.body.querySelectorAll<HTMLButtonElement>('.notification-center-row button')]
+      .find((candidate) => flat(candidate.textContent) === '看原文')
+    expect(button).toBeDefined()
+    await click(button!)
+
+    expect(onOpenExternal).toHaveBeenCalledWith('https://example.test/a')
+    expect(onOpenDeeplink).not.toHaveBeenCalled()
+  })
+
+  it('外链不是 http(s) 时不给按钮：主进程会拒，点了就是一个抛错的按钮', async () => {
+    const source = fakeSource({
+      list: async () => ({
+        items: [record({
+          id: 'bad-scheme',
+          actions: [{ id: 'open-settings-app', kind: 'open-external' as const, label: '打开设置', url: 'x-apple.systempreferences:com.apple.preference' }]
+        })]
+      })
+    })
+    await mount(source, () => undefined, 'zh-CN', () => undefined)
+
+    expect(document.body.querySelector('.notification-center-row button')).toBeNull()
+    // 没有可去之处 → 落进「仅记录」，不在主位。
+    expect(document.body.querySelector('.notification-center-group-title')?.textContent).toBe(labels.centerRecordedGroup)
   })
 
   it('列表读不到时给错误态，重试会再读一次', async () => {

@@ -32,6 +32,13 @@ type NotificationCenterDrawerProps = {
   labels: PlatformText['notifications']
   /** 通知自带的动作要真的做那件事：把 deeplink 交给外壳打开，而不是再标一次已读。 */
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  /**
+   * 外链动作（`open-external`）的出口：舆情那条「看原文」就是它（验收 N37⑦）。
+   *
+   * 与 `onOpenDeeplink` 分开：一个交给外壳导航，一个交浏览器打开。合并成一个回调会让调用方
+   * 自己判「这是落点还是网址」，那套判断就跑到两个地方去了。
+   */
+  onOpenExternal?: (url: string) => void
   source?: NotificationCenterSource
   /**
    * 产品注册的设置抽屉（`productSettingsDrawers` 里声明了 `notifications` 那一屏）。
@@ -39,6 +46,20 @@ type NotificationCenterDrawerProps = {
    */
   settingsEntry?: NotificationCenterSettingsEntry | null
   onOpenSettings?: (entry: NotificationCenterSettingsEntry) => void
+}
+
+/** 外链只放行 http(s)：主进程出口会拒别的 scheme，递过去就是点了抛错的按钮。 */
+const EXTERNAL_URL = /^https?:\/\//i
+
+/**
+ * 这一行有没有「能去的地方」：应用内落点，或外链动作。
+ *
+ * 只认落点会把「看原文」整段归到「仅记录」，按钮永远画不出来——记录里写着动作、读者点不到。
+ */
+function hasActionTarget(item: NotificationCenterItem): boolean {
+  const action = item.actions[0]
+  if (action?.kind === 'open-external' && typeof action.url === 'string' && EXTERNAL_URL.test(action.url)) return true
+  return (action?.deeplink ?? item.deeplink) !== undefined
 }
 
 /**
@@ -62,6 +83,7 @@ export function NotificationCenterDrawer({
   onClose,
   labels,
   onOpenDeeplink,
+  onOpenExternal,
   source,
   settingsEntry,
   onOpenSettings
@@ -119,9 +141,9 @@ export function NotificationCenterDrawer({
     setNotice(result.deleted === 0 ? labels.centerDeleteReadEmpty : labels.centerDeleteReadDone(String(result.deleted)))
   }
 
-  // 有目标可去的通知才进主位；没有动作目标的只留记录，不占主位（A3）。
-  const actionables = items.filter((item) => item.deeplink !== undefined)
-  const recorded = items.filter((item) => item.deeplink === undefined)
+  // 有地方可去的通知才进主位；落点与外链都算「有地方可去」，两者都没有的只留记录（A3）。
+  const actionables = items.filter(hasActionTarget)
+  const recorded = items.filter((item) => !hasActionTarget(item))
   const unreadItems = actionables.filter((item) => item.state === 'unread')
   const readItems = actionables.filter((item) => item.state !== 'unread')
 
@@ -193,6 +215,7 @@ export function NotificationCenterDrawer({
           <NotificationGroups
             labels={labels}
             onOpenDeeplink={onOpenDeeplink}
+            {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
             onRead={markOneRead}
             readItems={readItems}
             recorded={recorded}
@@ -231,12 +254,13 @@ export function NotificationCenterDrawer({
 function NotificationGroups(props: {
   labels: PlatformText['notifications']
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  onOpenExternal?: (url: string) => void
   onRead: (id: string) => Promise<void>
   unreadItems: readonly NotificationCenterItem[]
   readItems: readonly NotificationCenterItem[]
   recorded: readonly NotificationCenterItem[]
 }): React.ReactElement {
-  const { labels, onOpenDeeplink, onRead } = props
+  const { labels, onOpenDeeplink, onOpenExternal, onRead } = props
   return (
     <div className="notification-center-groups">
       {props.unreadItems.length === 0 ? null : (
@@ -245,6 +269,7 @@ function NotificationGroups(props: {
           items={props.unreadItems}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
+          {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
           onRead={onRead}
           actionable
         />
@@ -255,6 +280,7 @@ function NotificationGroups(props: {
           items={props.readItems}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
+          {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
           onRead={onRead}
           actionable
         />
@@ -265,6 +291,7 @@ function NotificationGroups(props: {
           items={props.recorded}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
+          {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
           onRead={onRead}
         />
       )}
@@ -278,6 +305,7 @@ function Group(props: {
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  onOpenExternal?: (url: string) => void
   /** 主位才给动作；「仅记录」组没有动作目标，行上不出按钮（A2 只约束主位，A3 管这里）。 */
   actionable?: boolean
 }): React.ReactElement {
@@ -292,6 +320,7 @@ function Group(props: {
             key={item.id}
             labels={props.labels}
             onOpenDeeplink={props.onOpenDeeplink}
+            {...(props.onOpenExternal === undefined ? {} : { onOpenExternal: props.onOpenExternal })}
             onRead={props.onRead}
           />
         ))}
@@ -319,6 +348,7 @@ function NotificationRow(props: {
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  onOpenExternal?: (url: string) => void
 }): React.ReactElement {
   const { item, labels } = props
   const [expanded, setExpanded] = useState(false)
@@ -357,6 +387,7 @@ function NotificationRow(props: {
         <NotificationActionButton
           item={item}
           onOpenDeeplink={props.onOpenDeeplink}
+          {...(props.onOpenExternal === undefined ? {} : { onOpenExternal: props.onOpenExternal })}
           onRead={props.onRead}
         />
       ) : null}
@@ -369,16 +400,31 @@ function NotificationRow(props: {
  *
  * 之前这里放的是「标为已读」——那是「我看过了」，不是「任务失败了你去看一眼」。记录里本来就有
  * `actions[0]`（如「打开任务」）与 `deeplink`，UI 不消费它，用户就只能点标记已读，事没做。
- * 现在点击真的把 deeplink 交给外壳打开；没有动作的通知本来就不会进主位。
+ *
+ * 两种动作各有各的出口，**不许只认一种**：
+ * - `kind: 'open'`（应用内落点）→ 把 `deeplink` 交给外壳；
+ * - `kind: 'open-external'`（外链，如舆情那条「看原文」，验收 N37⑦ 明写中心用这个按钮）
+ *   → 交给 `onOpenExternal` 开浏览器。之前只认落点，这类动作一个按钮都画不出来，
+ *   等于记录里写着「看原文」而读者永远点不到。
+ *
+ * 外链只放行 http(s)：主进程出口会拒别的 scheme（`windowIpc.ts` 的 `shellOpenExternal`），
+ * 递过去就是一个点了抛错的按钮（`openExternalProtocolGuard.test.ts` 守这条）。
  */
 function NotificationActionButton(props: {
   item: NotificationCenterItem
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   onRead: (id: string) => Promise<void>
+  onOpenExternal?: (url: string) => void
 }): React.ReactElement | null {
   const action = props.item.actions[0]
-  const deeplink = action?.deeplink ?? props.item.deeplink
-  if (action === undefined || deeplink === undefined) return null
+  if (action === undefined) return null
+  const external = action.kind === 'open-external' && typeof action.url === 'string' && EXTERNAL_URL.test(action.url)
+    ? action.url
+    : undefined
+  const deeplink = action.deeplink ?? props.item.deeplink
+  if (external === undefined && deeplink === undefined) return null
+  // 外链动作没有落点，只能用外链出口；没有那个出口时宁可不画，也不画一个点了没反应的按钮。
+  if (external !== undefined && props.onOpenExternal === undefined) return null
   const label = action.label
   return (
     <Button
@@ -387,7 +433,8 @@ function NotificationActionButton(props: {
         // 一次操作两个效果：把人送到地方，同时把这条标成已读。
         // 只送不标的话，回来仍看见同一条未读，角标也不减，等于留了个没人用的钩子。
         if (props.item.state === 'unread') void props.onRead(props.item.id)
-        props.onOpenDeeplink(deeplink)
+        if (external !== undefined) props.onOpenExternal?.(external)
+        else if (deeplink !== undefined) props.onOpenDeeplink(deeplink)
       }}>
       {label}
     </Button>
