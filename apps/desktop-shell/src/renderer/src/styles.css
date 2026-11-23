@@ -512,8 +512,28 @@ button {
   flex: 1 1 100%;
 }
 
+/* 动作回执（「看原文」打不开、「已标为已读」…）在抽屉顶部一行，但抽屉正文是滚动容器：
+   读者滚到列表下面点「看原文」，这一行会跟着滚出屏幕——症状和「点了没反应」一样。
+   所以让它黏在正文顶边，只在有提示时出现，其余时候什么都不变。 */
 .notification-center-notice {
-  margin: 0 0 8px;
+  /* 抽屉正文的内边距（`drawer.css` 的 `.drawer__panel--default .ant-drawer-body`）。
+     下面的黏顶偏移、负上边距、上内边距都由它算，只写一次这个数。 */
+  --notice-bleed: 16px;
+  position: sticky;
+  /* 为什么不是 0：sticky 的偏移作用在**外边距盒**上，而上边距是负的，
+     `top: 0` 会让边框盒反而下移 16（无头实测 rect.top 从 0 变 16），
+     于是滚过的行正好从提示条上方那条空带里穿过去。抵消掉它，贴顶才是真的贴顶。 */
+  top: calc(-1 * var(--notice-bleed));
+  z-index: 1;
+  /* 负上边距 + 等量上内边距：黏住时把正文上方那条内边距一起盖住，文字回到原位。
+     下边距改到内边距里给：留一条透明空白的话，滚过的行会从那条缝里露出来。
+     净占位因此与改动前一致（有提示时下面的列表不下移）。 */
+  margin: calc(-1 * var(--notice-bleed)) 0 0;
+  padding: var(--notice-bleed) 0 8px;
+  /* 黏住后下面滚过的行会从这条提示背后经过，必须给它自己的底色。
+     **取不到抽屉正文那一个 token**：正文底色是 antd 的 `colorBgElevated`（走 CSS-in-JS，
+     不落成 CSS 变量），CSS 侧最接近的是 `--surface-strong`（深色与它同色，浅色差一档）。 */
+  background: var(--surface-strong);
   font-size: 11.5px;
   color: var(--muted);
 }
