@@ -97,6 +97,8 @@ export const CHART_SYMBOL_MAX_POINTS = 7
 
 /** 恐惧贪婪那条线的门槛维持原值：这一半不改。 */
 const CHART_LINE_MIN_POINTS = 5
+/** 偏斜的连线门槛：2 个真实读数之间那段就是事实，画出来；1 个点只画点（Chief 2026-11-23）。 */
+const CHART_LINE_MIN_SKEW_POINTS = 2
 const CHART_WINDOW_DAYS = 30
 
 const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif'
@@ -352,7 +354,7 @@ function lineChartOption(input: {
   neutralLabel?: string
 }): ChartOption {
   const { palette, fonts } = input
-  const drawsLine = input.values.length >= CHART_MIN_POINTS
+  const drawsLine = input.values.length >= CHART_LINE_MIN_SKEW_POINTS
   // X 轴钉住**整个 30 天窗口**：窗口首日 = 最新一天往前 29 天。跟着数据收缩会让 3 个点铺满整格，
   // 一格当 30 天读；1 个点时范围缩到 0，竖线糊满屏就是这么来的。缺的日子留空，不补值。
   const window = pinnedWindow(input.days, input.values)
@@ -363,9 +365,10 @@ function lineChartOption(input: {
     tooltip: lineTooltip(palette, fonts, input.name, input.suffix),
     xAxis: {
       type: 'category',
-      // 只有 1 个读数时让那一档占满整格（boundaryGap: true）：点和它自己的日期都在中间。
-      // 不加这条时点画在最右、日期标签居中，读者会当成两回事（界面 2026-11-22 抓到的）。
-      boundaryGap: window.days.length === 1,
+      // 少于 3 个读数时让每档占满整格（boundaryGap: true）：点落在档位中间，不贴在绘图区左右边上。
+      // 只有 1 个读数时，点和它自己的日期都在中间；2 个读数时点在 1/4 与 3/4，不再像被边框裁掉
+      // （用户 2026-11-23 看 2 点那张：右点正压在右下角）。3 个点起按真实跨度铺满。
+      boundaryGap: window.days.length < CHART_MIN_POINTS,
       data: window.days,
       axisLine: { lineStyle: { color: palette.axis } },
       axisTick: { show: false },
@@ -417,7 +420,10 @@ function lineChartOption(input: {
       lineStyle: { width: drawsLine ? 1.6 : 0, opacity: drawsLine ? 1 : 0, color: palette.line },
       itemStyle: { color: palette.line, borderColor: palette.surface, borderWidth: 1 },
       // 淡面积：同一个线色加透明度，不另造一份品牌色的 rgba。
-      areaStyle: drawsLine ? { color: palette.line, opacity: input.areaOpacity ?? 0.22 } : undefined,
+      // 3 个点起才铺面积：2 个点的面积只是点下面一块三角，右端还会多出一条竖边（用户看图像一堵墙）。
+      areaStyle: input.values.length >= CHART_MIN_POINTS
+        ? { color: palette.line, opacity: input.areaOpacity ?? 0.22 }
+        : undefined,
       ...(input.gridLines === undefined ? {} : {
         markLine: {
           silent: true,

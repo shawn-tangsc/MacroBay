@@ -1797,7 +1797,18 @@ describe('the defensive premium band', () => {
     expect(manySeries.lineStyle.opacity).toBe(1)
     expect(manySeries.lineStyle.color).toBe(CHART_PALETTE_FIXTURE.line)
     expect(manySeries.areaStyle).toBeDefined()
-    // 3 个点起才连线（1–2 个点根本不画图，见卡面用例）。
+    // 2 个真实读数之间那段就是事实：连线，但不铺面积（2 点的面积是块三角，右端还多一条竖边）。
+    const two = skewChartOption({ points: skewPoints(2), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const twoSeries = (two.series as Array<{ lineStyle: { width: number; opacity: number }; areaStyle?: unknown }>)[0]!
+    expect(twoSeries.lineStyle.width).toBe(1.6)
+    expect(twoSeries.lineStyle.opacity).toBe(1)
+    expect(twoSeries.areaStyle).toBeUndefined()
+    // 1 个点只画点：没有线、没有面积。
+    const one = skewChartOption({ points: skewPoints(1), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const oneSeries = (one.series as Array<{ lineStyle: { width: number; opacity: number }; areaStyle?: unknown }>)[0]!
+    expect(oneSeries.lineStyle.opacity).toBe(0)
+    expect(oneSeries.areaStyle).toBeUndefined()
+    // 3 个点起才铺面积。
     const three = skewChartOption({ points: skewPoints(3), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
     const threeSeries = (three.series as Array<{ lineStyle: { opacity: number }; areaStyle?: unknown }>)[0]!
     expect(threeSeries.lineStyle.opacity).toBe(1)
@@ -1835,7 +1846,7 @@ describe('the defensive premium band', () => {
     }
   })
 
-  it('puts the single reading and its date in the same place', () => {
+  it('keeps one or two readings off the frame, with the date under each one', () => {
     // 1 个读数那张：点在界内居中，唯一的日期标签也在中间——不许出现「点在最右、日期在中间」。
     const single = skewChartOption({
       points: [{ day: '2026-11-22', observedAt: '2026-11-22T00:00:00.000Z', riskReversal: 13.2 }],
@@ -1844,9 +1855,13 @@ describe('the defensive premium band', () => {
     const axis = single.xAxis as { data: string[]; boundaryGap: boolean }
     expect(axis.data).toHaveLength(1)
     expect(axis.boundaryGap).toBe(true)
-    // 多于 1 个读数保持原来的形态：点落在首尾两端、日期各自对齐到点。
+    // 2 个读数同样让每档占满一格：点在 1/4 与 3/4，不压在绘图区左右边上（用户 2026-11-23：
+    // 右点正对着右下角，看着像被边框裁掉）。
     const two = skewChartOption({ points: skewPoints(2), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-    expect((two.xAxis as { boundaryGap: boolean }).boundaryGap).toBe(false)
+    expect((two.xAxis as { boundaryGap: boolean }).boundaryGap).toBe(true)
+    // 3 个点起按真实跨度铺满：首尾落回两端，这样 30 点的窗口才是「整段」。
+    const three = skewChartOption({ points: skewPoints(3), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    expect((three.xAxis as { boundaryGap: boolean }).boundaryGap).toBe(false)
   })
 
   it('keeps the gaps inside the span instead of shrinking to the number of readings', () => {
