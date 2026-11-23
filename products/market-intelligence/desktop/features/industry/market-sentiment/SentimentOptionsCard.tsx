@@ -61,26 +61,86 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   const loading = state.state === 'loading'
 
   return <section className="mi-defensive-premium" aria-labelledby={TITLE_ID} data-testid="defensive-premium-card">
-    <header className="mi-defensive-premium__header">
-      <h2 id={TITLE_ID}>{text.title}</h2>
-      <Popover lines={[{ labelKey: `${TEXT_PREFIX}.titleInfo` }]} resolveText={dataText}
-        trigger={triggerProps => (
-          <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.titleInfoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
-        )} />
-      {/* 整卡只留一颗动作：未接入时是「查看来源」，其余可读状态下是刷新；整块状态面自己带动作，
-          标题行不再给第二颗（AC-14）。 */}
-      {/* 标题行的动作一律 24 高（`md`）：文字按钮是 24，图标按钮若用 22，换态时标题行会跳 2px。 */}
-      {showRefresh ? <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="md" variant="plain"
-        onSelect={onRefresh} disabled={loading} className="mi-defensive-premium__refresh" /> : null}
-      {/* 这一格被读者关掉时，「去启用」也只在标题行；格内不再放按钮（AC-31）。 */}
-      {showEnable && cellOff !== undefined
-        ? <Button size="small" onClick={cellOff.onOpenSources} className="mi-defensive-premium__source-action">{text.action.enable}</Button>
-        : null}
-      <span className="mi-defensive-premium__window">{dataText(`${TEXT_PREFIX}.window`)}</span>
-      {showViewSource ? <Button size="small" onClick={onViewSource} className="mi-defensive-premium__source-action">
-        {text.action.viewSource}
-      </Button> : null}
-    </header>
+    {/* 头栏与内容第一行合并（用户 2026-11-23）：不再单独占一行——卡名、卡级 ⓘ、窗口、两个格名与卡级动作
+        都在这一条 24 高的行上，三轨与下面三列同宽（`1fr 240 1fr`），格名与图之间 0 间距。
+        这一行挂在**卡级**（`grid-column: 1 / -1`）：整卡读失败/空时它留着——那时 ⓘ 最需要；
+        但两个格名跟着三列一起收起来，下面已经被一张状态面替掉，留着格名等于给空格子立两个标题。 */}
+    <div className="mi-defensive-premium__topbar">
+      <div className="mi-defensive-premium__topbar-lead">
+        <h2 id={TITLE_ID}>{text.title}</h2>
+        <Popover lines={[{ labelKey: `${TEXT_PREFIX}.titleInfo` }]} resolveText={dataText}
+          trigger={triggerProps => (
+            <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.titleInfoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
+          )} />
+        {/* 窗口是整卡的事（用户 2026-11-23 定的排布）：贴卡名读，不放到最右那一轨。 */}
+        <span className="mi-defensive-premium__window">{dataText(`${TEXT_PREFIX}.window`)}</span>
+        {wholeCardState === undefined ? <>
+          <div className="mi-defensive-premium__half-head" data-half-head="fear-greed">
+            {/* 行名只有格名（用户 2026-11-22）：量程就在刻度上（0/50/100），不再后缀一遍。 */}
+            <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
+            <Popover resolveText={dataText} lines={[
+              { labelKey: `${TEXT_PREFIX}.fearGreed.info.volatility` },
+              percentile
+                ? { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentile`, params: { percentile: String(percentile.value) } }
+                : { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentileInsufficient` },
+            ]} trigger={triggerProps => (
+              <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.fearGreed.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
+            )} />
+            {/* 格名行右端：这一格的值在仪表盘那一列，这里只放「偏旧」这类陈旧状态（AC-20 照旧要标）。 */}
+            {fearGreed?.state === 'available' && fearGreed.stale
+              ? <span className="mi-defensive-premium__headline-tail" data-stale="fear-greed">
+                <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
+                <span>{fillLabelParams(text.stale.stopsAt, { date: fearGreed.latestDay })}</span>
+              </span>
+              : null}
+          </div>
+        </> : null}
+      </div>
+      <div className="mi-defensive-premium__topbar-tail">
+        {wholeCardState === undefined ? <div className="mi-defensive-premium__half-head" data-half-head="skew">
+          <h3 id={SKEW_HEADING_ID}>{text.skew.name}</h3>
+          <Popover resolveText={dataText} lines={[
+            { labelKey: `${TEXT_PREFIX}.skew.info.definition` },
+            { labelKey: `${TEXT_PREFIX}.skew.info.relative` },
+            { labelKey: `${TEXT_PREFIX}.skew.info.since` },
+          ]} trigger={triggerProps => (
+            <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
+          )} />
+        </div> : null}
+        <div className="mi-defensive-premium__topbar-actions">
+          {/* 行名行右端就是这一格的读数（用户 2026-11-22）：值 12/650 + 单位 11/muted，右对齐；
+              方向词与窗口跟着值走，挤的时候折到名称下面一行，名称不许被挤断。 */}
+          {skew?.state === 'available'
+            ? <span className="mi-defensive-premium__headline-tail">
+              <strong className="mi-defensive-premium__headline-value" data-skew-value>{skew.latest.riskReversal.toFixed(1)}</strong>
+              <span>{text.skew.unit}</span>
+              {skew.direction.kind === 'unknown' ? null : <>
+                <span aria-hidden="true">·</span>
+                <span data-skew-direction={skew.direction.kind}>{text.skew.direction[skew.direction.kind]} · {text.skew.direction.window}</span>
+              </>}
+              {skew.stale
+                ? <span className="mi-defensive-premium__stale" data-stale="skew">
+                  <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
+                  <span>{fillLabelParams(text.stale.stopsAt, { date: skew.latestDay })}</span>
+                </span>
+                : null}
+            </span>
+            : null}
+          {/* 整卡只留一颗动作：未接入时是「查看来源」，其余可读状态下是刷新；整块状态面自己带动作，
+              这一轨不再给第二颗（AC-14）。 */}
+          {/* 动作一律 24 高（`md`）：文字按钮是 24，图标按钮若用 22，换态时会跳 2px。 */}
+          {showRefresh ? <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="md" variant="plain"
+            onSelect={onRefresh} disabled={loading} className="mi-defensive-premium__refresh" /> : null}
+          {/* 这一格被读者关掉时，「去启用」也只在头栏；格内不再放按钮（AC-31）。 */}
+          {showEnable && cellOff !== undefined
+            ? <Button size="small" onClick={cellOff.onOpenSources} className="mi-defensive-premium__source-action">{text.action.enable}</Button>
+            : null}
+          {showViewSource ? <Button size="small" onClick={onViewSource} className="mi-defensive-premium__source-action">
+            {text.action.viewSource}
+          </Button> : null}
+        </div>
+      </div>
+    </div>
 
     {wholeCardState === 'error' ? <StateView state="error" reasonCode="unreadable"
       action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />
@@ -88,25 +148,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
         : <>
           {/* 三格顺序（用户 2026-11-22）：恐惧贪婪走势 | 仪表 | 偏斜走势——仪表居中，两张走势各一边。 */}
           <div className="mi-defensive-premium__col" data-half="fear-greed">
-            <div className="mi-defensive-premium__cell-head">
-              {/* 行名只有格名（用户 2026-11-22）：量程就在刻度上（0/50/100），不再后缀一遍。 */}
-              <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
-              <Popover resolveText={dataText} lines={[
-                { labelKey: `${TEXT_PREFIX}.fearGreed.info.volatility` },
-                percentile
-                  ? { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentile`, params: { percentile: String(percentile.value) } }
-                  : { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentileInsufficient` },
-              ]} trigger={triggerProps => (
-                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.fearGreed.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
-              )} />
-              {/* 行名行右端：这一格的值在仪表盘那一列，这里只放「偏旧」这类陈旧状态（AC-20 照旧要标）。 */}
-              {fearGreed?.state === 'available' && fearGreed.stale
-                ? <span className="mi-defensive-premium__headline-tail" data-stale="fear-greed">
-                  <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
-                  <span>{fillLabelParams(text.stale.stopsAt, { date: fearGreed.latestDay })}</span>
-                </span>
-                : null}
-            </div>
+            {/* 格名与半条 ⓘ 已经上到头栏那一轨（用户 2026-11-23），列里第一行就是图。 */}
             {/* 图位：曲线、加载空图框、或一块「这一格怎么没数」的状态块——三种都占同一个高度，
                 所以未接入/读不到时那一列不会塌成一行、留一大片空白。 */}
             {cellOff !== undefined
@@ -135,34 +177,6 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             {...(cellOff === undefined ? {} : { cellOff })} />
 
           <div className="mi-defensive-premium__col" data-half="skew">
-            <div className="mi-defensive-premium__cell-head">
-              <h3 id={SKEW_HEADING_ID}>{text.skew.name}</h3>
-              <Popover resolveText={dataText} lines={[
-                { labelKey: `${TEXT_PREFIX}.skew.info.definition` },
-                { labelKey: `${TEXT_PREFIX}.skew.info.relative` },
-                { labelKey: `${TEXT_PREFIX}.skew.info.since` },
-              ]} trigger={triggerProps => (
-                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
-              )} />
-              {/* 行名行右端就是这一格的读数（用户 2026-11-22）：值 12/650 + 单位 11/muted，右对齐；
-                  方向词与窗口跟着值走，挤的时候折到名称下面一行，名称不许被挤断。 */}
-              {skew?.state === 'available'
-                ? <span className="mi-defensive-premium__headline-tail">
-                  <strong className="mi-defensive-premium__headline-value" data-skew-value>{skew.latest.riskReversal.toFixed(1)}</strong>
-                  <span>{text.skew.unit}</span>
-                  {skew.direction.kind === 'unknown' ? null : <>
-                    <span aria-hidden="true">·</span>
-                    <span data-skew-direction={skew.direction.kind}>{text.skew.direction[skew.direction.kind]} · {text.skew.direction.window}</span>
-                  </>}
-                  {skew.stale
-                    ? <span className="mi-defensive-premium__stale" data-stale="skew">
-                      <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
-                      <span>{fillLabelParams(text.stale.stopsAt, { date: skew.latestDay })}</span>
-                    </span>
-                    : null}
-                </span>
-                : null}
-            </div>
             {skew === undefined && loading ? <>
               {/* 与正常态同构的占位：读数行、图框；转圈叠在图框里，不另占一行。 */}
               <ChartPlaceholder axisLabel={text.skew.axis} waitingLabel={text.loading} />

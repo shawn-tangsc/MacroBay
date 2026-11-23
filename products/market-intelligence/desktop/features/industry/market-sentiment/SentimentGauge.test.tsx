@@ -130,8 +130,8 @@ describe('the gauge column', () => {
   it('is the card’s middle column: no width of its own, rows come from the shared template', () => {
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
     // 列宽由卡的三列网格给（一个变量），这一列不自己定宽；行模板三列共用。
-    // 四行一列（2026-11-22 删掉读数行）：格名 20 / 图 168 / 说明 / 列尾留白。仪表列也用这一套，图底与另两列齐平。
-    expect(styles).toContain('grid-template-rows: 20px var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
+    // 三行一列（2026-11-23 删掉卡头、格名上到头栏）：图 168 / 说明 / 列尾留白。仪表列也用这一套，图底与另两列齐平。
+    expect(styles).toContain('grid-template-rows: var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
     // 默认 240（用户 2026-11-22 把仪表放到中间后加的宽）；940–995 那档才退回 184。
     // 两处分开断言：只写一个 `toContain(184px)` 会被窄档那条规则满足，主档写错也不红。
     expect(styles).toContain('--mi-defensive-premium-gauge-width: 240px')
