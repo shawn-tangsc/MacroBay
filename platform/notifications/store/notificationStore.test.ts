@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import type { NotificationRequest } from '../contracts/notificationContracts'
+import type { NotificationRecord, NotificationRequest } from '../contracts/notificationContracts'
 import {
   acknowledgeNotification,
   normalizeNotificationRecord,
@@ -55,20 +55,22 @@ describe('归一化：写进去的契约字段必须读得回来', () => {
    *
    * 这条按「整份契约」判，不逐个列名字——将来契约加字段、归一化忘了抄，它一样红。
    */
-  const FULL = {
+  // `Required<NotificationRecord>`：契约加字段时**编译期**就逼着这里补上，夹具不会悄悄落后于契约。
+  const FULL: Required<NotificationRecord> = {
     id: 'notification-edition-1',
     owner: 'product' as const,
     productId: 'market-intelligence',
     sourceId: 'market-intelligence.briefing.ready',
     eventTypeId: 'market-intelligence.briefing.ready',
     mergedEventTypes: ['market-intelligence.briefing.ready'],
-    delivery: { push: { state: 'sent-accepted' as const, messageId: 'm-1' } },
+    delivery: { push: { state: 'sent-accepted' as const, messageId: 'm-1', at: '2026-11-23T12:01:04.232Z' } },
     rendered: { 'en-US': { title: 'Daily brief is ready', body: 'The edition is ready', reason: 'You subscribed.' } },
-    titleParams: { count: 1 },
+    titleKey: 'notification.taskFailed.title' as never,
+    titleParams: { count: '1' },
     bodyKey: 'notification.taskFailed.body' as never,
-    bodyParams: { count: 1 },
+    bodyParams: { count: '1' },
     reasonKey: 'notification.taskFailed.body' as never,
-    reasonParams: { count: 1 },
+    reasonParams: { count: '1' },
     appliedLevels: ['center', 'desktop', 'channel'] as const,
     severity: 'info' as const,
     priority: 'normal' as const,
@@ -92,11 +94,14 @@ describe('归一化：写进去的契约字段必须读得回来', () => {
     expiresAt: '2026-12-23T12:01:04.228Z'
   }
 
-  it('契约里每个字段都留在归一化结果里（新增字段忘了抄 → 这条红）', () => {
+  it('契约里每个字段都留在归一化结果里，且**值不是 undefined**（新增字段忘了抄 / 抄了键没抄值 → 这条红）', () => {
     const normalized = normalizeNotificationRecord(FULL)
     expect(normalized).not.toBeNull()
-    const missing = Object.keys(FULL).filter((key) => !(key in (normalized as object)))
-    expect(missing).toEqual([])
+    // 不能只判 `in`：`bodyKey: … : undefined` 这类是「键留、值丢」，`in` 照样为真。
+    const lost = Object.entries(FULL)
+      .filter(([key, value]) => (normalized as unknown as Record<string, unknown>)[key] === undefined && value !== undefined)
+      .map(([key]) => key)
+    expect(lost).toEqual([])
   })
 
   it('三个真丢过的字段按原值回来', () => {
