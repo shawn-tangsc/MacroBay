@@ -3,6 +3,13 @@ import type { GaugeSeriesOption, LineSeriesOption } from 'echarts/charts'
 import type { GridComponentOption, TooltipComponentOption } from 'echarts/components'
 
 import type { FearGreedSeriesPoint, OptionSkewSeriesPoint } from '../../../../contracts/intelligenceQueryContracts'
+import { CHART_FONT_FAMILY as FONT } from './defensivePremiumChartTheme'
+import type { ChartFonts, ChartPalette } from './defensivePremiumChartTheme'
+import { fitSkewAxis } from './skewAxisFit'
+
+// 主题（字号/色板读取）与刻度拟合各自单独一份：这个文件贴着 500 行硬线，公共面仍从这里转出。
+export { CHART_FONTS_FALLBACK, readChartFonts, readChartPalette } from './defensivePremiumChartTheme'
+export type { ChartFonts, ChartPalette, ChartTheme } from './defensivePremiumChartTheme'
 
 /**
  * 合并卡三张图的 ECharts 选项：两条折线与一个仪表。
@@ -20,73 +27,6 @@ export type ChartOption = ComposeOption<
 >
 
 /**
- * 图的字号也从 token 派生，不写死数字：
- * `--font-body`（读数与提示框）、`--font-meta`（轴与刻度）、`--font-metric-sm`（仪表圆盘里的分数）。
- */
-export type ChartFonts = { body: number; meta: number; metricSm: number }
-
-/** 拿不到 CSS 变量时用：与 `tokens.css` 的这三档一致。 */
-export const CHART_FONTS_FALLBACK: ChartFonts = { body: 12, meta: 11, metricSm: 24 }
-
-export type ChartTheme = { palette: ChartPalette; fonts: ChartFonts }
-
-export type ChartPalette = {
-  line: string
-  text: string
-  muted: string
-  grid: string
-  axis: string
-  surface: string
-  bands: readonly [string, string, string, string, string]
-}
-
-/**
- * 色板只从宿主元素的 CSS 变量读（门户色板定义在 `.mi-sample-surface` 上，深浅主题各自 remap）。
- * **生产代码里不存任何颜色字面量**：读不到就是空串，那种环境只有用例与离屏首帧，不画给人看。
- */
-const PALETTE_VARS = [
-  ['line', '--mi-dashboard-lime'],
-  ['text', '--mi-dashboard-text'],
-  ['muted', '--mi-dashboard-muted'],
-  ['grid', '--mi-dashboard-line'],
-  ['axis', '--mi-dashboard-line'],
-  ['surface', '--mi-dashboard-surface']
-] as const
-
-const BAND_VARS = [
-  '--mi-dashboard-sentiment-extreme-fear',
-  '--mi-dashboard-sentiment-fear',
-  '--mi-dashboard-sentiment-neutral',
-  '--mi-dashboard-sentiment-greed',
-  '--mi-dashboard-sentiment-extreme-greed'
-] as const
-
-/** 从宿主元素上读字号（token → 数字）；读不到就用默认两档。 */
-export function readChartFonts(element: Element | null): ChartFonts {
-  if (!element || typeof getComputedStyle !== 'function') return CHART_FONTS_FALLBACK
-  const style = getComputedStyle(element)
-  const read = (name: string, fallback: number): number => {
-    const parsed = Number.parseFloat(style.getPropertyValue(name))
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-  }
-  return {
-    body: read('--font-body', CHART_FONTS_FALLBACK.body),
-    meta: read('--font-meta', CHART_FONTS_FALLBACK.meta),
-    metricSm: read('--font-metric-sm', CHART_FONTS_FALLBACK.metricSm)
-  }
-}
-
-/** 从宿主元素上读色板；读不到就退回深色那组。 */
-export function readChartPalette(element: Element | null): ChartPalette {
-  const style = element && typeof getComputedStyle === 'function' ? getComputedStyle(element) : undefined
-  const read = (name: string): string => style?.getPropertyValue(name).trim() ?? ''
-  const palette = { line: '', text: '', muted: '', grid: '', axis: '', surface: '', bands: ['', '', '', '', ''] as ChartPalette['bands'] }
-  for (const [key, variable] of PALETTE_VARS) palette[key] = read(variable)
-  const bands = BAND_VARS.map(read)
-  return { ...palette, bands: [bands[0]!, bands[1]!, bands[2]!, bands[3]!, bands[4]!] }
-}
-
-/**
  * 图从第 3 个点起才画：1–2 个点连不成线，坐标轴还会塌成一条（实测刻度竖排、网格铺满整格）。
  * 同一个数也决定「连线」的门槛：3 个点起就画折线。
  */
@@ -101,7 +41,6 @@ const CHART_LINE_MIN_POINTS = 5
 const CHART_LINE_MIN_SKEW_POINTS = 2
 const CHART_WINDOW_DAYS = 30
 
-const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif'
 
 /** 偏斜：图位 168 里扣掉上面 12、下面 24（日期），中间 132 给曲线。
  *  单位名 2026-11-22 起重排：不再画在图里，改由读数字与行名带出（`10.9 百分点`）。 */
@@ -239,82 +178,6 @@ export function skewChartOption(input: {
 }
 
 /**
- * 偏斜 Y 轴贴合本窗数据（界面 2026-11-22 的判据）：
- *
- * - 轴跨度**不超过数据跨度的 2 倍**（数据跨度不足 0.5 按 0.5 算，否则几个几乎同值的点会把轴压成一条）；
- * - 刻度间隔**不超过数据跨度的 1/2**；
- * - 上下界盖住数据，但不为了「凑四档」把轴撑开——第一版取整凑四档，12.8–13.2 的数据被摊到 12–15，
- *   曲线只用了六分之一高，看着还是一条平线。
- *
- * 档数因此是**结果**不是约束：小跨度 3 档、宽跨度最多 5 档；间隔取「不超过半个数据跨度」的最大整档，
- * 所以轴跨度最多是数据跨度 + 一个间隔（≤1.5 倍），永远满足 2 倍上限。
- */
-function fitSkewAxis(low: number, high: number, sparse = false): { min: number; max: number; interval: number; gridLines: number[] } {
-  const dataSpan = high - low
-  const span = Math.max(dataSpan, 0.5)
-  const epsilon = 1e-9
-  // 少于 3 个读数（攒数阶段）：点不许压在轴底或刻度线上，上下各留半档（界面 2026-11-23 定的公式）。
-  //  2 个读数：间隔 = max(0.2, ceil(跨度 ÷ 2 ÷ 0.2) × 0.2)，轴 = 最小值 − 间隔/2 … 最大值 + 间隔/2。
-  //  1 个读数：间隔 0.4，轴 = 值 − 0.6 … 值 + 0.6，点在正中、离最近刻度 0.2。
-  // 刻度会比整档「错位半档」（7.4 / 8.6 …），这是攒数阶段的样子，不是缺陷；3 个点起走原来的拟合。
-  if (sparse) {
-    const single = Math.abs(dataSpan) < epsilon
-    const interval = single ? 0.4 : Math.max(0.2, Math.ceil(dataSpan / 2 / 0.2 - epsilon) * 0.2)
-    // 1 个读数上下各留 0.6（= 1.5 个间隔），2 个读数上下各留半个间隔。
-    const pad = single ? interval * 1.5 : interval / 2
-    const min = round1(low - pad)
-    const max = round1(high + pad)
-    const steps = Math.max(2, Math.round((max - min) / interval))
-    return {
-      min,
-      max: round1(min + steps * interval),
-      interval: round1(interval),
-      gridLines: Array.from({ length: steps }, (_, index) => round1(min + index * interval))
-    }
-  }
-  /** 给定间隔时的对齐结果：下界向下取整到间隔，上界盖住最大值。 */
-  const fitWith = (interval: number) => {
-    let min = Math.floor(low / interval + epsilon) * interval
-    // 读数几乎同值时，下界会被对齐到最小值本身，点就贴死在轴底；往下让一格，点落在中间才看得出「有个读数」。
-    if (high - min < interval - epsilon) min -= interval
-    const steps = Math.max(2, Math.ceil((high - min) / interval - epsilon))
-    return { interval, min, steps, ticks: steps + 1, total: steps * interval }
-  }
-  // 间隔取 0.2 的整数倍（含小数档）：档数封顶 4，宁可把间隔调细/调粗到 0.2 的倍数，也不放宽到画不出线的程度。
-  const candidates: number[] = []
-  for (let step = 0.2; step <= 20 + epsilon; step = Math.round((step + 0.2) * 10) / 10) candidates.push(step)
-
-  let chosen: ReturnType<typeof fitWith> | undefined
-  for (const interval of candidates) {
-    if (interval > span / 2 + epsilon) break
-    // 先试「下界对齐到间隔整数倍」（刻度值好看），不行再试「下界只比最小值低 0.2」——
-    // 后者能保住更细的间隔：满窗 11.8–15.0 用 1.2 时，对齐是 10.8 起会出 5 档，退 0.2 就是 11.6/12.8/14/15.2 四档。
-    const nudgedMin = Math.round((Math.floor((low - 0.2) * 10) / 10) * 10) / 10
-    const nudged = {
-      interval,
-      min: nudgedMin,
-      steps: Math.max(2, Math.ceil((high - nudgedMin) / interval - epsilon))
-    }
-    const options = [fitWith(interval), { ...nudged, ticks: nudged.steps + 1, total: nudged.steps * interval }]
-    const fit = options.find(candidate => candidate.ticks <= 4 && candidate.total <= span * 2 + epsilon)
-    if (fit !== undefined) { chosen = fit; break }
-  }
-  // 极窄/极宽两端找不到「4 档 + 2 倍上限」同时成立的间隔时，先保盖住数据与 2 倍上限，档数退让。
-  chosen ??= candidates.map(fitWith)
-    .filter(fit => fit.total <= span * 2 + epsilon)
-    .sort((a, b) => a.total - b.total)[0] ?? fitWith(candidates[candidates.length - 1]!)
-
-  // 横虚线 = 档数 − 1：只画到倒数第二档，最上面那条边不画（Chief 2026-11-22）。
-  const gridLines = Array.from({ length: chosen.steps }, (_, index) => round1(chosen!.min + index * chosen!.interval))
-  return {
-    min: round1(chosen.min),
-    max: round1(chosen.min + chosen.steps * chosen.interval),
-    interval: round1(chosen.interval),
-    gridLines
-  }
-}
-
-/**
  * 日期轴 + 按日对齐的取值；窗口里没有数据的日子是 `null`（缺口就是缺口，不补 0）。
  *
  * 窗口**按实际数据跨度铺满**（首日…最新一天），最多 30 天：攒到 5 个读数时曲线铺满整格，
@@ -347,10 +210,6 @@ function dayLabelIndexes(length: number): Set<number> {
   const indexes = new Set<number>([0, length - 1])
   for (let index = 7; index < length - 2; index += 7) indexes.add(index)
   return indexes
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10
 }
 
 const NICE_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10] as const
