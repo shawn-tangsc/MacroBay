@@ -215,11 +215,6 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
       width = chipWidthFor(label)
       left = placement()
     }
-    // 上一张牌挡着就右移让位：两张牌各自说自己那一向，谁也别压住谁。
-    const previous = clusters.at(-1)
-    if (previous !== undefined && left < previous.left + previous.width + MARKER_CHIP.gap) {
-      left = Math.min(previous.left + previous.width + MARKER_CHIP.gap, VIEW.right - width)
-    }
     const direction = members[0]!.direction
     clusters.push({
       key: members.map(mark => mark.key).join('+'),
@@ -233,6 +228,21 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
       width
     })
     cursor += members.length
+  }
+
+  // 两张牌之间至少留 6px（用户 2026-11-24：混向不再并簇后，两枚牌会挨在一起）。
+  // 先从左往右挤；挤到右边缘还不够就回头把前一张往左让——只在单边挪，贴边的牌就永远挤不开。
+  const laidOut: Cluster[] = []
+  for (const cluster of clusters) {
+    const previous = laidOut.at(-1)
+    const floor = previous === undefined ? cluster.left : previous.left + previous.width + MARKER_CHIP.gap
+    laidOut.push({ ...cluster, left: Math.min(Math.max(cluster.left, floor), VIEW.right - cluster.width) })
+  }
+  for (let index = laidOut.length - 1; index > 0; index -= 1) {
+    const next = laidOut[index]!
+    const previous = laidOut[index - 1]!
+    const limit = next.left - MARKER_CHIP.gap - previous.width
+    if (previous.left > limit) laidOut[index - 1] = { ...previous, left: Math.max(VIEW.left, limit) }
   }
 
   return (
@@ -276,7 +286,7 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
         })}
         {/* 一簇一组：线、点、牌在同一个组里，悬停/聚焦/点哪个都出同一份浮层。
             **不存在只画线的命中**——每条线都在某个带牌的簇里。 */}
-        {clusters.map(cluster => (
+        {laidOut.map(cluster => (
           <Tooltip key={cluster.key} dataText={cluster.summary} resolveText={resolveProductKey}>
             <g className="mi-positioning-panel__hint" data-hint={cluster.asset} data-hint-direction={cluster.direction}
               data-hint-count={cluster.marks.length} tabIndex={0} aria-label={cluster.summary}>

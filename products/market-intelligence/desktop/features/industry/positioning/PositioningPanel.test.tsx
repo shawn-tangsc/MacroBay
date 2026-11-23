@@ -192,14 +192,17 @@ describe('positioning panel', () => {
   })
 
   it('never labels a mixed-direction pair without its directions', () => {
-    // 用户 2026-11-24 的真实形状：22:37 ETH 空头、23:07 ETH 多头，两张牌在窗口里放不下，
-    // 并成一簇后只剩「疑似爆仓 ×2」，多空全丢。这里把两条放到同样的近距离，逼出成簇。
+    // 用户 2026-11-24 的真实形状：24 小时窗口里 22:37 ETH 空头、23:07 ETH 多头（相隔 30 分钟），
+    // 两张牌放不下就并成一簇，只剩「疑似爆仓 ×2」，多空全丢。按同一几何复现：24 小时轴、30 分钟间距。
     const markup = render({
       positioning: {
         ...availablePositioning,
+        window: '24h',
+        btc: [at(1440), at(720), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
+        eth: [at(1440), at(720), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
         hints: [
-          { asset: 'eth', direction: 'short', observedAt: at(56), notionalUsd: 2.4e9, dropPct: -1.9, volumeMultiple: 3.4 },
-          { asset: 'eth', direction: 'long', observedAt: at(60), notionalUsd: 2.4e9, dropPct: -2.2, volumeMultiple: 5.1 }
+          { asset: 'eth', direction: 'short', observedAt: at(30), notionalUsd: 2.4e9, dropPct: -1.9, volumeMultiple: 3.4 },
+          { asset: 'eth', direction: 'long', observedAt: at(0), notionalUsd: 2.41e9, dropPct: -2.2, volumeMultiple: 5.1 }
         ]
       }
     })
@@ -210,6 +213,10 @@ describe('positioning panel', () => {
     expect(markup.split('data-hint-direction="long"').length - 1).toBe(1)
     expect(markup).toContain(text.markShort.replace('{pct}', '-1.9%'))
     expect(markup).toContain(text.markLong.replace('{pct}', '-2.2%'))
+    // 牌不叠：两枚牌之间仍有 6px 的空隙。
+    const placed = [...markup.matchAll(/<rect x="([\d.]+)" y="3" width="([\d.]+)"/g)].map(match => ({ left: Number(match[1]), width: Number(match[2]) }))
+    expect(placed).toHaveLength(2)
+    expect(placed[1]!.left - (placed[0]!.left + placed[0]!.width)).toBeGreaterThanOrEqual(6)
   })
 
   it('draws every hit in the window, not only the newest one', () => {
