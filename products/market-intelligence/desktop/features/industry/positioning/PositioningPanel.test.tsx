@@ -191,6 +191,27 @@ describe('positioning panel', () => {
     act(() => root.unmount())
   })
 
+  it('never labels a mixed-direction pair without its directions', () => {
+    // 用户 2026-11-24 的真实形状：22:37 ETH 空头、23:07 ETH 多头，两张牌在窗口里放不下，
+    // 并成一簇后只剩「疑似爆仓 ×2」，多空全丢。这里把两条放到同样的近距离，逼出成簇。
+    const markup = render({
+      positioning: {
+        ...availablePositioning,
+        hints: [
+          { asset: 'eth', direction: 'short', observedAt: at(56), notionalUsd: 2.4e9, dropPct: -1.9, volumeMultiple: 3.4 },
+          { asset: 'eth', direction: 'long', observedAt: at(60), notionalUsd: 2.4e9, dropPct: -2.2, volumeMultiple: 5.1 }
+        ]
+      }
+    })
+    // 无方向的牌子就是这次判死的东西。
+    expect(markup).not.toContain(text.markMixedMany.replace('{count}', '2'))
+    // 两个方向各出现一次；每簇仍是一组自己那根竖线。
+    expect(markup.split('data-hint-direction="short"').length - 1).toBe(1)
+    expect(markup.split('data-hint-direction="long"').length - 1).toBe(1)
+    expect(markup).toContain(text.markShort.replace('{pct}', '-1.9%'))
+    expect(markup).toContain(text.markLong.replace('{pct}', '-2.2%'))
+  })
+
   it('draws every hit in the window, not only the newest one', () => {
     // 7 天视图画 7 天内的全部命中；只看最新的那条会让旧命中凭空消失。
     const markup = render({
@@ -639,11 +660,13 @@ describe('the mark chips', () => {
     expect(same).toContain('疑似多头爆仓 ×2')
   })
 
-  it('never names a direction on a mixed cluster', () => {
+  it('never makes a cluster out of two directions: each keeps its own chip', () => {
+    // 用户 2026-11-24：混向并簇后只剩「疑似爆仓 ×2」，多空全丢。混向现在根本不并簇。
     const mixed = renderMarks([mark(), mark({ asset: 'eth', direction: 'short', pricePct: 1.8 })])
-    expect(mixed).toContain('疑似爆仓 ×2')
-    expect(mixed).not.toContain('疑似多头爆仓 ×2')
-    expect(mixed).not.toContain('疑似空头爆仓 ×2')
+    expect(mixed).not.toContain('疑似爆仓 ×2')
+    expect(mixed).toContain('疑似多头爆仓 -1.9%')
+    expect(mixed).toContain('疑似空头爆仓 +1.8%')
+    expect(chips(mixed)).toHaveLength(2)
   })
 
   it('keeps the truncation word off the chips: they count marks, the line under the chart counts the rest', () => {

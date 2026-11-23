@@ -163,29 +163,27 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     key: string
     marks: readonly Mark[]
     asset: 'btc' | 'eth'
-    direction: 'long' | 'short' | 'mixed'
+    direction: 'long' | 'short'
     label: string
     summary: string
     left: number
     width: number
   }>
 
-  /** 簇的话：一条说方向 + 价格变化；同向 ≥2 说 ×N；混向不写方向。 */
+  /**
+   * 簇的话：一条说方向 + 价格变化；同向 ≥2 说 ×N。
+   *
+   * **成簇只在同向之内**（用户 2026-11-24）：一簇里混着多空时，牌子写「多头 ×2」会撒谎、
+   * 写「疑似爆仓 ×2」又丢了方向，所以那种簇根本不许出现——见下面的成簇循环。
+   */
   const clusterLabel = (cluster: readonly Mark[]): string => {
     if (cluster.length === 1) {
       const only = cluster[0]!
       return (only.direction === 'long' ? text.markLong : text.markShort).replace('{pct}', only.pct)
     }
-    const sameDirection = cluster.every(mark => mark.direction === cluster[0]!.direction)
-    if (sameDirection) {
-      const template = cluster[0]!.direction === 'long' ? text.markLongMany : text.markShortMany
-      return template.replace('{count}', String(cluster.length))
-    }
-    return text.markMixedMany.replace('{count}', String(cluster.length))
+    const template = cluster[0]!.direction === 'long' ? text.markLongMany : text.markShortMany
+    return template.replace('{count}', String(cluster.length))
   }
-
-  const directionOf = (cluster: readonly Mark[]): 'long' | 'short' | 'mixed' =>
-    cluster.every(mark => mark.direction === cluster[0]!.direction) ? cluster[0]!.direction : 'mixed'
 
   /**
    * 从左到右贪心成簇（界面 2026-11-08）：取最左未分配者起一簇，牌以线居中、到边内收贴边；
@@ -207,6 +205,8 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     // 注意「并进本簇」不是「另起一簇再往左挤」——那会让两枚牌压在一起。
     while (cursor + members.length < marks.length) {
       const next = marks[cursor + members.length]!
+      // 方向不同就到此为止：并进来只剩一句没有方向的话，读者分不清是多头还是空头爆仓。
+      if (next.direction !== members[0]!.direction) break
       const nextWidth = chipWidthFor(clusterLabel([next]))
       const nextLeft = Math.max(VIEW.left, Math.min(next.x - nextWidth / 2, VIEW.right - nextWidth))
       if (nextLeft >= left + width + MARKER_CHIP.gap) break
@@ -215,7 +215,12 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
       width = chipWidthFor(label)
       left = placement()
     }
-    const direction = directionOf(members)
+    // 上一张牌挡着就右移让位：两张牌各自说自己那一向，谁也别压住谁。
+    const previous = clusters.at(-1)
+    if (previous !== undefined && left < previous.left + previous.width + MARKER_CHIP.gap) {
+      left = Math.min(previous.left + previous.width + MARKER_CHIP.gap, VIEW.right - width)
+    }
+    const direction = members[0]!.direction
     clusters.push({
       key: members.map(mark => mark.key).join('+'),
       marks: members,
