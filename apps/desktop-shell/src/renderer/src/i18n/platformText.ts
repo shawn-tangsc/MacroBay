@@ -1329,6 +1329,8 @@ export type PlatformText = {
     centerEmptyHint: string
     centerStaleNotice: string
     centerReload: string
+    /** 点「看原文」这类外链按钮却没打开时的那一句（列表上方的状态行）。 */
+    centerLinkFailed: string
     centerUnknownHint: string
     channelsHeading: string
   }
@@ -2760,6 +2762,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerEmptyHint: '失败与系统问题会出现在这里。',
       centerStaleNotice: '刚才没能刷新，下面是上次读到的内容。',
       centerReload: '重新加载',
+      centerLinkFailed: '这条链接没能打开，稍后再试一次。',
       centerUnknownHint: '批量操作先不可用：通知现在读不到。',
     },
     webSearch: {
@@ -4180,6 +4183,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerEmptyHint: 'Failures and system problems will appear here.',
       centerStaleNotice: 'Could not refresh — showing what was read last time.',
       centerReload: 'Reload',
+      centerLinkFailed: 'That link could not be opened. Try again in a moment.',
       centerUnknownHint: 'Bulk actions are unavailable for now: notifications cannot be read right now.',
     },
     webSearch: {

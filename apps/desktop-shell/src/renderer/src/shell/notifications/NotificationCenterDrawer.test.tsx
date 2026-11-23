@@ -7,7 +7,8 @@ import type { NotificationCenterAction, NotificationCenterItem, NotificationUnre
 
 import { platformText } from '../../i18n/platformText'
 
-import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer, notificationActionTarget } from './NotificationCenterDrawer'
+import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './NotificationCenterDrawer'
+import { notificationActionTarget } from './notificationActionButton'
 import type { NotificationCenterSource } from './notificationCenterSource'
 
 const labels = platformText['zh-CN'].notifications
@@ -293,6 +294,8 @@ describe('通知中心的分组与空态', () => {
     expect(ourLog).toBeDefined()
     // 日志可查，但不许把链接（可能带查询串里的凭据）抄进日志。
     expect(JSON.stringify(ourLog)).not.toContain('https://')
+    // 日志只进 devtools；读者要看到一句话，否则还是「点了没反应」。
+    expect(document.body.querySelector('.notification-center-notice')?.textContent).toBe(labels.centerLinkFailed)
     spy.mockRestore()
   })
 
