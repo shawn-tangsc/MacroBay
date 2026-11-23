@@ -445,7 +445,9 @@ describe('cross-asset observation workspace', () => {
     expect(css).toContain('--mi-cross-asset-gold: var(--mi-dashboard-chart-gold)')
     // The return chart is sized to sit level with the status column, and the plot and empty state
     // must keep consuming the token.
-    expect(css).toContain('--mi-cross-asset-chart-height: 100px')
+    // 窄档（单栏）地板 150：五条线的浮层要 157，栏高 150 + 刻度 30 = 180、可用 164 才装得下；
+    // 同时单栏绘图区约 538 宽，100 那版 538×88 ≈ 6.1:1 把五条归一曲线压成一条带。
+    expect(css).toContain('--mi-cross-asset-chart-height: 150px')
     // 宽档地板沿用既有 116（2026-11-23 定的：不新造数字，行高改了之后块高由行数决定）。
     expect(css).toContain('--mi-cross-asset-chart-height-wide: 116px')
     // The plot's height is the grid row's, not a constant: the status table beside it sets how tall the
