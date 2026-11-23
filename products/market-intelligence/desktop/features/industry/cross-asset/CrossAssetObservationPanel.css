@@ -12,8 +12,8 @@
   --mi-cross-asset-gap: 16px;
   --mi-cross-asset-gap-small: 8px;
   --mi-cross-asset-gap-large: 24px;
-  /* 画布高度按「与左右两栏内容块等高」定标（约 250px 一栏）：
-     图例 20 + 图表 100 + 刻度 30 + 内边距 → 中央栏约 260px。 */
+  /* 图框地板：宽档 116，窄档（单栏）100。这块是**地板**不是高度——现在由行高定块高、图吃剩下的余量，
+     见下面 `@container` 那段注释。数字没有新造，仍是这一对既有值。 */
   --mi-cross-asset-chart-height: 100px;
   --mi-cross-asset-chart-height-wide: 116px;
   /* 空状态与图表共用同一高度，避免加载完成后整块跳动。 */
@@ -57,13 +57,22 @@
 .mi-cross-asset__heading-actions .ant-switch { margin: 0; }
 .mi-cross-asset__chart-actions, .mi-cross-asset__quote-heading, .mi-cross-asset__status { display: flex; align-items: center; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
 /*
- * 左栏的高度由同一行里更高的那一列决定，而表只按内容排：余量全堆在表底下，看起来像一块空白
- * （用户 2026-11-18：「这个表格可以高一点，把现在的高度撑满」「就是每一行」）。
- * 做法：左栏改成列向 flex，表 `flex: 1` 吃掉余量，`table-layout: fixed` 会把多出来的高度
- * **平均分到每一行**；单元格垂直居中，读数落在行的中线上。窄屏单列时没有固定高度，行为不变。
+ * 行的顺序：**行按自己的内边距与行高排，图吃剩下的**（用户 2026-11-23）。
+ *
+ * 2026-11-18 那版相反：左栏列向 flex、表 `flex: 1` 吃余量，`table-layout: fixed` 把多出来的高度
+ * 平均分到每一行——表的行只有四五排时，余量就被摊成每行 70–80px，读者看到的是「每一行都很大」
+ * （用户 2026-11-23 截图：市场状态只剩 4 行，每行被拉开）。所以表不再伸缩：它按内容排，
+ * 左栏仍然撑满整行（右边那条分隔线要到底），余量留在表下方。
+ * 单元格垂直居中，读数落在行的中线上；窄屏单列时没有并排的列，行为不变。
  */
 .mi-cross-asset__quote { display: flex; flex-direction: column; }
+/* 表按自然高度排之后，左栏底部会剩下高度：把那句脚注压到栏底，余量就成了「表与脚注之间的一段空白」，
+   而不是表格下方一块空框；也保证右边那条分隔线仍然到底。 */
+.mi-cross-asset__quote > small { margin-top: auto; }
 .mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }
+/* 行高走应用列表行那一档（ui-rules 速查：列表行 44 单行 / 60 两行）。
+   不用「自然高」：四五行的表自然高只有 29，旁边那张图的地板都比它高，左栏底下会空出一大块。 */
+.mi-cross-asset__status-table tbody tr { height: 44px; }
 .mi-cross-asset__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mi-cross-asset-gap); }
 .mi-cross-asset__body > * { min-width: 0; box-sizing: border-box; }
 .mi-cross-asset__quote > strong { display: inline-block; font-size: 24px; margin: 10px 6px 2px 0; }
@@ -101,8 +110,11 @@
  * legend, and the plot fills the frame — its `preserveAspectRatio="none"` svg stretches with it.
  */
 .mi-cross-asset__chart-frame { display: grid; grid-template-columns: var(--mi-cross-asset-axis-width) minmax(0, 1fr); gap: var(--mi-cross-asset-gap-small); padding-block: 6px; flex: 1; min-height: var(--mi-cross-asset-chart-height); }
+/* `svg` 必须脱离文档流：它在 `viewBox="0 0 1000 200"` 下有自己的内在比例（宽 × 0.2），
+   放在流里会把图框的地板算成「宽 × 0.2 + 内边距」，地板写多少都盖不过它（界面设计 2026-11-23 探到）。
+   所以绘图区定位、svg 绝对铺满：高度只由上层的行高与地板决定。 */
 .mi-cross-asset__plot { position: relative; height: 100%; min-width: 0; }
-.mi-cross-asset__plot svg { width: 100%; height: 100%; overflow: visible; }
+.mi-cross-asset__plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .mi-cross-asset__plot path { fill: none; stroke: var(--asset-color); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .mi-cross-asset__plot [data-forming-line] circle { fill: var(--asset-color); stroke: var(--mi-cross-asset-surface); stroke-width: 1; vector-effect: non-scaling-stroke; }
 /*
@@ -132,26 +144,22 @@
 .mi-cross-asset__tooltip b { margin-left: auto; }
 /* CrossAssetLayoutPolicy thresholds from 123; custom properties cannot be used in container conditions. */
 /*
- * 这一行的高度下限：删掉「日频」段（段头 + 两行）之后表矮了，而右栏那张图的高度**跟着表走**
- * （`[data-cross-asset-region="chart"]` 是 `height: 100%`，图框 `flex: 1` 只有一块地板），
- * 所以不给下限，旁边「同起点收益率」就会被压扁（用户 2026-11-22 原话）。
+ * 高度怎么分：**行高固定 44，整块不再有下限，图吃剩下的余量**（用户 2026-11-23）。
  *
- * 数字是**量出来的**，不是拍的：静态夹具（真实 CSS + 照 `CryptoIntelligenceDashboard` 的 DOM 摆的表与
- * 图框，无头 Chrome 渲染，没起应用也没连 CDP）量到删块前这一行在容器 1280 时 327px、900 时 340px
- * （320 档下日频格那句说明折成两行、把行撑高了），删块后都掉到 231px，图框随之从 230 / 243 掉到 134。
- * 这里取 330 / 342，留 2–3px 余量：宁可高一点也不让它变矮。表那栏是 `flex: 1`，会自己把余量平均分到
- * 每一行——矮掉的只是行数，高度不掉。
- *
- * 窄于 800 是单栏：旁边没有那张图，不写规则。
+ * 2026-11-22 那版给整行加过 342 / 330 的下限，当时按五行算的「保持删块前的高度」；等表里只剩四行，
+ * 四行分 342 就成了每行 80 上下，读者看到的是「每一行被拉得很大」（用户 2026-11-23 截图）。
+ * 所以整行下限撤掉、表不再吃余量（`flex: none`），行高改由列表行档 44 定；图框只留既有那块地板 116。
+ * 整块高度 = max(表高, 图那一栏的最小高度)，四行与五行每行都是 44，差值来自行数而不是拉伸。
+ * 窄于 800 是单栏：没有并排的图，不写规则。
  */
 @container mi-cross-asset (min-width: 800px) {
-  .mi-cross-asset__body { grid-template-columns: var(--mi-cross-asset-quote-medium) minmax(0, 1fr); min-height: 342px; }
-  /* Taller by default here, but the height is the row's: this is a floor, not a ceiling. */
+  .mi-cross-asset__body { grid-template-columns: var(--mi-cross-asset-quote-medium) minmax(0, 1fr); }
+  /* 这块是地板，不是高度：图随行高长（`flex: 1`），但不许被压到看不见走势。 */
   .mi-cross-asset__chart-frame { min-height: var(--mi-cross-asset-chart-height-wide); }
 }
 @container mi-cross-asset (min-width: 1200px) {
   /* Two columns: the 跨市场观察 aside is temporarily unrendered, so there is no third track. */
-  .mi-cross-asset__body { grid-template-columns: minmax(0, var(--mi-cross-asset-quote-wide)) minmax(0, 1fr); min-height: 330px; }
+  .mi-cross-asset__body { grid-template-columns: minmax(0, var(--mi-cross-asset-quote-wide)) minmax(0, 1fr); }
   .mi-cross-asset__quote { border-right: 1px solid var(--mi-cross-asset-line); padding-right: var(--mi-cross-asset-gap); }
 }
 
@@ -163,7 +171,7 @@
    asset column because the rows must line up with their header: letting content size the columns
    made the hint under each name set the width, so the four numeric columns drifted out from under
    their own headings. Numbers never wrap; the name and its hint may. */
-.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; flex: 1 1 auto; }
+.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; flex: none; }
 /* Six columns since the ladder became 15m/1h/4h/24h. Every share is explicit: with equal remaining
    width the four windows came out around 42px and the two-decimal percentages ran together into
    what read as one long number (`+0.09%0.06%0.27%0.43%`), so the name and the level give the four

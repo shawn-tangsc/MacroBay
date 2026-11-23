@@ -666,9 +666,10 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     } finally { await page.unmount() }
   })
 
-  it('lets the status table grow into the column and share the slack across its rows', () => {
-    // 用户 2026-11-18：「这个表格可以高一点，把现在的高度撑满」「就是每一行」。
-    // happy-dom 没有布局，只钉结构规则：左栏是列向 flex、表吃余量、单元格垂直居中。
+  it('keeps the rows at their natural height and leaves the slack above the footnote', () => {
+    // 2026-11-18 那版是「表吃余量、把高度撑满」；2026-11-23 用户看到四行被拉成每行 80 上下之后反过来了：
+    // **行按自然高度排，余量留在脚注上方**。happy-dom 没有布局，这里钉结构规则：
+    // 左栏仍是列向 flex（右栏那条分隔线要到底）、表不再吃余量、脚注被压到栏底、单元格垂直居中。
     const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
     const quoteAt = css.indexOf('.mi-cross-asset__quote {')
     const quoteRule = css.slice(quoteAt, css.indexOf('}', quoteAt))
@@ -676,8 +677,9 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     expect(quoteRule).toContain('flex-direction: column')
     // 并进既有那条表规则（`flex` 与 `table-layout` 同一处，且表规则里仍然不许出现 display）。
     const tableRule = css.match(/\.mi-cross-asset__status-table\s*\{([^}]*)\}/)
-    expect(tableRule?.[1] ?? '').toContain('flex: 1 1 auto')
+    expect(tableRule?.[1] ?? '').toContain('flex: none')
     expect(tableRule?.[1] ?? '').not.toMatch(/display\s*:/)
+    expect(css).toMatch(/\.mi-cross-asset__quote > small \{[^}]*margin-top: auto/)
     expect(css).toContain('.mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }')
   })
 

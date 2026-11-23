@@ -446,6 +446,7 @@ describe('cross-asset observation workspace', () => {
     // The return chart is sized to sit level with the status column, and the plot and empty state
     // must keep consuming the token.
     expect(css).toContain('--mi-cross-asset-chart-height: 100px')
+    // 宽档地板沿用既有 116（2026-11-23 定的：不新造数字，行高改了之后块高由行数决定）。
     expect(css).toContain('--mi-cross-asset-chart-height-wide: 116px')
     // The plot's height is the grid row's, not a constant: the status table beside it sets how tall the
     // row is, and the chart has to end on the same line. The tokens are floors under the frame, so a
@@ -461,14 +462,24 @@ describe('cross-asset observation workspace', () => {
     expect(css).not.toContain('border-top-style: dotted')
     expect(css).toContain('minmax(0, var(--mi-cross-asset-quote-wide))')
     expect(css).toContain('box-sizing: border-box')
-    // 删掉「日频」段之后这一行的高度下限（用户 2026-11-22：别把旁边那张图压扁）。数字是量出来的：
-    // 静态夹具在容器 1280 量到删块前 327、900 量到 340（320 档下那句说明折两行），删块后都掉到 231，
-    // 图框跟着 230/243 → 134。两个下限钉在这里，谁往下调都会红；往下调就等于把图压扁。
-    const wide = css.match(/@container mi-cross-asset \(min-width: 1200px\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
-    const medium = css.match(/@container mi-cross-asset \(min-width: 800px\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
-    expect(medium).toMatch(/\.mi-cross-asset__body \{[^}]*min-height: 342px/)
-    expect(wide).toMatch(/\.mi-cross-asset__body \{[^}]*min-height: 330px/)
-    // 单栏（<800）没有旁边那张图，不给下限：不写规则。
+    // 高度怎么分（用户 2026-11-23：行太高，要矮一点）：**行高固定 44，整行没有下限，图吃剩下的余量**。
+    // 夹具在容器 1164（＝1280 窗口）上量的：
+    //   五行：行高全是 44，表 240.5，整行 280.5，图框 183.5（绘图区 171.5）
+    //   四行：行高全是 44，表 196.5，整行 236.5，图框 139.5（绘图区 127.5）
+    //   三行：行高全是 44，表 152.5，整行 213（图框吃 116 的地板，绘图区 104）
+    // 四行与五行的行高逐行相同（差 0px）——行不再随总高度被拉开；上一版是给整行加 342/330 的下限，
+    // 四行分下来每行 80 上下，才是用户截图的形状。
+    expect(css).not.toMatch(/\.mi-cross-asset__body \{[^}]*min-height/)
+    expect(css).toContain('--mi-cross-asset-chart-height-wide: 116px')
+    expect(css).toMatch(/\.mi-cross-asset__status-table tbody tr \{ height: 44px; \}/)
+    // 表不许吃余量（`flex: 1` 会把行拉松）；余量落在脚注上方，不是表格下方一块空框。
+    expect(css).toMatch(/\.mi-cross-asset__status-table \{[^}]*flex: none/)
+    expect(css).toMatch(/\.mi-cross-asset__quote > small \{[^}]*margin-top: auto/)
+    // 图框地板要能生效：svg 必须脱离文档流，否则它拿 viewBox 的 1000×200 内在比例（宽 × 0.2）
+    // 把地板整个盖过去（界面设计 2026-11-23 探到的那处）。
+    expect(css).toMatch(/\.mi-cross-asset__plot svg \{[^}]*position: absolute;[^}]*inset: 0/)
+    expect(css).toMatch(/\.mi-cross-asset__plot \{[^}]*position: relative/)
+    // 单栏（<800）没有旁边那张图，图框地板仍是 100：不写规则。
     expect(css).not.toMatch(/@container mi-cross-asset \(min-width: 720px\)/)
   })
 
