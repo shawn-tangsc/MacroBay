@@ -221,7 +221,8 @@ export function skewChartOption(input: {
   const values = input.points.map(point => point.riskReversal)
   const low = values.length > 0 ? Math.min(...values) : 0
   const high = values.length > 0 ? Math.max(...values) : 1
-  const fit = fitSkewAxis(low, high)
+  // 1–2 个读数：点不贴轴底、也不贴刻度线（Chief 2026-11-23）；3 个点起维持原来那套刻度。
+  const fit = fitSkewAxis(low, high, input.points.length < CHART_MIN_POINTS)
   return lineChartOption({
     days: input.points.map(point => point.day),
     values,
@@ -248,10 +249,29 @@ export function skewChartOption(input: {
  * 档数因此是**结果**不是约束：小跨度 3 档、宽跨度最多 5 档；间隔取「不超过半个数据跨度」的最大整档，
  * 所以轴跨度最多是数据跨度 + 一个间隔（≤1.5 倍），永远满足 2 倍上限。
  */
-function fitSkewAxis(low: number, high: number): { min: number; max: number; interval: number; gridLines: number[] } {
+function fitSkewAxis(low: number, high: number, sparse = false): { min: number; max: number; interval: number; gridLines: number[] } {
   const dataSpan = high - low
   const span = Math.max(dataSpan, 0.5)
   const epsilon = 1e-9
+  // 少于 3 个读数（攒数阶段）：点不许压在轴底或刻度线上，上下各留半档（界面 2026-11-23 定的公式）。
+  //  2 个读数：间隔 = max(0.2, ceil(跨度 ÷ 2 ÷ 0.2) × 0.2)，轴 = 最小值 − 间隔/2 … 最大值 + 间隔/2。
+  //  1 个读数：间隔 0.4，轴 = 值 − 0.6 … 值 + 0.6，点在正中、离最近刻度 0.2。
+  // 刻度会比整档「错位半档」（7.4 / 8.6 …），这是攒数阶段的样子，不是缺陷；3 个点起走原来的拟合。
+  if (sparse) {
+    const single = Math.abs(dataSpan) < epsilon
+    const interval = single ? 0.4 : Math.max(0.2, Math.ceil(dataSpan / 2 / 0.2 - epsilon) * 0.2)
+    // 1 个读数上下各留 0.6（= 1.5 个间隔），2 个读数上下各留半个间隔。
+    const pad = single ? interval * 1.5 : interval / 2
+    const min = round1(low - pad)
+    const max = round1(high + pad)
+    const steps = Math.max(2, Math.round((max - min) / interval))
+    return {
+      min,
+      max: round1(min + steps * interval),
+      interval: round1(interval),
+      gridLines: Array.from({ length: steps }, (_, index) => round1(min + index * interval))
+    }
+  }
   /** 给定间隔时的对齐结果：下界向下取整到间隔，上界盖住最大值。 */
   const fitWith = (interval: number) => {
     let min = Math.floor(low / interval + epsilon) * interval

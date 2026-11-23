@@ -1716,8 +1716,24 @@ describe('the defensive premium band', () => {
       const ticks = gridLines.length + 1
       expect(yAxis.min).toBeLessThanOrEqual(low)
       expect(yAxis.max).toBeGreaterThanOrEqual(high)
-      expect(yAxis.max - yAxis.min).toBeLessThanOrEqual(span * 2 + 1e-9)
-      expect(yAxis.interval).toBeLessThanOrEqual(span / 2 + 1e-9)
+      // 1–2 个读数走攒数阶段的固定窗（上下各留半档，间隔向上取到 0.2 的倍数，可能略超半跨度），
+      // 「轴 ≤ 2 倍跨度 / 间隔 ≤ 半跨度」只对 3 个点起成立。
+      if (values.length > 2) {
+        expect(yAxis.max - yAxis.min).toBeLessThanOrEqual(span * 2 + 1e-9)
+        expect(yAxis.interval).toBeLessThanOrEqual(span / 2 + 1e-9)
+      } else {
+        // 上界仍要盖住数据、下界仍要在下面：点落在框里，不压在轴上。
+        expect(yAxis.min).toBeLessThan(low)
+        expect(yAxis.max).toBeGreaterThan(high)
+      }
+      // 少于 3 个读数：点不许压在轴底/轴顶，也不许正好落在任何一条刻度线上（用户 2026-11-23）。
+      if (values.length < 3) {
+        for (const value of values) {
+          expect(Math.abs(value - yAxis.min)).toBeGreaterThan(1e-6)
+          expect(Math.abs(value - yAxis.max)).toBeGreaterThan(1e-6)
+          for (const line of gridLines) expect(Math.abs(value - line)).toBeGreaterThan(1e-6)
+        }
+      }
       // 档数封顶 4，横虚线 = 档数 − 1（最上面那条边不画），而且线只落在刻度上。
       expect(ticks).toBeLessThanOrEqual(4)
       expect((option.yAxis as { splitLine: { show: boolean } }).splitLine.show).toBe(false)
@@ -1725,6 +1741,34 @@ describe('the defensive premium band', () => {
         expect(Math.abs(((line - yAxis.min) / yAxis.interval) - Math.round((line - yAxis.min) / yAxis.interval))).toBeLessThan(1e-6)
       }
     }
+  })
+
+  it('leaves half a tick of air around one or two readings, and leaves 3+ tick patterns alone', () => {
+    const seriesOf = (values: number[]) => values.map((riskReversal, index) => ({
+      day: new Date(Date.parse('2026-11-22T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10),
+      observedAt: '2026-11-22T00:00:00.000Z',
+      riskReversal
+    }))
+    const fitOf = (values: number[]) => {
+      const option = skewChartOption({ points: seriesOf(values), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      const y = option.yAxis as { min: number; max: number; interval: number }
+      const lines = (option.series as Array<{ markLine?: { data: Array<{ yAxis: number }> } }>)[0]!.markLine!.data.map(entry => entry.yAxis)
+      return { y, lines }
+    }
+    // 2 个读数（8.0 / 10.4）：间隔 = 跨度 ÷ 2 向上取到 0.2 的倍数 = 1.2，轴 7.4–11.0；
+    // 两个点各离最近刻度 0.6，最下面那个点离轴底也是 0.6——不再压在 8 那条线上（用户 2026-11-23）。
+    const two = fitOf([8.0, 10.4])
+    expect(two.y).toMatchObject({ min: 7.4, max: 11, interval: 1.2 })
+    expect(two.lines).toEqual([7.4, 8.6, 9.8])
+    // 1 个读数：间隔 0.4、轴 = 值 ∓0.6，点在正中、离最近刻度 0.2。
+    const one = fitOf([13.2])
+    expect(one.y).toMatchObject({ min: 12.6, max: 13.8, interval: 0.4 })
+    expect(one.lines).toEqual([12.6, 13, 13.4])
+
+    // 3 个点起一个数都不许动：满窗 11.8–15.0 仍是 11.6 / 12.8 / 14 / 15.2 四档三条虚线。
+    const full = fitOf(Array.from({ length: 30 }, (_, index) => 11.8 + (15 - 11.8) * index / 29))
+    expect(full.y).toMatchObject({ min: 11.6, max: 15.2, interval: 1.2 })
+    expect(full.lines).toEqual([11.6, 12.8, 14])
   })
 
   it('keeps the 5-reading skew curve tall: 12.8–13.2 gets an axis no wider than 1.0', () => {
