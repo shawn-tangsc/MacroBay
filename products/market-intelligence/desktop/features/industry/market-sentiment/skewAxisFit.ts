@@ -23,18 +23,32 @@ export function fitSkewAxis(low: number, high: number, sparse = false): { min: n
   // 刻度会比整档「错位半档」（7.4 / 8.6 …），这是攒数阶段的样子，不是缺陷；3 个点起走原来的拟合。
   if (sparse) {
     const single = Math.abs(dataSpan) < epsilon
-    const interval = single ? 0.4 : Math.max(0.2, Math.ceil(dataSpan / 2 / 0.2 - epsilon) * 0.2)
-    // 1 个读数上下各留 0.6（= 1.5 个间隔），2 个读数上下各留半个间隔。
-    const pad = single ? interval * 1.5 : interval / 2
-    const min = round1(low - pad)
-    const max = round1(high + pad)
-    const steps = Math.max(2, Math.round((max - min) / interval))
-    return {
-      min,
-      max: round1(min + steps * interval),
-      interval: round1(interval),
-      gridLines: Array.from({ length: steps }, (_, index) => round1(min + index * interval))
+    let interval = single ? 0.4 : Math.max(0.2, Math.ceil(dataSpan / 2 / 0.2 - epsilon) * 0.2)
+    // 点离最近刻度至少 0.25 个间隔（界面 2026-11-23）：跨度正好是 1.5 个间隔时，高点会正好落在最后
+    // 一条刻度线上（跨度 0.3 → 间隔 0.2，或跨度 0.6 → 间隔 0.4，`Math.round(2.5)` 恒取 3）。
+    // 撞上就把间隔加一档再算，最多试 20 档；真撞了也不把点画在线上。
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      // 1 个读数上下各留 0.6（= 1.5 个间隔），2 个读数上下各留半个间隔。
+      const pad = single ? interval * 1.5 : interval / 2
+      const min = round1(low - pad)
+      const max = round1(high + pad)
+      const steps = Math.max(2, Math.round((max - min) / interval))
+      const clear = [low, high].every((value) => {
+        const position = (value - min) / interval
+        const nearest = Math.round(position)
+        return position > epsilon && position < steps - epsilon && Math.abs(position - nearest) >= 0.25 - epsilon
+      })
+      if (clear) {
+        return {
+          min,
+          max: round1(min + steps * interval),
+          interval: round1(interval),
+          gridLines: Array.from({ length: steps }, (_, index) => round1(min + index * interval))
+        }
+      }
+      interval = round1(interval + 0.2)
     }
+    throw new Error('skew axis: could not keep readings off the tick lines')
   }
   /** 给定间隔时的对齐结果：下界向下取整到间隔，上界盖住最大值。 */
   const fitWith = (interval: number) => {

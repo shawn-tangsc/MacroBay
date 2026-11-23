@@ -1765,6 +1765,18 @@ describe('the defensive premium band', () => {
     expect(one.y).toMatchObject({ min: 12.6, max: 13.8, interval: 0.4 })
     expect(one.lines).toEqual([12.6, 13, 13.4])
 
+    // 边界：跨度正好 1.5 个间隔时，高点会落在最后一条刻度线上（跨度 0.3 / 0.6，`Math.round(2.5)` 恒取 3）。
+    // 撞上就把间隔加一档，点退到两线之间、离最近刻度 0.25 个间隔（界面 2026-11-23 指出的边界）。
+    for (const [low, high] of [[13.0, 13.3], [13.0, 13.6]]) {
+      const edge = fitOf([low, high])
+      for (const value of [low, high]) {
+        expect(Math.abs(value - edge.y.min)).toBeGreaterThan(1e-6)
+        for (const line of edge.lines) expect(Math.abs(value - line)).toBeGreaterThan(1e-6)
+        const position = (value - edge.y.min) / edge.y.interval
+        expect(Math.abs(position - Math.round(position))).toBeGreaterThanOrEqual(0.25 - 1e-9)
+      }
+    }
+
     // 3 个点起一个数都不许动：满窗 11.8–15.0 仍是 11.6 / 12.8 / 14 / 15.2 四档三条虚线。
     const full = fitOf(Array.from({ length: 30 }, (_, index) => 11.8 + (15 - 11.8) * index / 29))
     expect(full.y).toMatchObject({ min: 11.6, max: 15.2, interval: 1.2 })
