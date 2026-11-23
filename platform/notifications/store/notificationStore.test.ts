@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { NotificationRequest } from '../contracts/notificationContracts'
 import {
   acknowledgeNotification,
+  normalizeNotificationRecord,
   createNotificationFromRequest,
   dismissNotification,
   expireDueNotifications,
@@ -43,6 +44,84 @@ describe('rendered-only records survive a round trip (two-shape contract)', () =
     expect(once.records).toHaveLength(1)
     const twice = normalizeNotificationStoreState(JSON.parse(JSON.stringify(once)))
     expect(twice.records).toHaveLength(1)
+  })
+})
+
+describe('归一化：写进去的契约字段必须读得回来', () => {
+  /**
+   * 真实事故（2026-11-24 架构师核出）：`normalizeNotificationRecord` 逐字段重建记录，`edition`、
+   * `editionPoster`、`appliedLevels` 三个契约字段没被复制。每次启动「读 → 归一化 → 回写」就把它们
+   * 静默抹掉：新记录重启后又变成「没有 edition」，不进中心的事件重新算成进中心，海报重投永远报版次不符。
+   *
+   * 这条按「整份契约」判，不逐个列名字——将来契约加字段、归一化忘了抄，它一样红。
+   */
+  const FULL = {
+    id: 'notification-edition-1',
+    owner: 'product' as const,
+    productId: 'market-intelligence',
+    sourceId: 'market-intelligence.briefing.ready',
+    eventTypeId: 'market-intelligence.briefing.ready',
+    mergedEventTypes: ['market-intelligence.briefing.ready'],
+    delivery: { push: { state: 'sent-accepted' as const, messageId: 'm-1' } },
+    rendered: { 'en-US': { title: 'Daily brief is ready', body: 'The edition is ready', reason: 'You subscribed.' } },
+    titleParams: { count: 1 },
+    bodyKey: 'notification.taskFailed.body' as never,
+    bodyParams: { count: 1 },
+    reasonKey: 'notification.taskFailed.body' as never,
+    reasonParams: { count: 1 },
+    appliedLevels: ['center', 'desktop', 'channel'] as const,
+    severity: 'info' as const,
+    priority: 'normal' as const,
+    channels: ['center' as const, 'desktop' as const],
+    state: 'unread' as const,
+    deeplink: { scope: 'product' as const, productId: 'market-intelligence', pageId: 'daily-briefing' },
+    actions: [{ id: 'open-briefing', kind: 'open' as const, labelRef: { scope: 'platform' as const, key: 'k' } as never }],
+    dedupeKey: 'brief-done:2026-11-23:zh-CN',
+    correlationId: 'corr-1',
+    safeMetadata: { note: 'ok' },
+    edition: { editionId: '2026-11-23:en-US:period_1', locale: 'en-US' },
+    editionPoster: { contentHash: '1cb80bea36d77b1d' },
+    occurrenceCount: 2,
+    collapsedCount: 3,
+    createdAt: '2026-11-23T12:01:04.228Z',
+    updatedAt: '2026-11-23T12:01:04.228Z',
+    readAt: '2026-11-23T13:00:00.000Z',
+    acknowledgedAt: '2026-11-23T13:00:00.000Z',
+    dismissedAt: '2026-11-23T13:10:00.000Z',
+    snoozedUntil: '2026-11-23T14:00:00.000Z',
+    expiresAt: '2026-12-23T12:01:04.228Z'
+  }
+
+  it('契约里每个字段都留在归一化结果里（新增字段忘了抄 → 这条红）', () => {
+    const normalized = normalizeNotificationRecord(FULL)
+    expect(normalized).not.toBeNull()
+    const missing = Object.keys(FULL).filter((key) => !(key in (normalized as object)))
+    expect(missing).toEqual([])
+  })
+
+  it('三个真丢过的字段按原值回来', () => {
+    const normalized = normalizeNotificationRecord(FULL)!
+    expect(normalized.edition).toEqual({ editionId: '2026-11-23:en-US:period_1', locale: 'en-US' })
+    expect(normalized.editionPoster).toEqual({ contentHash: '1cb80bea36d77b1d' })
+    expect(normalized.appliedLevels).toEqual(['center', 'desktop', 'channel'])
+  })
+
+  it('认不出的值整项丢掉，不返回半截脏数据', () => {
+    const normalized = normalizeNotificationRecord({
+      ...FULL,
+      appliedLevels: ['center', 'nonsense'],
+      edition: { editionId: '   ', locale: 'zh-CN' },
+      editionPoster: { contentHash: '' }
+    })!
+    expect(normalized.appliedLevels).toEqual(['center'])
+    expect(normalized.edition).toBeUndefined()
+    expect(normalized.editionPoster).toBeUndefined()
+  })
+
+  it('appliedLevels 一项都不剩时按「不知道」处理，不返回空数组', () => {
+    // 空数组的意思是「哪一档都没排上」，与「老记录没有这一项」是两件事，读侧的推断只认后者。
+    const normalized = normalizeNotificationRecord({ ...FULL, appliedLevels: ['nonsense'] })!
+    expect(normalized.appliedLevels).toBeUndefined()
   })
 })
 

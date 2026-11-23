@@ -1,10 +1,16 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import {
+  normalizeAppliedLevels,
+  normalizeEdition,
+  normalizeEditionPoster
+} from './notificationRecordFields'
 import type { NotificationCopyParam, NotificationCopyParamRef } from '../contracts/notificationCopyPort'
 import type { NotificationCopyNumber } from '../contracts/notificationNumberFormat'
 import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
   SEVERITY_RANK,
+  type NotificationApprovedLevel,
   type NotificationChannel,
   type NotificationContentByLanguage,
   type NotificationDeliveryState,
@@ -102,6 +108,18 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
     state: normalizeState(candidate.state),
     deeplink: candidate.deeplink,
     actions: Array.isArray(candidate.actions) ? candidate.actions : [],
+    // 契约字段**写进去就必须读得回来**：白名单不是可选清单。这三个漏过一次——
+    // `edition` 丢了新记录重启后又变成「没有 edition」，`appliedLevels` 丢了会把「不进中心」
+    // 的事件重新算成进中心，`editionPoster` 丢了让手动补图/重投永远报版次不符。
+    ...(normalizeAppliedLevels(candidate.appliedLevels) === undefined
+      ? {}
+      : { appliedLevels: normalizeAppliedLevels(candidate.appliedLevels) }),
+    ...(normalizeEdition(candidate.edition) === undefined
+      ? {}
+      : { edition: normalizeEdition(candidate.edition) }),
+    ...(normalizeEditionPoster(candidate.editionPoster) === undefined
+      ? {}
+      : { editionPoster: normalizeEditionPoster(candidate.editionPoster) }),
     dedupeKey: candidate.dedupeKey ? String(candidate.dedupeKey) : undefined,
     correlationId: candidate.correlationId ? String(candidate.correlationId) : undefined,
     safeMetadata:
