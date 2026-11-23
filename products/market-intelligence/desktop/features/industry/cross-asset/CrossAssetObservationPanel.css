@@ -109,6 +109,15 @@
  * stretches to the grid row (the table's height), the chart takes what is left after its own toolbar and
  * legend, and the plot fills the frame — its `preserveAspectRatio="none"` svg stretches with it.
  */
+/*
+ * 图框 + 刻度是一栏（浮层的定位与高度都以它为准）。
+ *
+ * 浮层原来挂在 `.mi-cross-asset__plot` 上，`max-height: calc(100% - 16px)` 量的是**绘图区**：
+ * 行高改 44 之后绘图区只有 104–171，而五条线的浮层要 140 出头，五行裁 3、四行裁 25、三行裁 27，
+ * 还长出一条滚动条（用户 2026-11-23 真机，悬停是这张图唯一的读数出口）。
+ * 挂到这一栏上、仍然保持 `flex: 1`，图框照旧吃余量，浮层可以压到刻度那一行，但不越过图例。
+ */
+.mi-cross-asset__chart-area { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .mi-cross-asset__chart-frame { display: grid; grid-template-columns: var(--mi-cross-asset-axis-width) minmax(0, 1fr); gap: var(--mi-cross-asset-gap-small); padding-block: 6px; flex: 1; min-height: var(--mi-cross-asset-chart-height); }
 /* `svg` 必须脱离文档流：它在 `viewBox="0 0 1000 200"` 下有自己的内在比例（宽 × 0.2），
    放在流里会把图框的地板算成「宽 × 0.2 + 内边距」，地板写多少都盖不过它（界面设计 2026-11-23 探到）。
@@ -138,6 +147,7 @@
 .mi-cross-asset__ticks { position: relative; min-height: 3em; margin-left: calc(var(--mi-cross-asset-axis-width) + var(--mi-cross-asset-gap-small)); color: var(--mi-cross-asset-muted); font-size: 10px; }
 .mi-cross-asset__ticks time { position: absolute; box-sizing: border-box; width: calc(100% / var(--mi-cross-asset-tick-count)); overflow-wrap: anywhere; }
 .mi-cross-asset__crosshair { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--mi-cross-asset-muted); pointer-events: none; }
+/* `100%` 是 `.mi-cross-asset__chart-area`（图框 + 刻度）的高度，不是绘图区：见上面那条注释。 */
 .mi-cross-asset__tooltip { position: absolute; box-sizing: border-box; width: var(--mi-cross-asset-tooltip-width); max-width: calc(100% - var(--mi-cross-asset-tooltip-inset) - var(--mi-cross-asset-tooltip-inset)); max-height: calc(100% - var(--mi-cross-asset-tooltip-inset) - var(--mi-cross-asset-tooltip-inset)); overflow: auto; padding: 9px; border: 1px solid var(--mi-cross-asset-line); background: var(--mi-cross-asset-surface); z-index: 2; font-size: 11px; pointer-events: none; }
 .mi-cross-asset__tooltip time { display: block; margin-bottom: 6px; overflow-wrap: anywhere; }
 .mi-cross-asset__tooltip span { display: flex; align-items: center; gap: 6px; padding-block: 3px; }

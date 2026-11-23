@@ -481,6 +481,11 @@ describe('cross-asset observation workspace', () => {
     expect(css).toMatch(/\.mi-cross-asset__plot \{[^}]*position: relative/)
     // 单栏（<800）没有旁边那张图，图框地板仍是 100：不写规则。
     expect(css).not.toMatch(/@container mi-cross-asset \(min-width: 720px\)/)
+    // 浮层按**图框 + 刻度**这一栏定位与限高，不按绘图区（用户 2026-11-23：五行裁 3、四行 25、三行 27）。
+    // 那一栏必须自己成定位祖先并且继续吃余量，否则 `max-height: 100%` 又落回绘图区。
+    expect(css).toMatch(/\.mi-cross-asset__chart-area \{[^}]*position: relative/)
+    expect(css).toMatch(/\.mi-cross-asset__chart-area \{[^}]*flex: 1/)
+    expect(css).toContain('max-height: calc(100% - var(--mi-cross-asset-tooltip-inset) - var(--mi-cross-asset-tooltip-inset))')
   })
 
   it('withholds the reading lines without deleting the copy they are written from', async () => {
