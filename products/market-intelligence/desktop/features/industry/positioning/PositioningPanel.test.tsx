@@ -191,9 +191,9 @@ describe('positioning panel', () => {
     act(() => root.unmount())
   })
 
-  it('never labels a mixed-direction pair without its directions', () => {
-    // 用户 2026-11-24 的真实形状：24 小时窗口里 22:37 ETH 空头、23:07 ETH 多头（相隔 30 分钟），
-    // 两张牌放不下就并成一簇，只剩「疑似爆仓 ×2」，多空全丢。按同一几何复现：24 小时轴、30 分钟间距。
+  it('draws one chip with one line per direction, in time order, for a mixed cluster', () => {
+    // 用户 2026-11-24 + 界面设计定稿：混向一簇 = 一个牌框 + 两行字，各带自己的方向；
+    // 24 小时轴、相隔 30 分钟（22:37 空头 +1.8%，23:07 多头 −2.5%）。
     const markup = render({
       positioning: {
         ...availablePositioning,
@@ -201,22 +201,30 @@ describe('positioning panel', () => {
         btc: [at(1440), at(720), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
         eth: [at(1440), at(720), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
         hints: [
-          { asset: 'eth', direction: 'short', observedAt: at(30), notionalUsd: 2.4e9, dropPct: -1.9, volumeMultiple: 3.4 },
-          { asset: 'eth', direction: 'long', observedAt: at(0), notionalUsd: 2.41e9, dropPct: -2.2, volumeMultiple: 5.1 }
+          { asset: 'eth', direction: 'short', observedAt: at(30), notionalUsd: 2.4e9, dropPct: -1.9, pricePct: 1.8, volumeMultiple: 3.4 },
+          { asset: 'eth', direction: 'long', observedAt: at(0), notionalUsd: 2.41e9, dropPct: -2.2, pricePct: -2.5, volumeMultiple: 5.1 }
         ]
       }
     })
-    // 无方向的牌子就是这次判死的东西。
-    expect(markup).not.toContain(text.markMixedMany.replace('{count}', '2'))
-    // 两个方向各出现一次；每簇仍是一组自己那根竖线。
-    expect(markup.split('data-hint-direction="short"').length - 1).toBe(1)
-    expect(markup.split('data-hint-direction="long"').length - 1).toBe(1)
-    expect(markup).toContain(text.markShort.replace('{pct}', '-1.9%'))
-    expect(markup).toContain(text.markLong.replace('{pct}', '-2.2%'))
-    // 牌不叠：两枚牌之间仍有 6px 的空隙。
-    const placed = [...markup.matchAll(/<rect x="([\d.]+)" y="3" width="([\d.]+)"/g)].map(match => ({ left: Number(match[1]), width: Number(match[2]) }))
-    expect(placed).toHaveLength(2)
-    expect(placed[1]!.left - (placed[0]!.left + placed[0]!.width)).toBeGreaterThanOrEqual(6)
+    const doc = new DOMParser().parseFromString(markup, 'text/html')
+    const groups = [...doc.querySelectorAll('[data-hint]')]
+    expect(groups).toHaveLength(1)
+    // 牌框与竖线仍中性：混向那一档不变。
+    expect(groups[0]!.getAttribute('data-hint-direction')).toBe('mixed')
+    const lines = [...groups[0]!.querySelectorAll('.mi-positioning-panel__hint-chip text')]
+    // 行序 = 该方向最早一次命中的先后：22:37 空头在上，23:07 多头在下。
+    expect(lines.map(node => node.textContent)).toEqual([
+      text.markShort.replace('{pct}', '+1.8%'),
+      text.markLong.replace('{pct}', '-2.5%')
+    ])
+    expect(lines.map(node => node.getAttribute('data-line-direction'))).toEqual(['short', 'long'])
+    expect(groups[0]!.getAttribute('aria-label')).toContain(text.markShort.replace('{pct}', '+1.8%'))
+    expect(groups[0]!.getAttribute('aria-label')).toContain(text.markLong.replace('{pct}', '-2.5%'))
+    // 每条命中仍留自己那根竖线与那个点。
+    expect(groups[0]!.querySelectorAll('line')).toHaveLength(2)
+    expect(groups[0]!.querySelectorAll('circle')).toHaveLength(2)
+    // 那个没有方向的名字不许回来。
+    expect(markup).not.toContain('疑似爆仓 ×')
   })
 
   it('draws every hit in the window, not only the newest one', () => {
@@ -610,8 +618,8 @@ describe('the mark chips', () => {
   })
   const renderMarks = (hints: readonly ReturnType<typeof mark>[]) =>
     render({ positioning: { ...availablePositioning, hints, hiddenHits: 0 } })
-  const chips = (markup: string) => [...markup.matchAll(/<rect x="([\d.]+)" y="3" width="([\d.]+)"/g)]
-    .map(match => ({ left: Number(match[1]), width: Number(match[2]) }))
+  const chips = (markup: string) => [...markup.matchAll(/<rect x="([\d.]+)" y="(\d+)" width="([\d.]+)" height="(\d+)"/g)]
+    .map(match => ({ left: Number(match[1]), top: Number(match[2]), width: Number(match[3]), height: Number(match[4]) }))
     .sort((first, second) => first.left - second.left)
 
   it('never draws a line without a chip, and never a chip without a line', () => {
@@ -665,15 +673,6 @@ describe('the mark chips', () => {
     // 同一刻两资产同向：牌放不下（< 6px），并成一簇，只写 ×2。
     const same = renderMarks([mark(), mark({ asset: 'eth' })])
     expect(same).toContain('疑似多头爆仓 ×2')
-  })
-
-  it('never makes a cluster out of two directions: each keeps its own chip', () => {
-    // 用户 2026-11-24：混向并簇后只剩「疑似爆仓 ×2」，多空全丢。混向现在根本不并簇。
-    const mixed = renderMarks([mark(), mark({ asset: 'eth', direction: 'short', pricePct: 1.8 })])
-    expect(mixed).not.toContain('疑似爆仓 ×2')
-    expect(mixed).toContain('疑似多头爆仓 -1.9%')
-    expect(mixed).toContain('疑似空头爆仓 +1.8%')
-    expect(chips(mixed)).toHaveLength(2)
   })
 
   it('keeps the truncation word off the chips: they count marks, the line under the chart counts the rest', () => {

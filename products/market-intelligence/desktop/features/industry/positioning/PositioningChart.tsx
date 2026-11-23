@@ -13,12 +13,12 @@ import {
   type DashboardPositioningViewState
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 import { axisTicks } from './positioningAxisTicks'
+import { MARKER_CHIP, POSITIONING_CHART_VIEW, layoutLiquidationMarks } from './positioningLiquidationMarkers'
 
 import type { PositioningPanelText } from './positioningText'
 
-const VIEW = Object.freeze({ width: 1000, height: 186, left: 32, right: 992, markerTop: 3, markerRow: 16, upperTop: 26, upperBottom: 92, zero: 142 })
-/** 标记牌：13 高、贴图上方那条带里，下缘正好是 `markerRow`——竖线从牌子底下开始，不穿牌。 */
-const MARKER_CHIP = Object.freeze({ height: 13, baseline: 12, radius: 4, gap: 6 })
+/** 几何归 `positioningLiquidationMarkers`：牌带两行、车道与基线都从那张表取，避免两处各改各的。 */
+const VIEW = POSITIONING_CHART_VIEW
 
 /**
  * 没有可画的读数时的图框：保留两条车道标签与两条基准线（上车道底线、费率零线）。
@@ -137,113 +137,8 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     })
   }
 
-  // 点上画**当前窗口内的全部命中**（账本），每格一个：点与牌子同源、与通知不同源。
-  // 7 天视图就画 7 天内所有命中，不再固定只画「现在那一条」——那条只在 24 小时视图下才等于全部。
-  const marks = positioning.hints
-    .map(hint => {
-      const markMs = Date.parse(hint.observedAt)
-      if (!(markMs >= startMs && markMs <= endMs)) return undefined
-      return {
-        key: `${hint.asset}-${hint.observedAt}`,
-        asset: hint.asset,
-        direction: hint.direction,
-        x: x(markMs),
-        y: upperY(hint.notionalUsd, hint.asset === 'btc' ? btcScale : ethScale),
-        pct: formatDashboardChange(hint.pricePct ?? hint.dropPct),
-        volumeMultiple: hint.volumeMultiple
-      }
-    })
-    .filter((entry): entry is {
-      key: string; asset: 'btc' | 'eth'; direction: 'long' | 'short'; x: number; y: number; pct: string; volumeMultiple: number
-    } => entry !== undefined)
-    .sort((left, right) => left.x - right.x)
-
-  type Mark = (typeof marks)[number]
-  type Cluster = Readonly<{
-    key: string
-    marks: readonly Mark[]
-    asset: 'btc' | 'eth'
-    direction: 'long' | 'short'
-    label: string
-    summary: string
-    left: number
-    width: number
-  }>
-
-  /**
-   * 簇的话：一条说方向 + 价格变化；同向 ≥2 说 ×N。
-   *
-   * **成簇只在同向之内**（用户 2026-11-24）：一簇里混着多空时，牌子写「多头 ×2」会撒谎、
-   * 写「疑似爆仓 ×2」又丢了方向，所以那种簇根本不许出现——见下面的成簇循环。
-   */
-  const clusterLabel = (cluster: readonly Mark[]): string => {
-    if (cluster.length === 1) {
-      const only = cluster[0]!
-      return (only.direction === 'long' ? text.markLong : text.markShort).replace('{pct}', only.pct)
-    }
-    const template = cluster[0]!.direction === 'long' ? text.markLongMany : text.markShortMany
-    return template.replace('{count}', String(cluster.length))
-  }
-
-  /**
-   * 从左到右贪心成簇（界面 2026-11-08）：取最左未分配者起一簇，牌以线居中、到边内收贴边；
-   * 若牌与上一张右缘不足 `MARKER_CHIP.gap`，就把下一条并进来重算文字再试——放得下就收簇。
-   * 线不动：并簇只改**文字与牌位**，每条命中仍留自己那根竖线。
-   */
-  const clusters: Cluster[] = []
-  let cursor = 0
-  while (cursor < marks.length) {
-    let members: Mark[] = [marks[cursor]!]
-    let label = clusterLabel(members)
-    let width = chipWidthFor(label)
-    const placement = (): number => {
-      const center = (members[0]!.x + members.at(-1)!.x) / 2
-      return Math.max(VIEW.left, Math.min(center - width / 2, VIEW.right - width))
-    }
-    let left = placement()
-    // 试放下一条：它自己那张牌若与**本簇**的牌右缘不足 6px，就并进来重算，再试下一条。
-    // 注意「并进本簇」不是「另起一簇再往左挤」——那会让两枚牌压在一起。
-    while (cursor + members.length < marks.length) {
-      const next = marks[cursor + members.length]!
-      // 方向不同就到此为止：并进来只剩一句没有方向的话，读者分不清是多头还是空头爆仓。
-      if (next.direction !== members[0]!.direction) break
-      const nextWidth = chipWidthFor(clusterLabel([next]))
-      const nextLeft = Math.max(VIEW.left, Math.min(next.x - nextWidth / 2, VIEW.right - nextWidth))
-      if (nextLeft >= left + width + MARKER_CHIP.gap) break
-      members = [...members, next]
-      label = clusterLabel(members)
-      width = chipWidthFor(label)
-      left = placement()
-    }
-    const direction = members[0]!.direction
-    clusters.push({
-      key: members.map(mark => mark.key).join('+'),
-      marks: members,
-      asset: members[0]!.asset,
-      direction,
-      label,
-      // 浮层与牌同一句话，单个再加一句量；成簇时量各不相同，不编一个数出来。
-      summary: members.length === 1 ? `${label} · ${members[0]!.volumeMultiple.toFixed(1)}×` : label,
-      left,
-      width
-    })
-    cursor += members.length
-  }
-
-  // 两张牌之间至少留 6px（用户 2026-11-24：混向不再并簇后，两枚牌会挨在一起）。
-  // 先从左往右挤；挤到右边缘还不够就回头把前一张往左让——只在单边挪，贴边的牌就永远挤不开。
-  const laidOut: Cluster[] = []
-  for (const cluster of clusters) {
-    const previous = laidOut.at(-1)
-    const floor = previous === undefined ? cluster.left : previous.left + previous.width + MARKER_CHIP.gap
-    laidOut.push({ ...cluster, left: Math.min(Math.max(cluster.left, floor), VIEW.right - cluster.width) })
-  }
-  for (let index = laidOut.length - 1; index > 0; index -= 1) {
-    const next = laidOut[index]!
-    const previous = laidOut[index - 1]!
-    const limit = next.left - MARKER_CHIP.gap - previous.width
-    if (previous.left > limit) laidOut[index - 1] = { ...previous, left: Math.max(VIEW.left, limit) }
-  }
+  // 牌与线同一个来源：成簇、分行、丢牌全在共享排布里算（界面设计 2026-11-24 的三条硬规则）。
+  const chips = layoutLiquidationMarks(positioning, text)
 
   return (
     <div className="mi-positioning-panel__chart">
@@ -285,22 +180,28 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
           )
         })}
         {/* 一簇一组：线、点、牌在同一个组里，悬停/聚焦/点哪个都出同一份浮层。
-            **不存在只画线的命中**——每条线都在某个带牌的簇里。 */}
-        {laidOut.map(cluster => (
-          <Tooltip key={cluster.key} dataText={cluster.summary} resolveText={resolveProductKey}>
-            <g className="mi-positioning-panel__hint" data-hint={cluster.asset} data-hint-direction={cluster.direction}
-              data-hint-count={cluster.marks.length} tabIndex={0} aria-label={cluster.summary}>
-              {cluster.marks.map(mark => (
+            **不存在只画线的命中**——每条线都在某个带牌的簇里；两行都放不下的簇连牌带线一起不画，
+            数量由面板那句「图上还有 N 次」统一记账。 */}
+        {chips.map(chip => (
+          <Tooltip key={chip.key} dataText={chip.summary} resolveText={resolveProductKey}>
+            <g className="mi-positioning-panel__hint" data-hint={chip.asset} data-hint-direction={chip.direction}
+              data-hint-count={chip.marks.length} tabIndex={0} aria-label={chip.summary}>
+              {chip.marks.map(mark => (
                 <g key={mark.key}>
                   <line x1={mark.x} x2={mark.x} y1={VIEW.markerRow} y2={VIEW.height - 10} />
-                  <circle cx={mark.x} cy={mark.y} r="3" />
+                  <circle cx={mark.x} cy={upperY(mark.notionalUsd, mark.asset === 'btc' ? btcScale : ethScale)} r="3" />
                 </g>
               ))}
               <g className="mi-positioning-panel__hint-chip">
-                <rect x={cluster.left} y={VIEW.markerTop} width={cluster.width}
-                  height={MARKER_CHIP.height} rx={MARKER_CHIP.radius} />
-                <text x={cluster.left + cluster.width / 2} y={VIEW.markerTop + MARKER_CHIP.baseline}
-                  textAnchor="middle">{cluster.label}</text>
+                <rect x={chip.left} y={chip.top} width={chip.width}
+                  height={chip.height} rx={MARKER_CHIP.radius} />
+                {/* 一行一个字（方向），颜色按 `data-line-direction` 落在每一行上；牌框仍中性。 */}
+                {chip.lines.map((line, index) => (
+                  <text key={line.direction} data-line-direction={line.direction}
+                    x={chip.left + chip.width / 2}
+                    y={chip.top + MARKER_CHIP.baselines[Math.min(index, 1)]!}
+                    textAnchor="middle">{line.text}</text>
+                ))}
               </g>
             </g>
           </Tooltip>
@@ -356,11 +257,3 @@ function tooltipStyle(hover: Readonly<{ left: number; top: number; width: number
   const top = Math.min(Math.max(inset, hover.top - height / 2), Math.max(inset, hover.height - height - inset))
   return { left, top }
 }
-
-/** Rough advance widths at the 9px chart-label size: a CJK glyph ~9px, latin ~5.2px. */
-function chipWidthFor(label: string): number {
-  let width = 0
-  for (const character of label) width += /[\u3000-\u9fff]/.test(character) ? 9 : 5.2
-  return Math.round(width + 12)
-}
-
