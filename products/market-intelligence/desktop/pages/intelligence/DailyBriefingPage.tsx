@@ -12,7 +12,7 @@ import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { briefingScreenEdition } from './briefingScreenEdition'
 import { useBriefingShareActions } from './useBriefingShareActions'
 import { useBriefingEditionDelete } from './useBriefingEditionDelete'
-import { DailyBriefingShareCard } from './DailyBriefingShareCard'
+import { DailyBriefingShareHost } from './DailyBriefingShareHost'
 import { briefingDocumentInvalidIssue } from './briefingDocumentInvalidIssue'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
@@ -24,7 +24,6 @@ import { useBriefingReload } from './useBriefingReload'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
 import { briefingEditionSelection } from './briefingEditionSelection'
-import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 import './dailyBriefing.css'
 import './dailyBriefingShareCard.css'
@@ -446,9 +445,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       }} />
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
-    {screenDocument && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
-      {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
-      <div ref={shareRef}><DailyBriefingShareCard document={screenDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} paymentDirectionsCompact={briefingPaymentDirections(poster.locale)} policyWords={briefingPolicyGaugeWords(poster.locale)} changeArrows={briefingChangeArrows(poster.locale)} fearGreedBuckets={briefingFearGreedBuckets(poster.locale)} {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} timeZone={timeZone} /></div>
-    </div> : null}
+    {/* 导出的那一张纸在 `DailyBriefingShareHost` 里：它自己一个文件，门禁的截图面名单按文件认
+        「导出面」；这里只交出文档、海报 props 与 ref，那句话不在这里拼。 */}
+    {screenDocument && !contentBlocked ? <DailyBriefingShareHost
+      document={screenDocument}
+      poster={poster}
+      ref={shareRef}
+      readOnly={readyKind(view) === 'history'}
+      {...(eventTitles === undefined ? {} : { eventTitles })}
+      formatTime={formatTime}
+      timeZone={timeZone}
+    /> : null}
   </main>
 }

@@ -12,11 +12,15 @@
  * 挡什么：`*.tsx` 里 `*Hint` / `*Note` 文案的**用法点**——成员访问（`text.a.hoursHint`、`labels.xNote`）
  * 与键字符串（`resolveText('…Hint')`）。
  * 不挡什么：i18n 定义文件本身（`*.ts`）、`*.test.*`（断言里的键名是文本，不是渲染位置）、
- * **截图面**（见 `CAPTURE_ONLY_SURFACES`：那几张页面的产物是一张图，不是屏幕上的界面）。
+ * **截图面**（见 `CAPTURE_ONLY_SURFACES`：那几个文件的产物是一张图，不是屏幕上的界面）。
+ *
+ * 豁免**只免这一条**（说明句出现在正文位置）。别以为进了名单就什么都放过：内部进度话术
+ * （「本版只验证…」「本版不采集…」）、手写第二份文案、图上的数不走契约结算，在导出面上**同样禁**，
+ * 由 `scripts/capture-surfaces.test.mts` 另管——那条测试不认名单豁免，只认事实。
  *
  * 复算：`pnpm exec tsx scripts/check-body-prose.mts`。
  */
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
 const ROOT = process.cwd()
@@ -30,20 +34,30 @@ const ALLOWED_CONTEXT = /helpTrigger\(|\bPopover\b|content=|lines=|aria-|title=|
 type Finding = { file: string; line: number; key: string }
 
 /**
- * 截图面：**不画给屏幕、只画进一张图**的页面。那几句在这个门禁的射程之外，理由是产物形态不同——
- * PNG 里没有 hover、没有可点的 `ⓘ`，「收进浮层」在图上根本不存在；而图上的说明句是**内容**
- * （这一版缺不缺数据、有没有另一种语言版），拿到图的人要靠它判断这份简报全不全，删了就变成
- * 「残缺的一期看起来是完整的」。
+ * 截图面：产物是**一张图**、不是一屏界面的文件。
  *
- * 判据只认**页面自己是不是只用来截图**（不是「这句话看起来像说明」），所以按文件写死，一处一条；
- * 测试里断每条路径都还在（文件改名就红，逼下一个人重新判断这块还算不算截图面），
- * 也断同样的命中出现在**别的**文件里照样红（白名单不许变成整门禁的旁路）。
+ * 豁免的理由**不是「读者看不见」**——那张图会被存档、转发、被不相干的人读到，比屏幕上的字活得久。
+ * 理由是**产物形态**：PNG 里没有 hover、没有可点的 `ⓘ`，也没有可以省下来的屏幕空间预算；
+ * 「把说明收进浮层」在图上不存在，而这句话本身是内容（这一版缺不缺数据、有没有另一种语言版），
+ * 删了就变成「残缺的一期看起来是完整的」。
  *
- * 今天只有一条：海报窗口——主进程起一个不显示的窗口，画完 `capturePage()` 就把窗口销毁
- * （`window/briefingPosterCapture.ts`），页面上没有控件、没有壳层状态。
+ * 判据只认**这个文件自己是不是只用来画图**（不是「这句话看起来像说明」）：
+ * - 按文件写死，精确相对路径、`*.tsx`、不许通配/目录/正则（形状由 `captureSurfacePathProblem` 校验，
+ *   用例在 `scripts/capture-surfaces.test.mts`）；
+ * - 加一条要过架构师：名单只在本文件的 diff 里增删，别处不得改；
+ * - 结构上也要立得住：条目必须能被反向依赖证明「只被那个导出入口引用」
+ *   （`BriefingPosterWindow` 的 importer 恰好是 `pages/briefing-poster/index.tsx`，多一个可见页面即红）；
+ * - 同样的命中出现在**别的**文件里照样红：白名单不是整门禁的旁路，基线那边照旧只降不升。
+ *
+ * 今天两条，形状同一个：导出面自己一个文件。
+ * - 海报窗口：主进程 `show:false` 起一个不显示的窗口，画完 `capturePage()` 就把窗口销毁
+ *   （`window/briefingPosterCapture.ts`），页面上没有控件、没有壳层状态；
+ * - 页面的离屏导出节点：`DailyBriefingShareHost`（`aria-hidden` + `left:-20000px`），
+ *   页面自己截图导出、推图都用这一块。
  */
 const CAPTURE_ONLY_SURFACES: readonly string[] = [
-  'products/market-intelligence/desktop/pages/intelligence/BriefingPosterWindow.tsx'
+  'products/market-intelligence/desktop/pages/intelligence/BriefingPosterWindow.tsx',
+  'products/market-intelligence/desktop/pages/intelligence/DailyBriefingShareHost.tsx'
 ]
 
 /** 纯函数：这个文件是不是截图面（相对仓库根、`/` 分隔）。 */
@@ -54,6 +68,24 @@ export function isCaptureOnlySurface(file: string): boolean {
 /** 名单本身也要能被测试读到（每条都必须在仓库里存在）。 */
 export function captureOnlySurfaces(): readonly string[] {
   return CAPTURE_ONLY_SURFACES
+}
+
+/**
+ * 纯函数：名单条目的形状问题（`null` = 合格）。
+ *
+ * 只许「精确相对路径 + `.tsx`」：通配会顺手放过一批文件，目录会连以后新建的文件一起放过，
+ * 正则更没法审——三种都会把「这一处是不是导出面」变成没人复核的默认值。
+ */
+export function captureSurfacePathProblem(entry: string): string | null {
+  if (!entry.endsWith('.tsx')) return '必须是 .tsx 文件'
+  if (entry.includes('\\')) return '必须用 / 分隔'
+  if (entry.startsWith('/') || entry.startsWith('./') || entry.includes('//')) return '必须是相对仓库根的规范路径'
+  if (/[*?[\]{}()|+^$]/u.test(entry)) return '不许通配、目录或正则'
+  if (entry.endsWith('/')) return '不许是目录'
+  const absolute = join(ROOT, entry)
+  if (!existsSync(absolute)) return '文件不存在'
+  if (!statSync(absolute).isFile()) return '不是单个文件'
+  return null
 }
 
 function walk(dir: string, out: string[] = []): string[] {
