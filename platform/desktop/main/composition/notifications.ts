@@ -102,6 +102,10 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
     diagnostics: ports.diagnostics,
     ...(ports.push === undefined ? {} : { push: ports.push }),
+    // 海报钩子必须**在这里也转发一次**（2026-11-23 事故）：`composeNotificationRuntimeForApp` 把它算出来
+    // 传进来，这一层以前只转发 `push`，于是自动推送每期都只发正文、一条 `pushImage` 都没有，
+    // 而任何单测都不会红——存进端口不等于接上运行时。
+    ...(ports.pushImage === undefined ? {} : { pushImage: ports.pushImage }),
     ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets }),
     ...(ports.lastDelivery === undefined ? {} : { lastDelivery: ports.lastDelivery }),
     ...(ports.resolvePushChannels === undefined ? {} : { resolvePushChannels: ports.resolvePushChannels }),
