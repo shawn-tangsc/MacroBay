@@ -68,7 +68,7 @@ export type NotificationAction = {
    * `url` 是真链接，Telegram 自己会把它变成可点。两者混用会得到一句做不到的话
    * （手机上点不动），所以提交期分四种情形拒收，见 `notificationSubmitPlan.ts`。
    */
-  kind: 'open' | 'acknowledge' | 'dismiss' | 'snooze' | 'custom' | 'open-external'
+  kind: NotificationActionKind
   /**
    * 只在 `kind === 'open-external'` 时出现：**只收 http/https 绝对地址**。
    *
@@ -154,6 +154,24 @@ export type NotificationContentByLanguage = {
   'zh-CN'?: { title: string; body: string; reason: string }
   'en-US'?: { title: string; body: string; reason: string }
 }
+
+/**
+ * 动作类型的**运行时闭集**（类型从它派生，不再手抄一份联合）。
+ *
+ * 为什么要一份运行时的：界面只消费其中几种，其余（`acknowledge` / `dismiss` / `snooze` / `custom`）
+ * 今天没有消费者。闭集留在类型里，就没法写「每个 kind 要么有消费者、要么登记过没消费者」的守卫——
+ * 加了新 kind 没人认也是绿的。守卫在 `notificationActionKinds.test.ts`。
+ */
+export const NOTIFICATION_ACTION_KINDS = [
+  'open',
+  'open-external',
+  'acknowledge',
+  'dismiss',
+  'snooze',
+  'custom'
+] as const
+
+export type NotificationActionKind = (typeof NOTIFICATION_ACTION_KINDS)[number]
 
 export type NotificationRecord = {
   id: string

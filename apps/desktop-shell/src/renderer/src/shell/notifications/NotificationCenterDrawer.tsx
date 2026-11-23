@@ -8,6 +8,7 @@ import type {
   NotificationCenterItem,
   NotificationDeeplink
 } from '@platform/notifications/contracts/notificationContracts'
+import { isExternalUrl } from '@platform/notifications/contracts/externalUrl'
 
 import type { PlatformText } from '../../i18n/platformText'
 
@@ -41,7 +42,7 @@ type NotificationCenterDrawerProps = {
    * **必填**：`hasActionTarget` 把外链算作「有地方可去」，行因此进主位、必须有按钮。
    * 做成可选就会留下一个只有类型才看得见的洞——调用点漏传时，那一行进未读组却一颗按钮都没有。
    */
-  onOpenExternal: (url: string) => void
+  onOpenExternal: (url: string) => Promise<unknown>
   source?: NotificationCenterSource
   /**
    * 产品注册的设置抽屉（`productSettingsDrawers` 里声明了 `notifications` 那一屏）。
@@ -51,18 +52,27 @@ type NotificationCenterDrawerProps = {
   onOpenSettings?: (entry: NotificationCenterSettingsEntry) => void
 }
 
-/** 外链只放行 http(s)：主进程出口会拒别的 scheme，递过去就是点了抛错的按钮。 */
-const EXTERNAL_URL = /^https?:\/\//i
-
 /**
- * 这一行有没有「能去的地方」：应用内落点，或外链动作。
+ * 一次动作要去的地方：外链，或应用内落点。
  *
- * 只认落点会把「看原文」整段归到「仅记录」，按钮永远画不出来——记录里写着动作、读者点不到。
+ * **分组与画按钮都从这里取**，不许各算一遍——各算一遍就会出现「进了主位却没按钮」或
+ * 「有按钮却落在仅记录」。判据本身也只有一个：`isExternalUrl` 与主进程出口共用。
  */
-function hasActionTarget(item: NotificationCenterItem): boolean {
+export type NotificationActionTarget =
+  | { readonly kind: 'external'; readonly url: string }
+  | { readonly kind: 'deeplink'; readonly deeplink: NotificationDeeplink }
+
+export function notificationActionTarget(item: NotificationCenterItem): NotificationActionTarget | undefined {
   const action = item.actions[0]
-  if (action?.kind === 'open-external' && typeof action.url === 'string' && EXTERNAL_URL.test(action.url)) return true
-  return (action?.deeplink ?? item.deeplink) !== undefined
+  if (action === undefined) return undefined
+  if (action.kind === 'open-external' && isExternalUrl(action.url)) return { kind: 'external', url: action.url }
+  const deeplink = action.deeplink ?? item.deeplink
+  return deeplink === undefined ? undefined : { kind: 'deeplink', deeplink }
+}
+
+/** 这一行有没有「能去的地方」——与按钮同一个判据，只是问法不同。 */
+function hasActionTarget(item: NotificationCenterItem): boolean {
+  return notificationActionTarget(item) !== undefined
 }
 
 /**
@@ -257,7 +267,7 @@ export function NotificationCenterDrawer({
 function NotificationGroups(props: {
   labels: PlatformText['notifications']
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
-  onOpenExternal: (url: string) => void
+  onOpenExternal: (url: string) => Promise<unknown>
   onRead: (id: string) => Promise<void>
   unreadItems: readonly NotificationCenterItem[]
   readItems: readonly NotificationCenterItem[]
@@ -308,7 +318,7 @@ function Group(props: {
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
-  onOpenExternal: (url: string) => void
+  onOpenExternal: (url: string) => Promise<unknown>
   /** 主位才给动作；「仅记录」组没有动作目标，行上不出按钮（A2 只约束主位，A3 管这里）。 */
   actionable?: boolean
 }): React.ReactElement {
@@ -361,7 +371,7 @@ function NotificationRow(props: {
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
-  onOpenExternal: (url: string) => void
+  onOpenExternal: (url: string) => Promise<unknown>
 }): React.ReactElement {
   const { item, labels } = props
   const [expanded, setExpanded] = useState(false)
@@ -427,15 +437,11 @@ function NotificationActionButton(props: {
   item: NotificationCenterItem
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   onRead: (id: string) => Promise<void>
-  onOpenExternal: (url: string) => void
+  onOpenExternal: (url: string) => Promise<unknown>
 }): React.ReactElement | null {
   const action = props.item.actions[0]
-  if (action === undefined) return null
-  const external = action.kind === 'open-external' && typeof action.url === 'string' && EXTERNAL_URL.test(action.url)
-    ? action.url
-    : undefined
-  const deeplink = action.deeplink ?? props.item.deeplink
-  if (external === undefined && deeplink === undefined) return null
+  const target = notificationActionTarget(props.item)
+  if (action === undefined || target === undefined) return null
   const label = action.label
   return (
     <Button
@@ -445,8 +451,19 @@ function NotificationActionButton(props: {
         // 一次操作两个效果：把人送到地方，同时把这条标成已读。
         // 只送不标的话，回来仍看见同一条未读，角标也不减，等于留了个没人用的钩子。
         if (props.item.state === 'unread') void props.onRead(props.item.id)
-        if (external !== undefined) props.onOpenExternal(external)
-        else if (deeplink !== undefined) props.onOpenDeeplink(deeplink)
+        if (target.kind === 'deeplink') {
+          props.onOpenDeeplink(target.deeplink)
+          return
+        }
+        // 打不开要说出来：调用点把 rejection 吞掉，就是「按钮点了没反应」那一类。日志只带
+        // 记录 id 与动作 id，**不带 URL**（新闻链接可能带查询串里的凭据）。
+        void props.onOpenExternal(target.url).catch((error: unknown) => {
+          console.error('[notification] openExternal failed', {
+            recordId: props.item.id,
+            actionId: action.id,
+            error
+          })
+        })
       }}>
       {label}
     </Button>

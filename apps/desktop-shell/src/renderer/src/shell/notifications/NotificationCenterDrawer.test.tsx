@@ -3,11 +3,11 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { NotificationCenterItem, NotificationUnreadState } from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationCenterAction, NotificationCenterItem, NotificationUnreadState } from '@platform/notifications/contracts/notificationContracts'
 
 import { platformText } from '../../i18n/platformText'
 
-import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './NotificationCenterDrawer'
+import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer, notificationActionTarget } from './NotificationCenterDrawer'
 import type { NotificationCenterSource } from './notificationCenterSource'
 
 const labels = platformText['zh-CN'].notifications
@@ -44,6 +44,20 @@ function record(overrides: Partial<NotificationCenterItem> & { id: string }): No
 
 const deeplink = { scope: 'platform' as const, entityType: 'job', entityId: 'job-1' }
 
+/**
+ * 一条「读者能去做」的记录：落点 + 与它配对的动作。
+ *
+ * 为什么要成对：中心的分组与按钮现在用**同一个判据**（`notificationActionTarget`），
+ * 有落点却没动作的行不会进主位——只有落点而没有动作，读者点不到任何东西。
+ */
+function actionable(overrides: Partial<NotificationCenterItem> & { id: string }): NotificationCenterItem {
+  const target = overrides.deeplink ?? deeplink
+  return record({
+    ...overrides,
+    actions: overrides.actions ?? [{ id: 'open-task', kind: 'open' as const, label: '打开任务', deeplink: target }]
+  })
+}
+
 function fakeSource(overrides: Partial<NotificationCenterSource> = {}): NotificationCenterSource {
   const read: NotificationUnreadState = { unread: 0, version: 1 }
   return {
@@ -61,7 +75,7 @@ async function mount(
   source: NotificationCenterSource,
   onOpenDeeplink: (d: unknown) => void = () => undefined,
   language: 'zh-CN' | 'en-US' = 'zh-CN',
-  onOpenExternal?: (url: string) => void
+  onOpenExternal?: (url: string) => Promise<unknown>
 ): Promise<void> {
   const host = document.createElement('div')
   document.body.append(host)
@@ -73,7 +87,7 @@ async function mount(
         onClose={() => undefined}
         labels={platformText[language].notifications}
         onOpenDeeplink={onOpenDeeplink}
-        onOpenExternal={onOpenExternal ?? (() => undefined)}
+        onOpenExternal={onOpenExternal ?? (async () => undefined)}
         source={source}
       />
     )
@@ -133,8 +147,8 @@ describe('通知中心的分组与空态', () => {
     const source = fakeSource({
       list: async () => ({
         items: [
-          record({ id: 'read-1', state: 'read', deeplink }),
-          record({ id: 'unread-1', deeplink }),
+          actionable({ id: 'read-1', state: 'read' }),
+          actionable({ id: 'unread-1' }),
           record({ id: 'no-target-1' })
         ]
       })
@@ -156,7 +170,7 @@ describe('通知中心的分组与空态', () => {
 
   it('外链动作（看原文）也画按钮：只认落点时这类动作永远点不到', async () => {
     const onOpenDeeplink = vi.fn()
-    const onOpenExternal = vi.fn()
+    const onOpenExternal = vi.fn(async () => undefined)
     const source = fakeSource({
       list: async () => ({
         items: [record({
@@ -224,11 +238,98 @@ describe('通知中心的分组与空态', () => {
         })]
       })
     })
-    await mount(source, () => undefined, 'zh-CN', () => undefined)
+    await mount(source, () => undefined, 'zh-CN', async () => undefined)
 
     expect(document.body.querySelector('.notification-center-row button')).toBeNull()
     // 没有可去之处 → 落进「仅记录」，不在主位。
     expect(document.body.querySelector('.notification-center-group-title')?.textContent).toBe(labels.centerRecordedGroup)
+  })
+
+  it.each([
+    ['http://example.test/a', true],
+    ['https://example.test/a', true],
+    // 协议大小写不敏感：主进程与抽屉共用 `isExternalUrl`，两边必须同结论。
+    ['HTTP://EXAMPLE.TEST/a', true],
+    ['javascript:alert(1)', false]
+  ])('外链判据与主进程同一份：%s → 画按钮=%s', async (url, expected) => {
+    const source = fakeSource({
+      list: async () => ({
+        items: [record({
+          id: 'scheme-case',
+          actions: [{ id: 'open-original', kind: 'open-external' as const, label: '看原文', url }]
+        })]
+      })
+    })
+    await mount(source)
+
+    const button = document.body.querySelector('.notification-center-row button')
+    expect(button !== null).toBe(expected)
+  })
+
+  it('打开外链失败不留白：记一条诊断，且日志里不带 URL', async () => {
+    const errors: unknown[][] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errors.push(args)
+    })
+    const source = fakeSource({
+      list: async () => ({
+        items: [record({
+          id: 'open-fails',
+          actions: [{ id: 'open-original', kind: 'open-external' as const, label: '看原文', url: 'https://example.test/secret?token=abc' }]
+        })]
+      })
+    })
+    await mount(source, () => undefined, 'zh-CN', async () => {
+      throw new Error('denied')
+    })
+
+    await click(document.body.querySelector<HTMLButtonElement>('.notification-center-row button')!)
+    // 等那 promise 的 catch 跑完。
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const ourLog = errors.find((args) => args[0] === '[notification] openExternal failed')
+    expect(ourLog).toBeDefined()
+    // 日志可查，但不许把链接（可能带查询串里的凭据）抄进日志。
+    expect(JSON.stringify(ourLog)).not.toContain('https://')
+    spy.mockRestore()
+  })
+
+  it('「有地方可去」与「画按钮」是同一个判据：每种动作摆一行，两者必须一致', async () => {
+    const cases: { kind: NotificationCenterAction['kind']; url?: string; deeplink?: boolean }[] = [
+      { kind: 'open', deeplink: true },
+      { kind: 'open' },
+      { kind: 'open-external', url: 'https://example.test/a' },
+      { kind: 'open-external', url: 'javascript:alert(1)' },
+      { kind: 'custom' },
+      { kind: 'acknowledge' },
+      { kind: 'dismiss' },
+      { kind: 'snooze' }
+    ]
+    const items = cases.map((entry, index) => record({
+      id: `kind-${index}`,
+      title: `行 ${index}`,
+      actions: [{
+        id: `action-${index}`,
+        kind: entry.kind,
+        label: '动作',
+        ...(entry.url === undefined ? {} : { url: entry.url }),
+        ...(entry.deeplink === undefined ? {} : { deeplink })
+      }]
+    }))
+    await mount(fakeSource({ list: async () => ({ items }) }))
+
+    for (const [index, item] of items.entries()) {
+      const row = rows().find((candidate) => candidate.querySelector('.notification-center-title')?.textContent === `行 ${index}`)!
+      expect(row, `第 ${index} 行的行体没找到`).toBeDefined()
+      const hasTarget = notificationActionTarget(item) !== undefined
+      const hasButton = row.querySelector('button') !== null
+      // 一个进主位一个进仅记录：分组判据与按钮判据任何一处走偏，这两条断言就有一处红。
+      expect(hasButton, `第 ${index} 行：有方向却没按钮 / 有按钮却没方向`).toBe(hasTarget)
+      const mainGroup = row.closest('.notification-center-group')?.querySelector('.notification-center-group-title')?.textContent
+      expect(mainGroup === labels.centerRecordedGroup).toBe(!hasTarget)
+    }
   })
 
   it('列表读不到时给错误态，重试会再读一次', async () => {
@@ -237,7 +338,7 @@ describe('通知中心的分组与空态', () => {
       list: async () => {
         attempts += 1
         if (attempts === 1) throw new Error('bridge gone')
-        return { items: [record({ id: 'after-retry', deeplink })] }
+        return { items: [actionable({ id: 'after-retry' })] }
       }
     })
     await mount(source)
@@ -286,7 +387,7 @@ describe('清空与删除是两件事', () => {
   it('清空 = 全部标为已读：条数一条不减', async () => {
     let markAllCalls = 0
     const source = fakeSource({
-      list: async () => ({ items: [record({ id: 'a', deeplink }), record({ id: 'b', deeplink })] }),
+      list: async () => ({ items: [actionable({ id: 'a' }), actionable({ id: 'b' })] }),
       markAllRead: async () => {
         markAllCalls += 1
         return { unread: 0, version: 2 }
@@ -309,7 +410,7 @@ describe('清空与删除是两件事', () => {
   it('删除已读要二次确认，且只删已读', async () => {
     let deletes = 0
     const source = fakeSource({
-      list: async () => ({ items: [record({ id: 'unread-1', deeplink }), record({ id: 'read-1', state: 'read', deeplink })] }),
+      list: async () => ({ items: [actionable({ id: 'unread-1' }), actionable({ id: 'read-1', state: 'read' })] }),
       deleteRead: async () => {
         deletes += 1
         return { deleted: 1 }
@@ -334,7 +435,7 @@ describe('清空与删除是两件事', () => {
   it('取消失去确认态，什么都不删', async () => {
     let deletes = 0
     const source = fakeSource({
-      list: async () => ({ items: [record({ id: 'read-1', state: 'read', deeplink })] }),
+      list: async () => ({ items: [actionable({ id: 'read-1', state: 'read' })] }),
       deleteRead: async () => {
         deletes += 1
         return { deleted: 1 }
@@ -470,7 +571,7 @@ describe('首次进入不闪错误或空态', () => {
     expect(document.body.querySelector('[data-state="empty"]')).toBeNull()
 
     await act(async () => {
-      resolveList?.({ items: [record({ id: 'after-load', deeplink })] })
+      resolveList?.({ items: [actionable({ id: 'after-load' })] })
       await Promise.resolve()
     })
 
@@ -491,7 +592,7 @@ describe('首次进入不闪错误或空态', () => {
     const source = fakeSource({
       list: async () => {
         calls += 1
-        if (calls === 1) return { items: [record({ id: 'kept', deeplink })] }
+        if (calls === 1) return { items: [actionable({ id: 'kept' })] }
         throw new Error('refresh failed')
       }
     })
@@ -506,7 +607,7 @@ describe('首次进入不闪错误或空态', () => {
         onClose: () => undefined,
         labels,
         onOpenDeeplink: () => undefined,
-        onOpenExternal: () => undefined,
+        onOpenExternal: async () => undefined,
         source
       })
     await act(async () => {
