@@ -33,6 +33,7 @@ import {
 import { SignalDetail } from '../shared'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import { PositioningChart, PositioningChartSkeleton, formatRate } from './PositioningChart'
+import { layoutLiquidationMarks } from './positioningLiquidationMarkers'
 import type { PositioningPanelText } from './positioningText'
 import {
   projectPositioningCardState,
@@ -196,6 +197,9 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const fundingCellState: PositioningCellState = cells?.funding ?? 'available'
   const oiReady = oiState === 'available'
   const fundingReady = fundingCellState === 'available'
+  // 牌只排一次：图负责画，这里还要拿「两排都放不下而丢掉的那些」补进截断数——卡面只有一个数字。
+  const markLayout = available && oiReady && positioning.state === 'available' ? layoutLiquidationMarks(positioning, text) : undefined
+  const undrawnHits = markLayout && positioning.state === 'available' ? positioning.hiddenHits + markLayout.hidden : 0
   // 每格一颗主动作：未配置 → 去配置；未启用 → 去启用（同一处，落在该源那一行）；读不到 → 再试一次。
   const cardSourceReason: PositioningCellReason | undefined = cells?.reasons.oi ?? cells?.reasons.funding
   // 整卡「再试一次」把两格一起重读：两格都不可用时读者要的是「再读一次这张卡」。
@@ -353,10 +357,10 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           {/* 只有「这一格已启用、正在读」才算等待：被关掉/没配置的格不会自己变出数据，等它就是在骗人。 */}
           {oiReady && positioning.state === 'loading' || fundingReady && funding.state === 'loading'
             ? <LoadingState label={text.loading} minHeight={140} />
-            : available && oiReady
+            : available && oiReady && markLayout
               ? <>
                   {/* 费率那一格不可用时只画持仓线，不画半张柱子图；缺的那格由上面那行说明。 */}
-                  <PositioningChart positioning={positioning} funding={fundingReady ? funding : { state: 'unavailable' }} text={text} />
+                  <PositioningChart positioning={positioning} funding={fundingReady ? funding : { state: 'unavailable' }} text={text} marks={markLayout} />
                   {/* 一条腿读不到时的说明：整句、muted、不带重试——另半张图照常画，读者要知道少了哪条腿。 */}
                   {fundingReady && fundingMissingNote ? (
                     <p className="mi-positioning-panel__funding-missing" data-funding-missing="true" role="status">{fundingMissingNote}</p>
@@ -364,11 +368,12 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
                   {/*
                     截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
                     一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
-                    只在真的画不下时出现：命中 0 时这一行不存在，卡面不多一个字。
+                    只有**一个数字**：服务端截断的（DTO 本来就没进图）+ 两排都排不下而丢掉的，
+                    两个出口在这里相加，读者看到的 N 就是全部没画出来的命中。
                   */}
-                  {positioning.hiddenHits > 0 ? (
+                  {undrawnHits > 0 ? (
                     <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
-                      {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}
+                      {text.liquidationHiddenHits.replace('{count}', String(undrawnHits))}
                     </p>
                   ) : null}
                 </>

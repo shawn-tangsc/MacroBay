@@ -4,8 +4,8 @@ import type { PositioningPanelText } from './positioningText'
 /**
  * 图的几何：一张表，牌带、车道、基线都从这里取。
  *
- * 牌带从 16 抬到 29（界面设计 2026-11-24 定稿的形态 B）：混向一簇是一块牌、两行字，
- * 牌高 26（基线 12 / 23），牌底正好落在 `markerRow`；单行牌仍高 13、贴底放。
+ * 牌带留两排（`markerTop` 3 到 `markerRow` 29，每排 13 高）：一张牌只代表一次命中，
+ * 横轴放不下同一排就把牌**错到第二排**，不横向挪位（界面设计 2026-11-24 的硬规则）。
  * 上面那条名义车道 66 个单位不动——不是拿压扁图换牌高；空态骨架用同一份 `VIEW`，卡高不跳。
  */
 export const POSITIONING_CHART_VIEW = Object.freeze({
@@ -20,13 +20,15 @@ export const POSITIONING_CHART_VIEW = Object.freeze({
   zero: 155
 })
 
-/** 一枚牌：两行各 13 高、横排间隔 6px；行内文字基线 12 / 23。 */
+/** 一枚牌：13 高、圆角 4、同一排内间隔 6px；牌带两排，先出现的贴下半排，溢出的往上排。 */
 export const MARKER_CHIP = Object.freeze({
   height: 13,
-  twoLineHeight: 26,
-  baselines: [12, 23] as const,
   radius: 4,
-  gap: 6
+  gap: 6,
+  /** 牌带里的两排：第 1 排在下（底贴 `markerRow`），第 2 排在上（顶贴 `markerTop`）。 */
+  rowTops: [16, 3] as const,
+  /** 文字基线相对牌顶的偏移（字号走 `--mi-chart-label-size`）。 */
+  baseline: 12
 })
 
 export type LiquidationMark = Readonly<{
@@ -40,24 +42,34 @@ export type LiquidationMark = Readonly<{
   volumeMultiple: number
 }>
 
-/** 牌上的一行字：一个方向一行；行序 = 该方向最早一次命中的先后。 */
-export type LiquidationChipLine = Readonly<{ direction: 'long' | 'short'; text: string }>
-
+/**
+ * 一枚牌＝一次命中（同资产同向、牌放不下的一小段仍并成 `×N`，那才是「同一市场的同类事件发生了 N 次」）。
+ * 牌只写一个市场、一个方向、一句话。
+ */
 export type LiquidationChip = Readonly<{
   key: string
   marks: readonly LiquidationMark[]
-  /** 牌挂在哪个市场的线上：混向时仍取第一根线（`data-hint` 的既有语义）。 */
+  /** 牌就是这次命中的市场（不再「取第一个成员」）。 */
   asset: 'btc' | 'eth'
-  /** 混向仍是 `mixed`：牌框与竖线保持中性，颜色只落在每一行字上。 */
-  direction: 'long' | 'short' | 'mixed'
-  lines: readonly LiquidationChipLine[]
+  direction: 'long' | 'short'
+  text: string
   left: number
   width: number
-  /** 牌底对齐 `markerRow`：单行牌 13 高，混向牌 26 高。 */
+  /** 牌带里的第几排：0 先用的下半排，1 溢出的上半排。 */
+  row: 0 | 1
   top: number
   height: number
-  /** 浮层与可访问名：两行用「 · 」连成一句，单个命中再加一句量。 */
+  /** 浮层与可访问名：单个命中再加一句量。 */
   summary: string
+}>
+
+export type LiquidationMarkLayout = Readonly<{
+  chips: readonly LiquidationChip[]
+  /**
+   * 这一窗里排不下、连牌带线一起没画的命中数。面板把它**加到** DTO 的截断数上，
+   * 两句出口合成一个数字（「图上还有 N 次」不许有两套数）。
+   */
+  hidden: number
 }>
 
 /** Rough advance widths at the 9px chart-label size: a CJK glyph ~9px, latin ~5.2px. */
@@ -92,7 +104,7 @@ export function liquidationMarks(positioning: Extract<DashboardPositioningViewSt
       const markMs = Date.parse(hint.observedAt)
       if (!(markMs >= axis.startMs && markMs <= axis.startMs + axis.span)) return undefined
       return {
-        key: `${hint.asset}-${hint.observedAt}`,
+        key: `${hint.asset}-${hint.direction}-${hint.observedAt}`,
         asset: hint.asset,
         direction: hint.direction,
         x: axis.xOf(markMs),
@@ -105,82 +117,95 @@ export function liquidationMarks(positioning: Extract<DashboardPositioningViewSt
     .sort((left, right) => left.x - right.x)
 }
 
+/** 四个类：一枚牌只属于一个市场、一个方向。跨资产、跨方向都不许并（界面设计 2026-11-24）。 */
+const LIQUIDATION_CLASSES = [['btc', 'long'], ['btc', 'short'], ['eth', 'long'], ['eth', 'short']] as const
+
+function chipTextOf(members: readonly LiquidationMark[], text: PositioningPanelText): string {
+  const direction = members[0]!.direction
+  if (members.length === 1) {
+    return (direction === 'long' ? text.markLong : text.markShort).replace('{pct}', members[0]!.pct)
+  }
+  return (direction === 'long' ? text.markLongMany : text.markShortMany).replace('{count}', String(members.length))
+}
+
+/** 牌心贴边内收的唯一位移：最多半枚牌宽，用来把牌留在绘图区里。 */
+function clampLeft(centre: number, width: number): number {
+  const { left, right } = POSITIONING_CHART_VIEW
+  return Math.max(left, Math.min(centre - width / 2, right - width))
+}
+
 /**
- * 成簇 + 牌上文字（界面设计 2026-11-24 定稿的形态 B）：
+ * 成簇 + 排布（界面设计 2026-11-24 定稿）：
  *
- * - 牌放不下就把下一条并进来（贪心，和以前一样）——**混向也并**，因为一块牌能写两行字；
- * - 一行 = 一个方向，行序取该方向**最早一次命中**的先后；单次写 `疑似多/空头爆仓 ±p%`，
- *   同一方向多次写 `… ×N`（×N 只在同一方向内，才是「这一小段发生了 N 次」）；
- * - 牌框与竖线中性，颜色只落在每一行字上（由调用点按 `data-line-direction` 上色）；
- * - 每簇的每条命中仍留自己的竖线——不存在只画线的命中，也不存在没有线的牌。
+ * - **成簇只发生在同一市场同一方向**：牌放不下时并进下一枚，写 `×N`——那是「同一市场的同类事件
+ *   发生了 N 次」；跨资产、跨方向都不并，一枚牌只说一个市场一个方向；
+ * - 牌心 = 这枚牌自己那几条竖线的中点（N=1 就是那根线），**不做横向挪位**，只有贴边内收；
+ * - 两排：先出现的贴下半排（`rowTops[0]`），本排放不下就往上一排，**一旦用了上一排，后面都进上一排**；
+ * - 两排都放不下 → 这枚牌连它那些竖线一起不画，计入 `hidden`（与 DTO 的截断数在面板里相加）。
  */
 export function layoutLiquidationMarks(
   positioning: Extract<DashboardPositioningViewState, { state: 'available' }>,
   text: PositioningPanelText
-): readonly LiquidationChip[] {
+): LiquidationMarkLayout {
   const marks = liquidationMarks(positioning)
-  const linesOf = (cluster: readonly LiquidationMark[]): readonly LiquidationChipLine[] => {
-    const order: ('long' | 'short')[] = []
-    const buckets = new Map<'long' | 'short', LiquidationMark[]>()
-    for (const mark of cluster) {
-      if (!buckets.has(mark.direction)) {
-        buckets.set(mark.direction, [])
-        order.push(mark.direction)
+
+  // 一、按类成簇：同类里牌放不下的连续命中并成一张牌（×N），类与类之间永不合并。
+  const drafts: { members: LiquidationMark[]; asset: 'btc' | 'eth'; direction: 'long' | 'short'; text: string; width: number; centre: number }[] = []
+  for (const [asset, direction] of LIQUIDATION_CLASSES) {
+    const own = marks.filter(mark => mark.asset === asset && mark.direction === direction)
+    let cursor = 0
+    while (cursor < own.length) {
+      let members: LiquidationMark[] = [own[cursor]!]
+      let label = chipTextOf(members, text)
+      let width = chipWidthFor(label)
+      let centre = members[0]!.x
+      while (cursor + members.length < own.length) {
+        const next = own[cursor + members.length]!
+        const nextWidth = chipWidthFor(chipTextOf([next], text))
+        // 两枚牌之间至少留 6px：放不下就并进这张牌。
+        if (next.x - centre >= (width + nextWidth) / 2 + MARKER_CHIP.gap) break
+        members = [...members, next]
+        label = chipTextOf(members, text)
+        width = chipWidthFor(label)
+        centre = (members[0]!.x + members.at(-1)!.x) / 2
       }
-      buckets.get(mark.direction)!.push(mark)
+      drafts.push({ members, asset, direction, text: label, width, centre })
+      cursor += members.length
     }
-    return order.map(direction => {
-      const members = buckets.get(direction)!
-      const only = members.length === 1 ? members[0]! : undefined
-      if (only !== undefined) {
-        return { direction, text: (direction === 'long' ? text.markLong : text.markShort).replace('{pct}', only.pct) }
-      }
-      const template = direction === 'long' ? text.markLongMany : text.markShortMany
-      return { direction, text: template.replace('{count}', String(members.length)) }
-    })
-  }
-  const widthOf = (lines: readonly LiquidationChipLine[]): number =>
-    Math.max(...lines.map(line => chipWidthFor(line.text)))
-  const leftOf = (cluster: readonly LiquidationMark[], width: number): number => {
-    const center = (cluster[0]!.x + cluster.at(-1)!.x) / 2
-    const { left, right } = POSITIONING_CHART_VIEW
-    return Math.max(left, Math.min(center - width / 2, right - width))
   }
 
+  // 二、按牌心从左到右排两排。
+  drafts.sort((first, second) => first.centre - second.centre)
+  const rowEnds: (number | undefined)[] = [undefined, undefined]
+  let overflowed = false
   const chips: LiquidationChip[] = []
-  let cursor = 0
-  while (cursor < marks.length) {
-    let members: LiquidationMark[] = [marks[cursor]!]
-    let lines = linesOf(members)
-    let width = widthOf(lines)
-    let left = leftOf(members, width)
-    while (cursor + members.length < marks.length) {
-      const next = marks[cursor + members.length]!
-      const nextWidth = chipWidthFor(linesOf([next])[0]!.text)
-      if (leftOf([next], nextWidth) >= left + width + MARKER_CHIP.gap) break
-      members = [...members, next]
-      lines = linesOf(members)
-      width = widthOf(lines)
-      left = leftOf(members, width)
+  let hidden = 0
+  for (const draft of drafts) {
+    const left = clampLeft(draft.centre, draft.width)
+    const rows = overflowed ? ([1] as const) : ([0, 1] as const)
+    const row = rows.find(candidate => rowEnds[candidate] === undefined || left >= rowEnds[candidate]! + MARKER_CHIP.gap)
+    if (row === undefined) {
+      // 牌与线是一体的：丢牌就一起丢线，数量交给面板那句统一记账。
+      hidden += draft.members.length
+      continue
     }
-    const direction = lines.length > 1 ? 'mixed' as const : members[0]!.direction
-    const single = members.length === 1 ? members[0]! : undefined
-    const joined = lines.map(line => line.text).join(' · ')
-    const height = lines.length > 1 ? MARKER_CHIP.twoLineHeight : MARKER_CHIP.height
+    rowEnds[row] = left + draft.width
+    if (row === 1) overflowed = true
+    const single = draft.members.length === 1 ? draft.members[0]! : undefined
     chips.push({
-      key: members.map(mark => mark.key).join('+'),
-      marks: members,
-      asset: members[0]!.asset,
-      direction,
-      lines,
+      key: draft.members.map(mark => mark.key).join('+'),
+      marks: draft.members,
+      asset: draft.asset,
+      direction: draft.direction,
+      text: draft.text,
       left,
-      width,
-      top: POSITIONING_CHART_VIEW.markerRow - height,
-      height,
+      width: draft.width,
+      row,
+      top: MARKER_CHIP.rowTops[row]!,
+      height: MARKER_CHIP.height,
       // 浮层与牌同一句话，单个再加一句量；成簇时量各不相同，不编一个数出来。
-      summary: single === undefined ? joined : `${joined} · ${single.volumeMultiple.toFixed(1)}×`
+      summary: single === undefined ? draft.text : `${draft.text} · ${single.volumeMultiple.toFixed(1)}×`
     })
-    cursor += members.length
   }
-  return chips
+  return { chips, hidden }
 }

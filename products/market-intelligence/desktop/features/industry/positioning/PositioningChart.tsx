@@ -13,11 +13,11 @@ import {
   type DashboardPositioningViewState
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 import { axisTicks } from './positioningAxisTicks'
-import { MARKER_CHIP, POSITIONING_CHART_VIEW, layoutLiquidationMarks } from './positioningLiquidationMarkers'
+import { MARKER_CHIP, POSITIONING_CHART_VIEW, type LiquidationMarkLayout } from './positioningLiquidationMarkers'
 
 import type { PositioningPanelText } from './positioningText'
 
-/** 几何归 `positioningLiquidationMarkers`：牌带两行、车道与基线都从那张表取，避免两处各改各的。 */
+/** 几何归 `positioningLiquidationMarkers`：牌带两排、车道与基线都从那张表取，避免两处各改各的。 */
 const VIEW = POSITIONING_CHART_VIEW
 
 /**
@@ -39,10 +39,15 @@ export function PositioningChartSkeleton({ text }: Readonly<{ text: PositioningP
   )
 }
 
-export function PositioningChart({ positioning, funding, text }: Readonly<{
+export function PositioningChart({ positioning, funding, text, marks }: Readonly<{
   positioning: Extract<DashboardPositioningViewState, { state: 'available' }>
   funding: DashboardFundingRateHistoryState
   text: PositioningPanelText
+  /**
+   * 牌与竖线的排布由调用点算一次（面板还要拿 `hidden` 去补那句截断数）：这里只画，
+   * 免得同一件事在卡里各算一套、数字对不上。
+   */
+  marks: LiquidationMarkLayout
 }>): React.ReactElement {
   const ref = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<Readonly<{ index: number; left: number; top: number; width: number; height: number }> | undefined>(undefined)
@@ -137,9 +142,6 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     })
   }
 
-  // 牌与线同一个来源：成簇、分行、丢牌全在共享排布里算（界面设计 2026-11-24 的三条硬规则）。
-  const chips = layoutLiquidationMarks(positioning, text)
-
   return (
     <div className="mi-positioning-panel__chart">
       <svg ref={ref} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label={text.pairTitle}
@@ -179,10 +181,11 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
               textAnchor={flip ? 'end' : 'start'}>{formatDashboardNotional(last.notionalUsd)}</text>
           )
         })}
-        {/* 一簇一组：线、点、牌在同一个组里，悬停/聚焦/点哪个都出同一份浮层。
-            **不存在只画线的命中**——每条线都在某个带牌的簇里；两行都放不下的簇连牌带线一起不画，
+        {/* 一枚牌一组：线、点、牌在同一个组里，悬停/聚焦/点哪个都出同一份浮层。
+            牌只说自己那个市场那个方向，颜色也由它定（`data-hint-direction` → `currentColor`）。
+            **不存在只画线的命中**——每条线都在某个带牌的组里；两排都放不下的命中连牌带线一起不画，
             数量由面板那句「图上还有 N 次」统一记账。 */}
-        {chips.map(chip => (
+        {marks.chips.map(chip => (
           <Tooltip key={chip.key} dataText={chip.summary} resolveText={resolveProductKey}>
             <g className="mi-positioning-panel__hint" data-hint={chip.asset} data-hint-direction={chip.direction}
               data-hint-count={chip.marks.length} tabIndex={0} aria-label={chip.summary}>
@@ -195,13 +198,9 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
               <g className="mi-positioning-panel__hint-chip">
                 <rect x={chip.left} y={chip.top} width={chip.width}
                   height={chip.height} rx={MARKER_CHIP.radius} />
-                {/* 一行一个字（方向），颜色按 `data-line-direction` 落在每一行上；牌框仍中性。 */}
-                {chip.lines.map((line, index) => (
-                  <text key={line.direction} data-line-direction={line.direction}
-                    x={chip.left + chip.width / 2}
-                    y={chip.top + MARKER_CHIP.baselines[Math.min(index, 1)]!}
-                    textAnchor="middle">{line.text}</text>
-                ))}
+                {/* 一行字，牌心压在自己那条线上；颜色与牌框、竖线同一个 `currentColor`。 */}
+                <text x={chip.left + chip.width / 2} y={chip.top + MARKER_CHIP.baseline}
+                  textAnchor="middle">{chip.text}</text>
               </g>
             </g>
           </Tooltip>
