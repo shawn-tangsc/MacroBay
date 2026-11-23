@@ -37,8 +37,11 @@ type NotificationCenterDrawerProps = {
    *
    * 与 `onOpenDeeplink` 分开：一个交给外壳导航，一个交浏览器打开。合并成一个回调会让调用方
    * 自己判「这是落点还是网址」，那套判断就跑到两个地方去了。
+   *
+   * **必填**：`hasActionTarget` 把外链算作「有地方可去」，行因此进主位、必须有按钮。
+   * 做成可选就会留下一个只有类型才看得见的洞——调用点漏传时，那一行进未读组却一颗按钮都没有。
    */
-  onOpenExternal?: (url: string) => void
+  onOpenExternal: (url: string) => void
   source?: NotificationCenterSource
   /**
    * 产品注册的设置抽屉（`productSettingsDrawers` 里声明了 `notifications` 那一屏）。
@@ -215,7 +218,7 @@ export function NotificationCenterDrawer({
           <NotificationGroups
             labels={labels}
             onOpenDeeplink={onOpenDeeplink}
-            {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
+            onOpenExternal={onOpenExternal}
             onRead={markOneRead}
             readItems={readItems}
             recorded={recorded}
@@ -254,7 +257,7 @@ export function NotificationCenterDrawer({
 function NotificationGroups(props: {
   labels: PlatformText['notifications']
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
-  onOpenExternal?: (url: string) => void
+  onOpenExternal: (url: string) => void
   onRead: (id: string) => Promise<void>
   unreadItems: readonly NotificationCenterItem[]
   readItems: readonly NotificationCenterItem[]
@@ -269,7 +272,7 @@ function NotificationGroups(props: {
           items={props.unreadItems}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
-          {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
+          onOpenExternal={onOpenExternal}
           onRead={onRead}
           actionable
         />
@@ -280,7 +283,7 @@ function NotificationGroups(props: {
           items={props.readItems}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
-          {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
+          onOpenExternal={onOpenExternal}
           onRead={onRead}
           actionable
         />
@@ -291,7 +294,7 @@ function NotificationGroups(props: {
           items={props.recorded}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
-          {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
+          onOpenExternal={onOpenExternal}
           onRead={onRead}
         />
       )}
@@ -305,7 +308,7 @@ function Group(props: {
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
-  onOpenExternal?: (url: string) => void
+  onOpenExternal: (url: string) => void
   /** 主位才给动作；「仅记录」组没有动作目标，行上不出按钮（A2 只约束主位，A3 管这里）。 */
   actionable?: boolean
 }): React.ReactElement {
@@ -320,7 +323,7 @@ function Group(props: {
             key={item.id}
             labels={props.labels}
             onOpenDeeplink={props.onOpenDeeplink}
-            {...(props.onOpenExternal === undefined ? {} : { onOpenExternal: props.onOpenExternal })}
+            onOpenExternal={props.onOpenExternal}
             onRead={props.onRead}
           />
         ))}
@@ -342,13 +345,23 @@ export function mergedCountOf(item: NotificationCenterItem, now: number): number
 /** 正文超过这个长度才给「展开」：短句被收起反而多一次点击。 */
 export const LONG_BODY_CHARS = 90
 
+/**
+ * 行标题的 id：动作按钮用 `aria-describedby` 指过来。
+ *
+ * 为什么需要：主位里一屏可能有好几条都叫「打开任务」「看原文」，读屏逐个 Tab 过去听到的是同一串名字，
+ * 分不出是哪一条。**所有动作按钮同一套做法**——不给某一种开特例，否则下一个人只修自己那一颗。
+ */
+export function rowTitleId(itemId: string): string {
+  return `notification-row-title-${itemId}`
+}
+
 function NotificationRow(props: {
   item: NotificationCenterItem
   actionable: boolean
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
-  onOpenExternal?: (url: string) => void
+  onOpenExternal: (url: string) => void
 }): React.ReactElement {
   const { item, labels } = props
   const [expanded, setExpanded] = useState(false)
@@ -361,7 +374,7 @@ function NotificationRow(props: {
   return (
     <li className="notification-center-row" data-state={item.state} key={item.id}>
       <div className="notification-center-copy">
-        <strong className="notification-center-title" title={text.title}>
+        <strong className="notification-center-title" id={rowTitleId(item.id)} title={text.title}>
           {text.title}
           {merged === null ? null : (
             <span className="notification-center-merged">{labels.centerMergedCount(String(merged))}</span>
@@ -387,7 +400,7 @@ function NotificationRow(props: {
         <NotificationActionButton
           item={item}
           onOpenDeeplink={props.onOpenDeeplink}
-          {...(props.onOpenExternal === undefined ? {} : { onOpenExternal: props.onOpenExternal })}
+          onOpenExternal={props.onOpenExternal}
           onRead={props.onRead}
         />
       ) : null}
@@ -414,7 +427,7 @@ function NotificationActionButton(props: {
   item: NotificationCenterItem
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   onRead: (id: string) => Promise<void>
-  onOpenExternal?: (url: string) => void
+  onOpenExternal: (url: string) => void
 }): React.ReactElement | null {
   const action = props.item.actions[0]
   if (action === undefined) return null
@@ -423,17 +436,16 @@ function NotificationActionButton(props: {
     : undefined
   const deeplink = action.deeplink ?? props.item.deeplink
   if (external === undefined && deeplink === undefined) return null
-  // 外链动作没有落点，只能用外链出口；没有那个出口时宁可不画，也不画一个点了没反应的按钮。
-  if (external !== undefined && props.onOpenExternal === undefined) return null
   const label = action.label
   return (
     <Button
       size="small"
+      aria-describedby={rowTitleId(props.item.id)}
       onClick={() => {
         // 一次操作两个效果：把人送到地方，同时把这条标成已读。
         // 只送不标的话，回来仍看见同一条未读，角标也不减，等于留了个没人用的钩子。
         if (props.item.state === 'unread') void props.onRead(props.item.id)
-        if (external !== undefined) props.onOpenExternal?.(external)
+        if (external !== undefined) props.onOpenExternal(external)
         else if (deeplink !== undefined) props.onOpenDeeplink(deeplink)
       }}>
       {label}

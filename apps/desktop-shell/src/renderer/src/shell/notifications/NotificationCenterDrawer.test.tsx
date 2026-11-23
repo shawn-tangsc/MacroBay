@@ -73,7 +73,7 @@ async function mount(
         onClose={() => undefined}
         labels={platformText[language].notifications}
         onOpenDeeplink={onOpenDeeplink}
-        {...(onOpenExternal === undefined ? {} : { onOpenExternal })}
+        onOpenExternal={onOpenExternal ?? (() => undefined)}
         source={source}
       />
     )
@@ -179,6 +179,40 @@ describe('通知中心的分组与空态', () => {
 
     expect(onOpenExternal).toHaveBeenCalledWith('https://example.test/a')
     expect(onOpenDeeplink).not.toHaveBeenCalled()
+  })
+
+  it('动作按钮用 aria-describedby 指回行标题：一屏好几条同名按钮，读屏要分得出是哪一条', async () => {
+    const source = fakeSource({
+      list: async () => ({
+        items: [
+          record({
+            id: 'job-a',
+            title: '任务失败：定时刷新',
+            deeplink: { scope: 'platform' as const, entityType: 'job', entityId: 'a' },
+            actions: [{ id: 'open-task', kind: 'open' as const, label: '打开任务', deeplink: { scope: 'platform' as const, entityType: 'job', entityId: 'a' } }]
+          }),
+          record({
+            id: 'job-b',
+            title: '任务失败：日历回填',
+            deeplink: { scope: 'platform' as const, entityType: 'job', entityId: 'b' },
+            actions: [{ id: 'open-task', kind: 'open' as const, label: '打开任务', deeplink: { scope: 'platform' as const, entityType: 'job', entityId: 'b' } }]
+          })
+        ]
+      })
+    })
+    await mount(source)
+
+    const actionButtons = rows().map((row) => row.querySelector<HTMLButtonElement>('.notification-center-copy ~ button'))
+    expect(actionButtons.filter((button) => button !== null)).toHaveLength(2)
+    for (const [index, button] of actionButtons.entries()) {
+      const describedBy = button?.getAttribute('aria-describedby')
+      expect(describedBy).toBeTruthy()
+      // 指的必须是同一行的标题，而且那个 id 真的存在：指到空处比不指更糟。
+      const title = document.getElementById(describedBy!)
+      expect(title).not.toBeNull()
+      expect(title?.closest('.notification-center-row')).toBe(rows()[index])
+      expect(title?.textContent).toBe(index === 0 ? '任务失败：定时刷新' : '任务失败：日历回填')
+    }
   })
 
   it('外链不是 http(s) 时不给按钮：主进程会拒，点了就是一个抛错的按钮', async () => {
@@ -472,6 +506,7 @@ describe('首次进入不闪错误或空态', () => {
         onClose: () => undefined,
         labels,
         onOpenDeeplink: () => undefined,
+        onOpenExternal: () => undefined,
         source
       })
     await act(async () => {

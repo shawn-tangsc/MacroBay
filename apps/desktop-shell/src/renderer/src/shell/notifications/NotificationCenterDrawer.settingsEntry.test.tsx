@@ -79,6 +79,7 @@ describe('the notification centre settings entry follows the registry', () => {
       onClose: () => undefined,
       labels,
       onOpenDeeplink: () => undefined,
+      onOpenExternal: () => undefined,
       source,
       settingsEntry: entry
     })
@@ -101,6 +102,7 @@ describe('the notification centre settings entry follows the registry', () => {
       onClose: () => undefined,
       labels,
       onOpenDeeplink: () => undefined,
+      onOpenExternal: () => undefined,
       source,
       settingsEntry: entry,
       onOpenSettings
