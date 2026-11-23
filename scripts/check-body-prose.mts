@@ -11,7 +11,8 @@
  *
  * 挡什么：`*.tsx` 里 `*Hint` / `*Note` 文案的**用法点**——成员访问（`text.a.hoursHint`、`labels.xNote`）
  * 与键字符串（`resolveText('…Hint')`）。
- * 不挡什么：i18n 定义文件本身（`*.ts`）、`*.test.*`（断言里的键名是文本，不是渲染位置）。
+ * 不挡什么：i18n 定义文件本身（`*.ts`）、`*.test.*`（断言里的键名是文本，不是渲染位置）、
+ * **截图面**（见 `CAPTURE_ONLY_SURFACES`：那几张页面的产物是一张图，不是屏幕上的界面）。
  *
  * 复算：`pnpm exec tsx scripts/check-body-prose.mts`。
  */
@@ -27,6 +28,33 @@ const SKIP_DIRS = new Set(['node_modules', 'out', 'dist', '.git', 'coverage'])
 const ALLOWED_CONTEXT = /helpTrigger\(|\bPopover\b|content=|lines=|aria-|title=|ariaLabelKey=|labelKeys=/u
 
 type Finding = { file: string; line: number; key: string }
+
+/**
+ * 截图面：**不画给屏幕、只画进一张图**的页面。那几句在这个门禁的射程之外，理由是产物形态不同——
+ * PNG 里没有 hover、没有可点的 `ⓘ`，「收进浮层」在图上根本不存在；而图上的说明句是**内容**
+ * （这一版缺不缺数据、有没有另一种语言版），拿到图的人要靠它判断这份简报全不全，删了就变成
+ * 「残缺的一期看起来是完整的」。
+ *
+ * 判据只认**页面自己是不是只用来截图**（不是「这句话看起来像说明」），所以按文件写死，一处一条；
+ * 测试里断每条路径都还在（文件改名就红，逼下一个人重新判断这块还算不算截图面），
+ * 也断同样的命中出现在**别的**文件里照样红（白名单不许变成整门禁的旁路）。
+ *
+ * 今天只有一条：海报窗口——主进程起一个不显示的窗口，画完 `capturePage()` 就把窗口销毁
+ * （`window/briefingPosterCapture.ts`），页面上没有控件、没有壳层状态。
+ */
+const CAPTURE_ONLY_SURFACES: readonly string[] = [
+  'products/market-intelligence/desktop/pages/intelligence/BriefingPosterWindow.tsx'
+]
+
+/** 纯函数：这个文件是不是截图面（相对仓库根、`/` 分隔）。 */
+export function isCaptureOnlySurface(file: string): boolean {
+  return CAPTURE_ONLY_SURFACES.includes(file)
+}
+
+/** 名单本身也要能被测试读到（每条都必须在仓库里存在）。 */
+export function captureOnlySurfaces(): readonly string[] {
+  return CAPTURE_ONLY_SURFACES
+}
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -95,6 +123,8 @@ function main(): void {
     const absolute = join(ROOT, root)
     if (!existsSync(absolute)) continue
     for (const file of walk(absolute)) {
+      const id = relative(ROOT, file).split(sep).join('/')
+      if (isCaptureOnlySurface(id)) continue
       const text = stripFloatingBlocks(readFileSync(file, 'utf8'))
       text.split('\n').forEach((line, index) => {
         if (ALLOWED_CONTEXT.test(line)) return
@@ -108,7 +138,7 @@ function main(): void {
         for (const match of line.matchAll(/['"`]([\w.$-]*(?:Hint|Note))['"`]/gu)) keys.push(match[1]!)
         for (const key of new Set(keys)) {
           // 基线键必须归一化分隔符：Windows 上 `relative()` 给 `a\\b`，基线里是 `a/b`，两边永远对不上。
-          findings.push({ file: relative(ROOT, file).split(sep).join('/'), line: index + 1, key })
+          findings.push({ file: id, line: index + 1, key })
         }
       })
     }
