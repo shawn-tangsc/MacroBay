@@ -222,7 +222,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   })
   // Positioning is read per window rather than reshaped in the browser: the fold and
   // the liquidation lookback belong to the query, so switching windows is one more read.
-  const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
+  // 默认 **24 小时**（用户 2026-11-24）：这张卡日常读的是最近一天的爆仓与持仓变化，7 天只是偶尔翻。
+  const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('24h')
   // TODO(0.4.3-settings-drawer): 数据接入后删除——静态版配置抽屉的临时开关。
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
   // 页面层的入口（日报页 / 日历 / 门户）通过计数请求打开某��屏：计数一变就打开一次。
