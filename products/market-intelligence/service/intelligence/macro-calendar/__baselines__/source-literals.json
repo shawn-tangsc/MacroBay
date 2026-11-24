@@ -18,8 +18,8 @@
       "why": "事件来源的联合类型：`source` 的旧值 `'Narwhal' | '0xRouter'`（历史行兼容，读侧按 feed id 优先、旧值兜底）与说明注释；不是按源分支的读数逻辑，是这个字段的类型定义处"
     },
     "contracts/macro/marketCalendarQueryContracts.ts": {
-      "count": 20,
-      "why": "契约里的 provider id 常量与来源标签定义处；2026-11-20 从 27 收到 20——0xRouter 三路 feed id 与 collectionFeeds 对齐那几处已收拢进注册表/常量，这里只留契约自己必须写的那一份"
+      "count": 17,
+      "why": "契约里的 provider id 常量与来源标签定义处；2026-11-20 从 27 收到 20——0xRouter 三路 feed id 与 collectionFeeds 对齐那几处已收拢进注册表/常量，这里只留契约自己必须写的那一份；2026-11-24 采集清单与描述清单收成一份，删掉重复的 `descriptors` 三个 id，27→20→17"
     },
     "desktop/features/macro/economic-calendar/calendarTwoSourceValue.ts": {
       "count": 2,
