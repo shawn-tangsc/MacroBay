@@ -322,6 +322,24 @@ export function gradeCalendarEvent(
   return row === undefined ? undefined : { tier: row.tier, family: row.family, basis: row.basis }
 }
 /**
+ * **一行的档**（写入端与启动回填共用，`Chief 2026-11-24`）：只从这一行的国家 + 指标码取身份，
+ * 事件行把指标码同时当事件键（`evt.*` / `US.FOMC.<日期>` 这两种身份本来就是事件）。
+ *
+ * 一处实现、两处调用：分开写就会出现「写入时判一个档、回填时判另一个」，而这两处判的是**同一行**。
+ * 返回 `undefined` ＝未分级（表里没有这个族）；调用方写 `NULL`，不是写「低」。
+ */
+export function calendarImportanceGradeForRow(
+  row: Readonly<{ countryCode: string; metricKey: string }>
+): 'high' | 'medium' | 'low' | undefined {
+  return gradeCalendarEvent({
+    countryCode: row.countryCode,
+    metricKey: row.metricKey,
+    ...(row.metricKey.startsWith('evt.') || row.metricKey.startsWith('US.FOMC.')
+      ? { eventKey: row.metricKey } : {})
+  })?.tier
+}
+
+/**
  * **linked 对取哪一档**（技术方案 §4.1 末条）：同一次发布在库里是两条物理记录——标准行（有指标码）
  * 与官方修订行（有 `eventFamily`）。标准行的判据更硬（码是身份、可查表），所以它的档先；
  * 标准行未分级才回退官方那条；两边都没有 → 未分级。

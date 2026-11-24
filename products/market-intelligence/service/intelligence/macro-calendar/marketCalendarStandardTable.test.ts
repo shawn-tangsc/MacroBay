@@ -318,3 +318,44 @@ describe('同一排期重复发布：字段级合并', () => {
     expect(rows[0]!.data_observed_at).toBe('2026-11-06T14:00:00.000Z')
   })
 })
+
+/**
+ * **档随重写更新**（Chief 2026-11-24 定，R44 S1 的收口）。
+ *
+ * `importance_grade` 原来只出现在 insert 的列清单里，`do update` 里没有——于是「S1 之后没重启过」
+ * 的老行（全表 `NULL`）被采集重写一百次也永远是未分级：日历显示「未分级」、提醒按
+ * `importance-not-selected` 一律不推。重启一次就是全站静音。
+ *
+ * 口径：**每次重写都按当前表重判**（不 coalesce）。旧档是源给的、已被证明是错的，
+ * 保留旧值等于把错档固化；判不出就写 `NULL`——那是「没有」，不是「低」。
+ */
+describe('档随重写更新（不回填、也不固化旧档）', () => {
+  it('行已存在且档为空：同身份再写一次就把档补上（不是只写不更）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const row: CalendarStandardRow = { ...base, countryCode: 'US', metricKey: 'US.CPI.NSA.YOY',
+      periodKey: '2026-10', scheduledDate: '2026-11-10', sourceProviderId: 'macro-calendar-bls',
+      sourceEventId: 'US.CPI.RELEASE.2026-10' }
+    upsertCalendarStandardRow(database, row)
+    // 模拟 S1 之前写下的行：列是后加的，值为 NULL。
+    database.exec('update mi_calendar_events set importance_grade = null')
+    upsertCalendarStandardRow(database, row)
+    const stored = database.prepare(`select importance_grade from mi_calendar_events
+      where metric_key = 'US.CPI.NSA.YOY'`).get() as { importance_grade: string | null }
+    expect(stored.importance_grade).toBe('high')
+  })
+
+  it('已有的档也会被按当前表重判（`low` 被重写成 `high`，不是只补空）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const row: CalendarStandardRow = { ...base, countryCode: 'US', metricKey: 'US.NONFARM.SA.CHANGE',
+      periodKey: '2026-10', scheduledDate: '2026-11-06', sourceProviderId: 'macro-calendar-bls',
+      sourceEventId: 'US.NONFARM_PAYROLLS.RELEASE.2026-10' }
+    upsertCalendarStandardRow(database, row)
+    database.exec("update mi_calendar_events set importance_grade = 'low'")
+    upsertCalendarStandardRow(database, row)
+    const stored = database.prepare(`select importance_grade from mi_calendar_events
+      where metric_key = 'US.NONFARM.SA.CHANGE'`).get() as { importance_grade: string | null }
+    expect(stored.importance_grade).toBe('high')
+  })
+})

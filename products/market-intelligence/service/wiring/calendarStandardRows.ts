@@ -23,6 +23,7 @@ import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/mar
 import { fillStandardSeriesIds } from '../intelligence/macro-calendar/marketCalendarStandardSeriesIdFill'
 import { auditCalendarIntegrity, calendarIntegrityGaps } from '../intelligence/macro-calendar/marketCalendarIntegrityAudit'
 import { normalizeCalendarStandardRows } from '../intelligence/macro-calendar/marketCalendarStartupNormalization'
+import { backfillCalendarImportanceGrades } from '../intelligence/macro-calendar/marketCalendarImportanceGradeBackfill'
 import type { CalendarStandardWriteLayer } from '../intelligence/macro-calendar/calendarStandardWriteLayer'
 
 /**
@@ -291,6 +292,21 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       + (normalized.renameCollisions > 0 ? `；改名撞车并入 ${normalized.renameCollisions} 行` : ''))
   } catch (error) {
     report(`[macro-calendar] 启动规范化失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
+  }
+  /**
+   * **重要性档的一次性回填**（Chief 2026-11-24）：`importance_grade` 是后加的列，写入端从今天起
+   * 每次重写都重判，但**不在采集窗口里的未来行**不会被重写——它们会一直 `NULL`（＝未分级，
+   * 日历不标档、提醒一律不推）。所以每次启动把仍是 `NULL` 的行按同一张表补一遍：
+   * 只填空、不覆盖，判不出就留空。幂等：第二遍只剩「本来就没有族」的那批。
+   *
+   * 放在规范化之后：先让重复行合掉，再给留下来的行补档，避免给马上要删的行白写一次。
+   */
+  try {
+    const grades = backfillCalendarImportanceGrades(input.database)
+    report(`[macro-calendar] 重要性档回填：扫 ${grades.scanned} 行、补上 ${grades.filled} 行、`
+      + `仍无族 ${grades.stillUngraded} 行（未分级）`)
+  } catch (error) {
+    report(`[macro-calendar] 重要性档回填失败（已忽略，下次启动重试）：${(error as Error)?.message ?? 'unknown'}`)
   }
   /**
    * **跨源冲突：采集批次这一侧也要扫**（Chief 2026-11-21）。启动链只覆盖「启动时有」的那批；

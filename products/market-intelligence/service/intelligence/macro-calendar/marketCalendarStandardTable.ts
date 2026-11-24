@@ -6,7 +6,7 @@ import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalen
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
 import { isCalendarNumericJson, numericJsonWithoutParse } from './marketCalendarNumericParse'
 import { sourceIdOnWrite, sourceIdOverwritePayload, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
-import { gradeCalendarEvent } from './calendarEventImportance'
+import { calendarImportanceGradeForRow } from './calendarEventImportance'
 import { normalizeValuesJsonForWrite } from './marketCalendarValueEncoding'
 import { resolveSameSourceIdentityTarget, sourceLabelsForWrite } from './marketCalendarSameIdentityWrite'
 
@@ -255,9 +255,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
    * 只作为证据写进旧 `importance` 列；我们的档一律按身份查表。这样「某条采集路径忘了判」
    * 在结构上不可能发生——没有第二个入口能写这一列。
    */
-  const importanceGrade = gradeCalendarEvent({ countryCode, metricKey: row.metricKey,
-    eventKey: row.metricKey.startsWith('evt.') || row.metricKey.startsWith('US.FOMC.')
-      ? row.metricKey : undefined })?.tier ?? null
+  const importanceGrade = calendarImportanceGradeForRow({ countryCode, metricKey: row.metricKey }) ?? null
   const sameIdentity = resolveSameSourceIdentityTarget(database, {
     countryCode, sourceProviderId: row.sourceProviderId, metricKey: row.metricKey, periodKey: row.periodKey
   })
@@ -323,6 +321,10 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       source_label = coalesce(excluded.source_label, source_label),
       source_label_en = coalesce(excluded.source_label_en, source_label_en),
       event_type = coalesce(excluded.event_type, event_type),
+      -- **档每次重写都按当前表重判**（Chief 2026-11-24）：旧档是源给的、已被证明是错的，
+      -- 任何 coalesce 都会把错档固化。判不出就写 NULL——那是「没有」，不是「低」。
+      -- 只在 insert 里写这一列的话，S1 之后没重启过的老行永远是未分级（提醒会全静音）。
+      importance_grade = excluded.importance_grade,
       -- 数值列**逐字段合并**（与 values_json 同一语义：后到的只带 previous 时不许把 actual 抹掉）；
       -- 有值的写进来就把状态拉回 available，没值的那次不清掉已有数值。
       numeric_json = case

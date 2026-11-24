@@ -80,6 +80,40 @@ describe('启动链：syncOfficialStandardRowsAtStartup', () => {
     expect(events.some((item) => String(item.fields?.message ?? '').includes('源内身份转正'))).toBe(true)
   })
 
+  /**
+   * **启动回填把老行的档补上**（Chief 2026-11-24）：S1 之前写下的行 `importance_grade` 是 NULL，
+   * 写入口改了之后只有「被采集重写」的行才会补；不在采集窗口里的未来行靠这一步。
+   * 第二遍必须报「补上 0 行」——只填空，不每轮重写。
+   */
+  it('启动回填补上老行的档，第二遍不再写', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, {
+      ...sourceRow(), countryCode: 'US', metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10',
+      sourceEventId: 'US.CPI.RELEASE.2026-10', seriesId: undefined as never
+    })
+    database.exec('update mi_calendar_events set importance_grade = null')
+    const grades: string[] = []
+    const run = (): void => {
+      syncOfficialStandardRowsAtStartup({
+        database, listEffectiveMonthAsOf: noRevisions, now: () => new Date('2026-11-18T00:00:00.000Z'),
+        log: (_level, _event, fields) => {
+          const message = String(fields?.message ?? '')
+          if (message.includes('重要性档回填')) grades.push(message)
+        }
+      })
+    }
+    run()
+    const stored = (): string | null => (database.prepare(`select importance_grade
+      from mi_calendar_events where metric_key = 'US.CPI.NSA.YOY'`).get() as
+      { importance_grade: string | null }).importance_grade
+    expect(stored()).toBe('high')
+    expect(grades[0]).toContain('补上 1 行')
+    run()
+    expect(stored()).toBe('high')
+    expect(grades[1]).toContain('补上 0 行')
+  })
+
   it('同步失败不阻断启动（吞错语义）', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
