@@ -251,6 +251,27 @@ describe('pad 竖屏 v3：左抽屉 + 底部聊天框', () => {
     expect(readCss()).toContain(".mi-agent-drawer[data-tier='full'] { width: 100%; box-shadow: none; }")
   })
 
+  it('整幅档开着时左侧图标栏也 inert（并排档不关，导航要能用）', async () => {
+    const rail = document.createElement('aside')
+    rail.className = 'global-sidebar'
+    document.body.append(rail)
+    // 并排档：看板要能读、导航也要能用。
+    const side = await mountNarrow(908)
+    await act(async () => grip(side).click())
+    expect(rail.hasAttribute('inert')).toBe(false)
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+    document.body.append(rail)
+    // 整幅档＝切到这一屏：图标栏不在布局根里、也盖不到，只能从外面关掉。
+    const full = await mountNarrow(748)
+    await act(async () => grip(full).click())
+    expect(rail.hasAttribute('inert')).toBe(true)
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(rail.hasAttribute('inert')).toBe(false)
+  })
+
   it('两个面互斥：开一个关另一个（不卸载，草稿与滚动位置都留着）', async () => {
     const container = await mountNarrow(908)
     // 先开聊天框，再点把手开抽屉：聊天框自己关掉。

@@ -186,6 +186,18 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [analysisDrawerOpen, closeAnalysisDrawer])
+  /**
+   * 整幅档＝切到这一屏：左侧 52px 图标栏在布局根**外面**（外壳 grid 第一列），既盖不到、
+   * 也不吃 `__panes` 上的 `inert`。这是本组件唯一一处伸进外壳的 DOM（侧栏不归产品渲染，
+   * 没有可注入的挂点），只认 `.global-sidebar` 一个类名；并排档不关（看板与导航都要能用）。
+   */
+  useEffect(() => {
+    if (!compact || !analysisDrawerOpen || drawerTier !== 'full') return
+    const rail = document.querySelector<HTMLElement>('.global-sidebar')
+    if (rail === null) return
+    rail.setAttribute('inert', '')
+    return () => { rail.removeAttribute('inert') }
+  }, [compact, analysisDrawerOpen, drawerTier])
   // 关掉后焦点回把手：把手关着时在 DOM 里，Tab 回来就落得上。
   useEffect(() => {
     if (analysisDrawerOpen || !returnGripFocus) return
