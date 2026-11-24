@@ -1,5 +1,4 @@
 import { Calendar } from 'lucide-react'
-import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { helpTrigger } from '@platform/ui/components/popover'
@@ -153,14 +152,6 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       ...(policyState === 'disabled' && onOpenPolicySources !== undefined
         ? { actionLabel: text.openSources, onAction: onOpenPolicySources } : {})
     })
-  /**
-   * 抬起来的那块牌（鼠标悬停）：环上一组牌会互相叠住，抬到最前的那块必须整块可读
-   * （用户 2026-11：「鼠标移动到对应的卡片就会到前面来」）。层级只在抬起的这一块上用行内给，
-   * 其余牌子的层级仍由模型按「离现在近的在上」排好——两套规矩不混在 CSS 里。
-   *
-   * 不给牌子 `tabIndex`：它们不点击、不展开，做成可聚焦就是假控件（读屏会以为这里能操作）。
-   */
-  const [raised, setRaised] = useState<string | undefined>(undefined)
   /**
    * **旧形状不要白屏**（2026-11-24 真机崩过）：热更新或宿主没跟上时，`arrows` / `notes` /
    * `text.categories` 可能还是上一版的样子。这里是首屏的一张卡，缺字段就按「这一类没画出来」处理，

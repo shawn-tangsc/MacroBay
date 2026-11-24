@@ -3,24 +3,14 @@
  * 只做三件允许的事：加 `.mi-clock` 作用域前缀、色值换成同值 token、补无障碍属性所需的规则。
  * 任何改变计算值的改写都不许进这里——判据是 getComputedStyle 逐项相等。
  *
- * 两区颜色只此一处：换过去区只改 --mi-clock-time-past；换未来区改 --mi-clock-time-future + 牌底那一档。
- * 牌底不能由带子色按比例混出（带子压得够暗，混出来到不了 1.5 档），必须同色相单独提亮一档。
+ * 两区颜色只此一处：换过去区只改 --mi-clock-time-past；换未来区改 --mi-clock-time-future。
  */
 .mi-clock {
   --mi-clock-time-past: #875d81;
-  --mi-clock-node-past-bg: color-mix(in srgb, var(--mi-clock-time-past) 22%, var(--surface));
-  --mi-clock-node-past-bd: color-mix(in srgb, var(--mi-clock-time-past) 45%, var(--surface));
   --mi-clock-time-future: #222f4a;
-  --mi-clock-node-future-bg: #293958;
-  --mi-clock-node-future-bd: color-mix(in srgb, var(--mi-clock-node-future-bg) 78%, #9aa3b2);
   /* 卡右上角那颗日历图标：叠在卡上，不参与布局。基线：图标矩形 (305,9)–(327,31)，
      即距卡外缘 9px（含 1px 边框）→ 内缩 8px。 */
   --mi-clock-action-inset: 8px;
-  /* 牌子最大宽度（用户 2026-11-21：「这个事件面板太宽了」）：长名字两行也装得下，又不越过环。
-     这个数在 `clockCardModel.clockPlaqueMaxWidth` 里也有一份，用于横向夹取；
-     两处必须同值，由 `ClockCard.test.tsx` 的守卫用例盯着。 */
-  /* 环上的按钮、溢出行、说明行、状态行：**高于所有牌子**（牌子的层级现在由模型按「离现在近的在上」给，
-     最高一块 = 4 + 牌数 − 1，这些行不许被牌子压住）。与 `clockPlaqueOverlayZ` 同值。 */
   --mi-clock-overlay-z: 100;
   /* 四个大类的固定色（用户 2026-11）：**只给箭头**，名字与浮层文字一律 --text。 */
   --mi-clock-cat-rate: #b994ff;
@@ -35,8 +25,6 @@
   --mi-clock-cat-pce: #2f6bb8;
   --mi-clock-time-past: #a880a2;
   --mi-clock-time-future: #d3daeb;
-  --mi-clock-node-past-bg: #e997dd;
-  --mi-clock-node-future-bg: #97b3e9;
 }
 
 .mi-clock__viewport { position: relative; width: 100%; min-width: 0; }
