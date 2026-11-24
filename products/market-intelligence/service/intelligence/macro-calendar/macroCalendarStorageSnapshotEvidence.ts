@@ -30,7 +30,7 @@ export const calendarSnapshotEvidencePolicy = Object.freeze({
    * 导入后旧事件的创建时间会是未知（我们本就不回填），但没有表连"新事件从此刻起准确"也做不到。
    * 若将来把它开放成读者备份，必须先改成接受旧版本并建空侧表，别让读者丢可恢复数据。
    */
-  migrationVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], hashPattern: /^[a-f0-9]{64}$/,
+  migrationVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], hashPattern: /^[a-f0-9]{64}$/,
   canonicalMarketProvider: '0xrouter', archiveMarketProvider: 'macro-calendar-0xrouter'
 })
 export type SnapshotFailureCode = 'schema-invalid' | 'evidence-invalid' | 'evidence-unresolved' | 'capacity' | 'path-invalid' | 'bundle-invalid' | 'incomplete' | 'io-failure'

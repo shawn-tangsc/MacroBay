@@ -11,6 +11,10 @@ import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt } from
 import { zeroXRouterCalendarSchedulerFeeds, zeroXRouterCalendarSchedulerPolicy }
   from '../intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
 import { createMarketCalendarBriefingRefresh } from '../intelligence/macro-calendar/macroCalendarBriefingCatchUp'
+import { createCalendarInterpretationGenerator } from '../intelligence/macro-calendar/interpretation/calendarEventInterpretationGenerator'
+import { createMacroCalendarInterpretationService, type MacroCalendarInterpretationService }
+  from '../intelligence/macro-calendar/macroCalendarEventInterpretationService'
+import { registerCalendarEventInterpretationBackfill } from '../intelligence/macro-calendar/interpretation/calendarEventInterpretationBackfillJob'
 import { registerCalendarEventReminder } from '../intelligence/macro-calendar/registerCalendarEventReminder'
 import { registerCalendarIntegrityJob } from '../intelligence/macro-calendar/marketCalendarIntegrityJob'
 import { latestCurrentWriteFailure, type CalendarStandardWriteLayer }
@@ -162,4 +166,34 @@ export function wireCalendarReadings(input: Readonly<{
   }))
 
   return Object.freeze({ standardCalendarReader, calendarReminder })
+}
+
+/**
+ * 装配「事件解读」（R36 #34 第二半）：用哪份库、哪个模型实例、哪个读口。
+ *
+ * 放在这里而不是 `bootstrap.ts`：主装配文件已经过 500 行，接线上限只许降；
+ * 判据与文案都不在这里（`macroCalendarEventInterpretationService` 负责）。
+ * **模型实例共用情报模块那一个**：`maxConcurrent` 是每实例的闸，另建一份会让两条线互相看不见。
+ */
+export function wireMacroCalendarEventInterpretation(deps: Readonly<{
+  repository: Pick<import('../intelligence/macro-calendar/macroCalendarRepository').MacroCalendarRepository, 'getEffectiveEventAsOf' | 'listEffectiveMonthAsOf'>
+  database: DatabaseSync
+  invoke: Parameters<typeof createCalendarInterpretationGenerator>[0]['invoke']
+  now?: () => string
+  /** 高档自动补生成：没有作业运行时就不注册（测试与演示装配可以不排作业）。 */
+  jobRuntime?: Parameters<typeof registerCalendarEventInterpretationBackfill>[0]
+  readLocale?: () => Promise<'zh-CN' | 'en-US'>
+}>): MacroCalendarInterpretationService {
+  const now = deps.now ?? (() => new Date().toISOString())
+  const interpretation = createMacroCalendarInterpretationService({
+    repository: deps.repository, database: deps.database,
+    generator: createCalendarInterpretationGenerator({ database: deps.database, now, invoke: deps.invoke }), now
+  })
+  // 「实际值落库后自动生成一次」的自动那半：按轮扫已发布的高档行，一轮有上限。
+  if (deps.jobRuntime !== undefined && deps.readLocale !== undefined) {
+    registerCalendarEventInterpretationBackfill(deps.jobRuntime, {
+      repository: deps.repository, interpretation, now, readLocale: deps.readLocale
+    })
+  }
+  return interpretation
 }

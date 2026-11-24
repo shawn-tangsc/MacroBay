@@ -1299,6 +1299,27 @@ mi: miText['zh-CN'],
                 watch: '看结果是否符合预期、声明对工资和通胀的表述，以及行长对下次调整的暗示。'
               },
             },
+            /*
+             * AI 解读（R36 #34 第二半）：只在事件详情抽屉出现。生成时刻与依据范围必须露出来——
+             * 读者要能分清「这段是模型写的、哪一刻写的、用了哪几项」，那是它与固定说明的分界。
+             * 低档与未分级不会走到这里（服务侧就不生成），所以界面不需要为它们准备文案。
+             */
+            interpretation: {
+              title: 'AI 解读',
+              generatedAt: '生成于 {time}',
+              basis: '依据：{scope}',
+              generating: '正在生成解读…',
+              unavailable: '这次没能生成解读。',
+              retry: '重新生成',
+              failure: {
+                'model-unavailable': '模型服务还没就绪，配置好之后再试。',
+                'provider-error': '模型服务这次没有回答，可以重试。',
+                timeout: '模型这次超时了，可以重试。',
+                'invalid-output': '生成的文字没有通过校验，可以重试。',
+                'fact-mismatch': '生成的文字引用了数据里没有的数，已丢弃，可以重试。'
+              },
+              scope: { event: '这条发布', actual: '实际值', previous: '前值', consensus: '预期', history: '往期读数' }
+            },
             abbreviations: {
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': '非农', unemployment: '失业率',
               'average-hourly-earnings': '时薪', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: '宏观'
@@ -3033,6 +3054,27 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 why: 'The yen is the main funding currency in global carry trades, so a change in the direction of Japanese rates changes the cost of cross-border funding.',
                 watch: 'Check whether the decision matched expectations, what the statement says about wages and inflation, and any hint the governor gives about the next move.'
               },
+            },
+            /*
+             * AI interpretation (R36 #34, second half): the drawer only. The generation time and the
+             * evidence scope are printed with the text — that is how a reader tells model-written
+             * prose from the fixed explanation above it.
+             */
+            interpretation: {
+              title: 'AI read',
+              generatedAt: 'Generated {time}',
+              basis: 'Based on: {scope}',
+              generating: 'Generating a read…',
+              unavailable: 'No read could be generated this time.',
+              retry: 'Generate again',
+              failure: {
+                'model-unavailable': 'The model service is not ready yet; try again once it is configured.',
+                'provider-error': 'The model did not answer this time; you can retry.',
+                timeout: 'The model timed out this time; you can retry.',
+                'invalid-output': 'The generated text failed validation; you can retry.',
+                'fact-mismatch': 'The generated text cited a number the data does not carry, so it was discarded; you can retry.'
+              },
+              scope: { event: 'this release', actual: 'actual', previous: 'previous', consensus: 'consensus', history: 'earlier readings' }
             },
             abbreviations: {
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': 'NFP', unemployment: 'Unemployment',

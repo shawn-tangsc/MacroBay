@@ -63,6 +63,15 @@ export function migrateMacroCalendarSchema(database: ReturnType<typeof createMac
     if (!revisionColumns.has('importance_grade')) {
       execute("alter table mi_macro_calendar_revisions add column importance_grade text check(importance_grade in (\'high\',\'medium\',\'low\'))")
     }
+    /**
+     * **R36 #34 第二半：事件解读的落库**（技术方案 §4；方案里写的迁移号 10 已被后面几笔占掉，实际是 12）。
+     *
+     * 主键带 `locale`：一份行只服务一种语言，中文解读端给英文读者是最显眼的错；
+     * 语言变了重新生成一次，比展示错语言的文字便宜。
+     * `data_key` = (实际值, 预期, 前值) 三项展示串的指纹：同一份数据只生成一次。
+     * **只插不改，失败行例外**（`where state='failed'`）：`ready` 是那一刻的账，失败只是标记、可重试。
+     */
+    execute("create table if not exists mi_macro_calendar_event_interpretation (event_key text not null, data_key text not null, locale text not null check(locale in ('zh-CN','en-US')), state text not null check(state in ('ready','failed')), text text, model_ref text, generated_at text not null, snapshot_hash text not null, evidence_scope_json text not null, failure_code text, primary key (event_key, data_key, locale)); create index if not exists idx_mi_calendar_interpretation_event on mi_macro_calendar_event_interpretation(event_key, locale, generated_at desc); insert or ignore into mi_macro_calendar_migrations(version) values (12)")
     execute('commit')
   } catch (error) {
     try { execute('rollback') } catch { /* Preserve the migration failure. */ }

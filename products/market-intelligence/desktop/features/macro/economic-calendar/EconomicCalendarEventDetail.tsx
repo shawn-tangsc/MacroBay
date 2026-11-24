@@ -7,15 +7,16 @@ import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEcono
 import { resolveCalendarConsensus, type CalendarConsensusValue } from '../../../../contracts/macro/calendarConsensus'
 import { useConfirm } from '@platform/ui/components/confirm'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { LoadingState } from '@platform/ui/components/loading'
 import { helpTrigger } from '@platform/ui/components/popover'
 import { Popover } from '@platform/ui/components/popover'
-import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { CalendarEventInterpretation } from './CalendarEventInterpretation'
 import { calendarEventOfficialExplanation } from './calendarEventExplanation'
 import type { EconomicCalendarText } from './economicCalendarText'
 import type { EconomicCalendarEventView } from './economicCalendarModel'
@@ -42,6 +43,8 @@ import {
  * the second one would show fewer facts, or name the same fact differently — so both render this
  * one, inside the same drawer shell (`CalendarInspector`).
  */
+
+import type { MacroCalendarInterpretationView } from '../../../../contracts/macro/economicCalendarQueryContracts'
 
 export type EconomicCalendarRefreshOperation = 'bls' | 'fomc'
 export type EconomicCalendarRefreshFeedback = 'updated' | 'unchanged' | 'unavailable'
@@ -90,7 +93,7 @@ function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalenda
   return time
 }
 
-export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice, blsRefreshBlocked, blsRefreshBlockedCode }: {
+export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice, blsRefreshBlocked, blsRefreshBlockedCode, interpretationClient }: {
   event: EconomicCalendarEventView
   /**
    * The official consensus, when the view carries one. The projection does not surface it today —
@@ -127,6 +130,11 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
    * 由 `blsRefreshBlockedReasonCode` 与行内句走同一道闸门给来，所以不会「句子在、码不在」。
    */
   blsRefreshBlockedCode?: string
+  /**
+   * 解读的读写口（R36 #34 第二半）。**可选**：没有注入就不出现那一段——解读是可选能力，
+   * 详情其余部分不因为它缺席而少一行。
+   */
+  interpretationClient?: Pick<MacroEconomicCalendarClient, 'readEventInterpretation' | 'requestEventInterpretation'>
 }): ReactElement {
   const timeZone = useShellTimeZone()
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
@@ -186,6 +194,8 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
       aria-live="off">
       {explanation.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
     </section>}
+    {/* AI 解读（R36 #34 第二半）：与上面的固定说明是两块、两个节点，互不顶替。 */}
+    {interpretationClient === undefined ? null : <CalendarEventInterpretation eventKey={event.eventKey} text={text} client={interpretationClient} />}
     <div className="mi-economic-calendar__values">
       {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? missingValueSentence}</strong></div>)}
       {/* 官方三源（Fed/BLS/BEA）不提供预期；能用的只有挂着的那条市场观测，所以标出来源。

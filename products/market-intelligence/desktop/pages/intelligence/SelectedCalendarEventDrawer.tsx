@@ -143,6 +143,8 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
       // "could not read it". Passing `null` for the empty field would claim a read we never failed.
       linkedConsensus={detail.linkedMarket.state === 'value' ? detail.linkedMarket.consensus ?? undefined : detail.linkedMarket.state === 'failed' ? null : undefined}
       linkedConsensusFailure={detail.linkedMarket.state === 'failed'}
+      // 解读与固定说明是两块：读/生成都由详情自己发起，页面只递客户端。
+      interpretationClient={client}
       now={now}
       onRefresh={refresh}
       // The reader's own release time is a fact about the event, so the detail is read again; the

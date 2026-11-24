@@ -188,6 +188,7 @@ export type IntelligenceModule = {
   bindCalendarStandardWriteLayer: (read: CalendarStandardWriteLayerReader) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
+  structuredModelInvocation: ReturnType<typeof createStructuredModelInvocationService>
 }
 
 let intelligenceModule: IntelligenceModule | null = null
@@ -344,8 +345,6 @@ export function getIntelligenceModule(
     // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
     // settings surface, but it no longer decides when an edition runs.
     const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
-    // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
-    // settings surface, but it no longer decides when an edition runs.
     const briefingPeriodsSource = createBriefingPeriodsSource({
       filePath: join(dataDir, 'daily-briefing-periods.json'),
       locale: getAppLanguage,
@@ -592,8 +591,7 @@ export function getIntelligenceModule(
         const credential = profile.credentialRef ? await credentialStore.getByRef(profile.credentialRef as never) : null
         return { enabled: profile.enabled === true, hasCredential: Boolean(credential?.apiKey) }
       },
-      macroMarketLive,
-      dashboardFeedStatus,
+      macroMarketLive, structuredModelInvocation, dashboardFeedStatus,
       setPolicyPathQuery: (query: PolicyPathQueryService) => {
         briefingPolicyPathQuery = query
         // The analysis reads through the public query service, not the briefing's direct handle.

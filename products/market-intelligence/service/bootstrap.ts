@@ -33,7 +33,7 @@ import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerI
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
-import { wireCalendarReadings } from './wiring/calendarReadings'
+import { wireCalendarReadings, wireMacroCalendarEventInterpretation } from './wiring/calendarReadings'
 import { wireZeroXRouterCalendarSchedule } from './wiring/zeroXRouterCalendarSchedule'
 import { scheduleHistoricalValueFill } from './wiring/calendarStandardRows'
 import { createNarwhalStandardRowsWriter, startCalendarStandardRows } from './wiring/calendarStandardRowsNarwhal'
@@ -536,7 +536,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides, releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
   }, blsEmploymentMvpRefresh, blsScheduleAndLatestValues, macroCalendarBackend.fedFomcRefresh, marketCalendar,
-    { database: macroCalendarBackend.storage.database })
+    { database: macroCalendarBackend.storage.database }, wireMacroCalendarEventInterpretation({ repository: macroCalendarBackend.repository, database: macroCalendarBackend.storage.database, invoke: intelligenceModule.structuredModelInvocation.invoke, jobRuntime: deps.jobRuntime, readLocale: () => deps.getAppLanguage?.() ?? Promise.resolve('zh-CN') }))
   // The dashboard's 市场状态 block reads the collected macro series (synthetic dollar, gold) here.
   // Gold's 最新 cell additionally reads the live tick, which is reported beside the stored level and
   // is read by no window: the returns in this snapshot are computed from stored points alone.
