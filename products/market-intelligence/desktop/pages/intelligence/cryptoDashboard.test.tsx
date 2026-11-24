@@ -1696,16 +1696,32 @@ describe('the defensive premium band', () => {
     expect(band.querySelector('.mi-defensive-premium__topbar-actions .mi-defensive-premium__headline-tail')?.textContent)
       .toContain(dashboardText.defensivePremium.skew.unit)
 
-    const sentence = band.querySelector('[data-skew-direction]')!
-    expect(sentence.getAttribute('data-skew-direction')).toBe(reason)
-    const expected = reason === 'insufficient'
-      ? dashboardText.defensivePremium.skew.direction.insufficient
-      : reason === 'discontinuous'
-        ? dashboardText.defensivePremium.skew.direction.discontinuous
-        : dashboardText.defensivePremium.skew.direction.stale.replace('{time}', '2026-08-04')
-    expect(sentence.textContent).toBe(expected)
-    // 方向未知时结论也跟着降级，不硬凑一个组合句。
-    expect(band.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
+    // 「为什么没方向」只在结论行说一次（用户 2026-11-24）：图下不再有那句，说明行只报数量。
+    expect(band.querySelector('[data-skew-direction]')).toBeNull()
+    expect(band.querySelector('[data-verdict]')?.textContent).toBe(
+      fillLabelParams(dashboardText.defensivePremium.verdict.fear.skewUnknown[reason], { date: '2026-08-04' })
+    )
+    // 同一件事只说一遍：整张卡里「还不够 5 天 / 数据停在 / 读数不连续」各只出现一次。
+    const repeated = ['还不够 5 天', '偏斜数据停在', '偏斜读数不连续']
+      .map(phrase => [phrase, band.textContent!.split(phrase).length - 1] as const)
+      .filter(([, count]) => count > 0)
+    expect(repeated.map(([phrase]) => phrase)).toHaveLength(1)
+    expect(repeated[0]![1]).toBe(1)
+  })
+
+  it('keeps only the count under the chart when the direction is unknown, so nothing is said twice', async () => {
+    // 用户 2026-11-24 的截图就是这一态（3 个读数、不足 5 天）：图下写「偏斜还不够 5 天，不判方向」，
+    // 结论又说「偏斜这半没有可用的方向」——同一件事两遍。现在图下只报数量，原因只在结论里说一次。
+    const container = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 6))
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const notes = band.querySelector('.mi-defensive-premium__notes')!
+    expect(notes.querySelector('[data-skew-history]')?.textContent).toContain('2026-07-06')
+    expect(notes.querySelector('[data-skew-direction]')).toBeNull()
+    expect(notes.textContent).not.toContain('不判方向')
+    // 整张卡里那句「还不够 5 天」只出现一次，且出现在结论行。
+    expect(band.textContent!.split('还不够 5 天').length - 1).toBe(1)
+    expect(band.querySelector('[data-verdict]')?.textContent)
+      .toBe(dashboardText.defensivePremium.verdict.fear.skewUnknown.insufficient)
   })
 
   it('says the skew half is empty in its own words, not the fear-greed sentence', async () => {
@@ -1994,7 +2010,8 @@ describe('the defensive premium band', () => {
     const unknown = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 5))
     const unknownBand = unknown.querySelector('.mi-defensive-premium')!
     expect(unknownBand.querySelector('.mi-defensive-premium__topbar-actions .mi-defensive-premium__headline-tail [data-skew-direction]')).toBeNull()
-    expect(unknownBand.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
+    expect(unknownBand.querySelector('[data-verdict]')?.textContent)
+      .toBe(dashboardText.defensivePremium.verdict.fear.skewUnknown.insufficient)
   })
 
   it('names the direction with the 5-day window, and leaves one action in the header when not connected', async () => {

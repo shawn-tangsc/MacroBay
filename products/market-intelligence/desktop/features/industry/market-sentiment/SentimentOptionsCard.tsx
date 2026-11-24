@@ -6,7 +6,7 @@ import { Popover } from '@platform/ui/components/popover'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
-import type { OptionSkewCardSection, OptionSkewDirection, SentimentOptionsCardResult } from '../../../../contracts/intelligenceQueryContracts'
+import type { OptionSkewCardSection, SentimentOptionsCardResult } from '../../../../contracts/intelligenceQueryContracts'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardSentimentOptionsState } from '../../../pages/intelligence/useDashboardSentimentOptionsCard'
 import type { DashboardFearGreedState } from '../../../pages/intelligence/dashboardFearGreedModel'
@@ -56,7 +56,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   // 「有过读数、正在重读」才留一颗禁用的刷新，保住焦点与入口。
   const firstReading = state.state === 'loading' && state.hadReading !== true
   const showRefresh = !firstReading && wholeCardState === undefined && (notConnected ? fearGreedFailed : !showEnable)
-  const verdictKey = result && wholeCardState === undefined ? verdictPath(result) : undefined
+  const verdict = result && wholeCardState === undefined ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
   const loading = state.state === 'loading'
   // 档位词在头栏中轨（用户 2026-11-24）：条件与仪表画指针那一处一致——真有读数、这一格没被关掉。
@@ -225,20 +225,16 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                         first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
                         last: skew.points[0]!.riskReversal.toFixed(1)
                       })} />
-                    {/* 图下只留**一行**说明，装在一个容器里落进列模板的第 4 行（`auto`）：
-                        方向未知（不足 5 天 / 偏旧 / 断档）说方向，方向已知且窗口未满说攒到哪天。
-                        两句同时出就是同一件事说两遍——读者在 1 点那天看到过。 */}
-                    {skew.direction.kind === 'unknown'
+                    {/* 图下只留**一行**说明，装在一个容器里落进列模板的第 2 行（`auto`）：只报数量
+                        （从哪天开始记、还差几个）。「为什么没方向」**只在结论行说一次**（用户 2026-11-24：
+                        图下说「偏斜还不够 5 天，不判方向」，结论又说「偏斜这半没有可用的方向」，同一件事两遍）。 */}
+                    {skew.points.length < 30
                       ? <div className="mi-defensive-premium__notes">
-                        <SkewDirectionSentence direction={skew.direction} latestDay={skew.latestDay} text={text} />
+                        <p className="mi-defensive-premium__history" data-skew-history>
+                          {fillLabelParams(text.skew.history.remaining, { date: skew.seriesStart, n: String(30 - skew.points.length) })}
+                        </p>
                       </div>
-                      : skew.points.length < 30
-                        ? <div className="mi-defensive-premium__notes">
-                          <p className="mi-defensive-premium__history" data-skew-history>
-                            {fillLabelParams(text.skew.history.remaining, { date: skew.seriesStart, n: String(30 - skew.points.length) })}
-                          </p>
-                        </div>
-                        : null}
+                      : null}
                   </>}
               </> : skew?.state === 'empty' ? <>
                 {/* 偏斜用自己的空态句：借用 `text.empty` 会让这半显示「暂无已采集的恐惧与贪婪指数」。 */}
@@ -253,7 +249,9 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
     {/* 结论行还没内容时先把位置留出来：换态时卡底不跳。卡上没有来源行——来源身份在卡头 ⓘ
         与两格的格名（「BTC 期权偏斜（Deribit）」）上说，定稿 219 的组成里也没有那一行。 */}
     {loading && wholeCardState === undefined ? <p className="mi-defensive-premium__verdict" aria-hidden="true">&nbsp;</p> : null}
-    {verdictKey && !wholeCardState ? <p className="mi-defensive-premium__verdict" data-verdict>{dataText(verdictKey)}</p> : null}
+    {verdict && !wholeCardState
+      ? <p className="mi-defensive-premium__verdict" data-verdict>{fillLabelParams(dataText(verdict.key), verdict.params ?? {})}</p>
+      : null}
   </section>
 }
 
@@ -297,21 +295,6 @@ function skewUnavailableText(section: Extract<OptionSkewCardSection, { state: 'u
   return text.skew.unavailable.read
 }
 
-/** 方向未知时说明是哪种未知：不够几天 / 停在哪天 / 中间断档。三句各有自己的键，不共用一个泛句。 */
-function SkewDirectionSentence({ direction, latestDay, text }: Readonly<{
-  direction: OptionSkewDirection
-  latestDay: string
-  text: DefensivePremiumCardText
-}>): React.ReactElement | null {
-  if (direction.kind !== 'unknown') return null
-  const sentence = direction.reason === 'insufficient'
-    ? text.skew.direction.insufficient
-    : direction.reason === 'discontinuous'
-      ? text.skew.direction.discontinuous
-      : fillLabelParams(text.skew.direction.stale, { time: latestDay })
-  return <p className="mi-defensive-premium__direction mi-defensive-premium__direction--unknown" data-skew-direction={direction.reason}>{sentence}</p>
-}
-
 function toGaugeState(section: SentimentOptionsCardResult['fearGreed'] | undefined): DashboardFearGreedState {
   if (!section) return { state: 'loading' }
   if (section.state === 'empty') return { state: 'empty' }
@@ -324,7 +307,7 @@ function toGaugeState(section: SentimentOptionsCardResult['fearGreed'] | undefin
  * itself first; then a half without a value degrades the combination; only two usable halves earn
  * a combination sentence.
  */
-export function verdictPath(result: SentimentOptionsCardResult): string | undefined {
+export function verdictPath(result: SentimentOptionsCardResult): { key: string; params?: Readonly<Record<string, string>> } | undefined {
   const bucket = result.fearGreed.state === 'available' ? result.fearGreed.bucket : undefined
   const side = bucket === undefined ? undefined : bucket === 'extreme-fear' || bucket === 'fear' ? 'fear' : bucket === 'neutral' ? 'neutral' : 'greed'
   const direction = result.optionSkew.state === 'available' && result.optionSkew.direction.kind !== 'unknown'
@@ -334,12 +317,18 @@ export function verdictPath(result: SentimentOptionsCardResult): string | undefi
   // 恐惧贪婪这一半没有读数——读不到、或者窗口内确实没有——都只说保费方向，并指出缺的是它。
   // 「为什么缺」由那一格的行内说，结论不重复原因（PRD §5.3）。
   if (result.fearGreed.state !== 'available') {
-    return direction ? `${TEXT_PREFIX}.verdict.fgMissing.${direction}` : `${TEXT_PREFIX}.degraded.fearGreed`
+    return { key: direction ? `${TEXT_PREFIX}.verdict.fgMissing.${direction}` : `${TEXT_PREFIX}.degraded.fearGreed` }
   }
   if (result.optionSkew.state === 'unavailable') {
-    return side ? `${TEXT_PREFIX}.verdict.${side}.skewMissing` : `${TEXT_PREFIX}.degraded.skew`
+    return { key: side ? `${TEXT_PREFIX}.verdict.${side}.skewMissing` : `${TEXT_PREFIX}.degraded.skew` }
   }
   if (!side) return undefined
-  if (result.optionSkew.state !== 'available' || direction === undefined) return `${TEXT_PREFIX}.verdict.${side}.skewMissing`
-  return `${TEXT_PREFIX}.verdict.${side}.${direction}`
+  if (result.optionSkew.state !== 'available') return { key: `${TEXT_PREFIX}.verdict.${side}.skewMissing` }
+  const skewDirection = result.optionSkew.direction
+  if (skewDirection.kind !== 'unknown') return { key: `${TEXT_PREFIX}.verdict.${side}.${skewDirection.kind}` }
+  // 方向未知：一句话同时说档位与偏斜状态（界面 2026-11-24 的合并句），图下不再重复同一件事。
+  // `stale` 带源日：读者要知道「停在哪天」，这个日期只在这里出现一次。
+  return skewDirection.reason === 'stale'
+    ? { key: `${TEXT_PREFIX}.verdict.${side}.skewUnknown.stale`, params: { date: result.optionSkew.latestDay } }
+    : { key: `${TEXT_PREFIX}.verdict.${side}.skewUnknown.${skewDirection.reason}` }
 }
