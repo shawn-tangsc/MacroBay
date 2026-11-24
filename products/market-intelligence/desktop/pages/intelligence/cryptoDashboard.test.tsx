@@ -288,17 +288,15 @@ describe('crypto intelligence dashboard', () => {
     expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    // 定版是 ECharts 仪表（用户 2026-11-22 看过手绘版后改口）：分数在盘里；档位词在**图下那一行**
-    // （用户 2026-11-24：三个名字一起下移到各自图下），图里没有任何字，画布本身不进可访问树，
-    // 读屏念的是那一句带分数的名字。
+    // 定版是 ECharts 仪表（用户 2026-11-22 看过手绘版后改口）：分数在盘里；档位词在**弧的上方**、
+    // 图位之内（用户 2026-11-24），画布本身不进可访问树，读屏念的是那一句带分数的名字。
     const bucketWord = container.querySelector('[data-gauge-reading]')!
-    expect(bucketWord.closest('.mi-defensive-premium__col-foot--gauge')).not.toBeNull()
+    expect(bucketWord.closest('.mi-defensive-premium__chart-slot')).not.toBeNull()
     expect(bucketWord.textContent).toBe(text.dashboard.fearGreed.buckets['extreme-fear'])
     expect(bucketWord.getAttribute('aria-label')).toBe(`22 ${text.dashboard.fearGreed.buckets['extreme-fear']}`)
     expect(bucketWord.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
-    // 词在图下那一行、不在图位里：图位（`__chart-slot`）里一个文字节点都没有。
-    expect(gauge.querySelector('.mi-defensive-premium__chart-slot [data-gauge-reading]')).toBeNull()
-    expect(gauge.querySelector('.mi-defensive-premium__chart-slot [data-gauge-bucket-text]')).toBeNull()
+    // 中列图下没有那一行了（用户 2026-11-24）：档位词在 168 图位里、弧上方，卡高由两侧的图下行决定。
+    expect(gauge.querySelector('.mi-defensive-premium__col-foot')).toBeNull()
     expect(gauge.querySelector('[data-chart="gauge"]')?.getAttribute('aria-hidden')).toBe('true')
     // 仪表只回答「落在哪一档」：日期在恐惧贪婪格的读数行上。
     expect(gauge.textContent).not.toContain('2026')
@@ -341,7 +339,7 @@ describe('crypto intelligence dashboard', () => {
       [12, 'extreme-fear'], [37, 'fear'], [50, 'neutral'], [60, 'greed'], [88, 'extreme-greed']
     ] as const) {
       const { band, dispose } = await renderSentimentGauge(score, bucket)
-      const reading = band.querySelector('.mi-defensive-premium__col-foot--gauge [data-gauge-reading]')!
+      const reading = band.querySelector('.mi-defensive-premium__chart-slot [data-gauge-reading]')!
       expect(reading.getAttribute('data-gauge-bucket-text')).toBe(bucket)
       expect(reading.textContent).toBe(text.dashboard.fearGreed.buckets[bucket])
       expect(reading.getAttribute('aria-label')).toBe(`${score} ${text.dashboard.fearGreed.buckets[bucket]}`)
@@ -384,15 +382,18 @@ describe('crypto intelligence dashboard', () => {
     expect(cssBlock(styles, '.mi-defensive-premium__col-foot .mi-defensive-premium__headline-tail {'))
       .toContain('margin-left: 0')
     expect(styles).not.toContain('.mi-defensive-premium__notes {')
-    // 档位词在图下那一行、11/650、居中（用户 2026-11-24）：它不再绝对定位、也不再占卡头中轨。
+    // 档位词在**弧上方、图位之内**（用户 2026-11-24）：绝对定位、top 6、铺满后居中，不新增行。
     const bucketRule = cssBlock(styles, '.mi-defensive-premium__gauge-bucket {')
-    expect(bucketRule).not.toContain('position: absolute')
+    expect(bucketRule).toContain('position: absolute')
+    expect(bucketRule).toContain('inset-inline: 0')
+    expect(bucketRule).toContain('top: 6px')
     expect(bucketRule).not.toContain('bottom:')
     expect(bucketRule).toContain('text-align: center')
     expect(bucketRule).toContain('font-size: var(--font-meta)')
+    expect(bucketRule).toContain('line-height: var(--line-meta)')
     expect(bucketRule).toContain('font-weight: 650')
-    expect(cssBlock(styles, '.mi-defensive-premium__col-foot--gauge {'))
-      .toContain('justify-content: center')
+    // 中列图下没有行：那条规则整个消失，否则中列又会多出 22 高、卡高变两档。
+    expect(styles).not.toContain('.mi-defensive-premium__col-foot--gauge {')
     expect(styles).not.toContain('.mi-defensive-premium__topbar-mid {')
     // 卡的行间收成 0 之后，结论句与图之间那 8（界面 2026-11-24 从 12 收到 8）落在它自己的外边距上。
     // `.mi-crypto-dashboard p { margin: 0 }` 权重更高，选择器不带 `>` 会被清成 0（探针里量到结论句紧贴图底 192）。
@@ -1398,10 +1399,10 @@ describe('host wiring: cells switched off and sources judged', () => {
     const gauge = container.querySelector('[data-sentiment-gauge]')!
     // 有数据时没有那一行：状态句只在没读数时出现。
     expect(gauge.querySelector('[data-sentiment-state]')).toBeNull()
-    // 档位词在仪表列图下那一行（用户 2026-11-24），图位里没有字。
-    expect(container.querySelector('.mi-defensive-premium__col-foot--gauge [data-gauge-reading]')?.textContent)
+    // 档位词在仪表列的图位里、弧上方（用户 2026-11-24），不在画布上——画布是装饰，一个字都没有。
+    expect(container.querySelector('.mi-defensive-premium__chart-slot [data-gauge-reading]')?.textContent)
       .toBe(dashboardText.fearGreed.buckets['extreme-fear'])
-    expect(gauge.querySelector('.mi-defensive-premium__chart-slot [data-gauge-reading]')).toBeNull()
+    expect(gauge.querySelector('[data-chart="gauge"] [data-gauge-reading]')).toBeNull()
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
   })
 })
@@ -2047,7 +2048,9 @@ describe('the defensive premium band', () => {
     // 说明行整行删掉（用户 2026-11-24）：6 个读数与满窗都只有图下那一行名字，没有第二行。
     for (const count of [6, 30]) {
       const band = (await renderBand(skewClient({ kind: 'steeper' }, count))).querySelector('.mi-defensive-premium')!
-      expect(band.querySelectorAll('.mi-defensive-premium__col-foot')).toHaveLength(3)
+      // 两列有图下行、中列没有（用户 2026-11-24 把档位词抬到弧上方）。
+      expect(band.querySelectorAll('.mi-defensive-premium__col-foot')).toHaveLength(2)
+      expect(band.querySelector('.mi-defensive-premium__col--gauge .mi-defensive-premium__col-foot')).toBeNull()
       expect(band.querySelector('[data-half="skew"]')!.children).toHaveLength(2)
     }
 

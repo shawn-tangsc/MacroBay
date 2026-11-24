@@ -8,8 +8,9 @@ import { GaugeChart } from './DefensivePremiumCharts'
 /**
  * 仪表那一列（定稿 §4.4）：**ECharts 仪表**（`b56f86a8c` 那套）——五段弧、指针、圆盘里的分数。
  *
- * 用户 2026-11-24：三个名字（两个格名 + 这一列的档位词）一起落到**各自图下面那一行**（行高 22、
- * 与图间距 6），所以这一列也有了行下说明；仪表画布仍占满整格 168、与两侧走势图等高。
+ * 用户 2026-11-24：两侧的格名落到**图下面那一行**（行高 22、与图间距 6）；这一列的档位词反过来
+ * 抬到**弧的上方**、仍在 168 图位之内（绝对定位，不新增行），所以中列图下没有行。
+ * 仪表画布仍占满整格 168、与两侧走势图等高。
  *
  * 用户 2026-11-22 先要回手绘、看完截图又改口「手绘太丑」，定版是这一版；以后要再换先问用户。
  * 手绘那版试过、已否，别再拿回来。
@@ -38,16 +39,16 @@ export function SentimentGauge({ state, cellOff, titleId, bucketLabels }: Readon
   return <div className="mi-defensive-premium__col mi-defensive-premium__col--gauge" role="group" aria-labelledby={titleId} data-sentiment-gauge>
     <div className="mi-defensive-premium__chart-slot">
       <GaugeChart score={reading?.score} />
-      {/* 还在读：环叠在图上，不另占一行，也**不播报**——整卡一次加载只许一处 role=status。 */}
-      {waiting ? <span className="mi-defensive-premium__col-wait"><LoadingSpinner /></span> : null}
-    </div>
-    {/* 图下那一行：档位词居中对齐两侧的格名（用户 2026-11-24 从卡头中轨挪下来）。
-        11/650、五档语义色；盘里那个分数只是画布内容，读屏靠这一句带分数的名字。 */}
-    <div className="mi-defensive-premium__col-foot mi-defensive-premium__col-foot--gauge">
+      {/* 档位词在**弧上方**、图位之内（用户 2026-11-24）：绝对定位，不新增行——中列到 168 就结束，
+          两侧到 196（168 + 6 + 22），所以「三列底边同线」不再成立，但三张图的图位仍同线。
+          词盒 6…22.5（top 6、行高 16.5），弧顶 31，词底到弧顶 8.5。
+          11/650、五档语义色；盘里那个分数只是画布内容，读屏靠这一句带分数的名字。 */}
       {reading === undefined ? null
         : <p className="mi-defensive-premium__gauge-bucket" data-gauge-reading
           data-gauge-bucket-text={reading.bucket}
           aria-label={`${reading.score} ${bucketLabels[reading.bucket]}`}>{bucketLabels[reading.bucket]}</p>}
+      {/* 还在读：环叠在图上，不另占一行，也**不播报**——整卡一次加载只许一处 role=status。 */}
+      {waiting ? <span className="mi-defensive-premium__col-wait"><LoadingSpinner /></span> : null}
     </div>
   </div>
 }

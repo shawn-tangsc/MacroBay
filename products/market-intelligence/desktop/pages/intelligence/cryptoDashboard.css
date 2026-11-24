@@ -189,7 +189,8 @@
 .mi-defensive-premium__window { margin-inline: 4px; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* 一列 = 三行（用户 2026-11-24）：图 168 / 名字行 auto / 列尾富余 1fr。
    名字行在**图下面**（格名读的是它上面那张图）；第三行是弹性行：三列内容不齐时多出来的高度落在列尾，
-   不再把图往下推。 */
+   不再把图往下推。中列没有名字行（档位词在弧上方、图位之内），所以中列到 168 结束、两侧到 196——
+   「三列底边同线」作废，但三张图的图位仍同线。 */
 .mi-defensive-premium__col {
   display: grid;
   grid-template-rows: var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr);
@@ -217,8 +218,7 @@
    同权重会被它赢回去（实测数值↔单位量到 6、分隔号前量到 10）。 */
 .mi-defensive-premium__col-foot .mi-defensive-premium__headline-tail--foot { gap: 4px; }
 .mi-defensive-premium__headline-tail--foot .mi-defensive-premium__foot-sep { margin-inline-start: 4px; }
-/* 中列那一行只有档位词，居中对齐两侧的格名。 */
-.mi-defensive-premium__col-foot--gauge { justify-content: center; }
+
 /* 图与同类状态块钉在**第 1 行**（固定 168）：上面直接就是头栏，读者一眼就是图。 */
 .mi-defensive-premium__col > .mi-defensive-premium__chart,
 .mi-defensive-premium__col > .mi-defensive-premium__chart-slot,
@@ -233,10 +233,12 @@
 .mi-defensive-premium [data-gauge-bucket-text='neutral'] { color: var(--mi-dashboard-sentiment-neutral); }
 .mi-defensive-premium [data-gauge-bucket-text='greed'] { color: var(--mi-dashboard-sentiment-greed); }
 .mi-defensive-premium [data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); }
-/* 档位词（用户 2026-11-24 从卡头中轨挪到图下那一行）：11/650、五档语义色，与两侧格名同一行。
-   图里再没有任何字，仪表画布回满 168，与两侧走势图等高。 */
+/* 档位词（用户 2026-11-24：从图下那一行抬到**弧的上方**）：11/650、五档语义色。
+   绝对定位在仪表图位之内，top 6、左右铺满后居中——不新增行，中列到 168 就结束。
+   词盒占 6…22.5（行高 16.5），弧顶 31，词底到弧顶 8.5。 */
 .mi-defensive-premium__gauge-bucket {
-  margin: 0; text-align: center; white-space: nowrap;
+  position: absolute; inset-inline: 0; top: 6px; margin: 0;
+  text-align: center; white-space: nowrap;
   font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 650;
 }
 /* 卡的行间是 0（头栏要与图贴），所以结论句在别的行里自己带上距：12 是原来那档行间距。

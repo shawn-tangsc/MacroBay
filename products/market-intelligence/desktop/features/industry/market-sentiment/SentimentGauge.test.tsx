@@ -45,12 +45,12 @@ async function render(state: DashboardFearGreedState, cellOff?: typeof openSourc
 }
 
 describe('the gauge column', () => {
-  it('keeps the bucket word under the chart, never inside it (user 2026-11-24)', async () => {
+  it('keeps the bucket word above the arc, inside the 168 figure box (user 2026-11-24)', async () => {
     const gauge = await render(available)
-    // 档位词在图下那一行（三个名字同一行），不在图位里——进去了就是又占图、把仪表挤小。
+    // 档位词在弧上方、图位之内（绝对定位，不新增行）；中列图下没有那一行，所以列高就是 168。
     const word = gauge.querySelector('[data-gauge-reading]')!
-    expect(word.closest('.mi-defensive-premium__col-foot--gauge')).not.toBeNull()
-    expect(word.closest('.mi-defensive-premium__chart-slot')).toBeNull()
+    expect(word.closest('.mi-defensive-premium__chart-slot')).not.toBeNull()
+    expect(gauge.querySelector('.mi-defensive-premium__col-foot')).toBeNull()
     expect(word.textContent).toBe(buckets['extreme-fear'])
     expect(word.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
     expect(word.getAttribute('aria-label')).toBe(`22 ${buckets['extreme-fear']}`)
