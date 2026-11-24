@@ -85,6 +85,15 @@ const REQUIRED_PATHS = [
   'verdict.neutral.flatter',
   'verdict.neutral.flat',
   'verdict.neutral.skewMissing',
+  'verdict.fear.skewUnknown.insufficient',
+  'verdict.fear.skewUnknown.stale',
+  'verdict.fear.skewUnknown.discontinuous',
+  'verdict.greed.skewUnknown.insufficient',
+  'verdict.greed.skewUnknown.stale',
+  'verdict.greed.skewUnknown.discontinuous',
+  'verdict.neutral.skewUnknown.insufficient',
+  'verdict.neutral.skewUnknown.stale',
+  'verdict.neutral.skewUnknown.discontinuous',
   'verdict.fgMissing.steeper',
   'verdict.fgMissing.flatter',
   'verdict.fgMissing.flat',
@@ -309,6 +318,23 @@ describe('fear & greed + downside premium card copy', () => {
     }
   })
 
+  it('ties the merged "no direction yet" sentence to the same numbers and placeholders', () => {
+    // 并句只许写一次（用户 2026-11-23 要求），但两件事必须跟判据绑死：
+    // 「还不够 N 天」的 N 与 `direction.points` 同源；「停在 {date}」必须带占位、且日期不是时刻。
+    const points = sentimentOptionsCardPolicy.direction.points
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const daysWord = locale === 'zh-CN' ? `还不够 ${points} 天` : `fewer than ${points} days`
+      for (const band of ['fear', 'greed', 'neutral'] as const) {
+        expect(valueOf(locale, `verdict.${band}.skewUnknown.insufficient`), `${locale}:${band} 天数`)
+          .toContain(daysWord)
+        const stale = valueOf(locale, `verdict.${band}.skewUnknown.stale`)
+        expect(stale, `${locale}:${band} stale 需要 {date}`).toContain('{date}')
+        expect(stale, `${locale}:${band} stale 不许印时刻`).not.toContain('{time}')
+        expect(valueOf(locale, `verdict.${band}.skewUnknown.discontinuous`), `${locale}:${band}`).not.toBe('')
+      }
+    }
+  })
+
   it('keeps direction words out of the direction-unknown sentences, the card-head popover and the degraded lines', () => {
     // 方向位（DIRECTION_SLOT_PATHS）是 2026-11-22 起唯一允许出现方向词的 skew.direction.* 键；
     // 同一层其余四条是「方向未知」的话，说了方向就等于硬凑结论。
@@ -319,6 +345,7 @@ describe('fear & greed + downside premium card copy', () => {
           !(DIRECTION_SLOT_PATHS as readonly string[]).includes(leaf.path)) ||
         leaf.path === 'titleInfo' ||
         leaf.path.endsWith('.skewMissing') ||
+        leaf.path.includes('.skewUnknown.') ||
         leaf.path.startsWith('degraded.')
     )
     expect(guarded.length).toBeGreaterThan(0)

@@ -722,19 +722,34 @@ mi: miText['zh-CN'],
                   steeper: '情绪在恐惧档，防跌保费在走阔。',
                   flatter: '情绪在恐惧档，防跌保费在收窄。',
                   flat: '情绪在恐惧档，防跌保费基本没动。',
-                  skewMissing: '情绪在恐惧档，偏斜这半没有可用的方向。'
+                  skewMissing: '情绪在恐惧档，偏斜这半没有可用的方向。',
+                  skewUnknown: {
+                    insufficient: '情绪在恐惧档；偏斜还不够 5 天，暂不判方向。',
+                    stale: '情绪在恐惧档；偏斜数据停在 {date}，暂不判方向。',
+                    discontinuous: '情绪在恐惧档；偏斜读数不连续，暂不判方向。'
+                  }
                 },
                 greed: {
                   steeper: '情绪在贪婪档，防跌保费在走阔。',
                   flatter: '情绪在贪婪档，防跌保费在收窄。',
                   flat: '情绪在贪婪档，防跌保费基本没动。',
-                  skewMissing: '情绪在贪婪档，偏斜这半没有可用的方向。'
+                  skewMissing: '情绪在贪婪档，偏斜这半没有可用的方向。',
+                  skewUnknown: {
+                    insufficient: '情绪在贪婪档；偏斜还不够 5 天，暂不判方向。',
+                    stale: '情绪在贪婪档；偏斜数据停在 {date}，暂不判方向。',
+                    discontinuous: '情绪在贪婪档；偏斜读数不连续，暂不判方向。'
+                  }
                 },
                 neutral: {
                   steeper: '情绪在中性档，防跌保费在走阔。',
                   flatter: '情绪在中性档，防跌保费在收窄。',
                   flat: '情绪在中性档，防跌保费基本没动。',
-                  skewMissing: '情绪在中性档，偏斜这半没有可用的方向。'
+                  skewMissing: '情绪在中性档，偏斜这半没有可用的方向。',
+                  skewUnknown: {
+                    insufficient: '情绪在中性档；偏斜还不够 5 天，暂不判方向。',
+                    stale: '情绪在中性档；偏斜数据停在 {date}，暂不判方向。',
+                    discontinuous: '情绪在中性档；偏斜读数不连续，暂不判方向。'
+                  }
                 },
                 fgMissing: {
                   steeper: '偏斜在走阔，恐惧贪婪这半没有可用的读数。',
@@ -2354,19 +2369,34 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   steeper: 'Sentiment sits in the fear band; the cost of downside protection is widening.',
                   flatter: 'Sentiment sits in the fear band; the cost of downside protection is narrowing.',
                   flat: 'Sentiment sits in the fear band; the cost of downside protection is little changed.',
-                  skewMissing: 'Sentiment sits in the fear band; the skew half has no usable direction.'
+                  skewMissing: 'Sentiment sits in the fear band; the skew half has no usable direction.',
+                  skewUnknown: {
+                    insufficient: 'Sentiment sits in the fear band; fewer than 5 days of skew, so no direction is called yet.',
+                    stale: 'Sentiment sits in the fear band; skew data stops at {date}, so no direction is called yet.',
+                    discontinuous: 'Sentiment sits in the fear band; skew readings are discontinuous, so no direction is called yet.'
+                  }
                 },
                 greed: {
                   steeper: 'Sentiment sits in the greed band; the cost of downside protection is widening.',
                   flatter: 'Sentiment sits in the greed band; the cost of downside protection is narrowing.',
                   flat: 'Sentiment sits in the greed band; the cost of downside protection is little changed.',
-                  skewMissing: 'Sentiment sits in the greed band; the skew half has no usable direction.'
+                  skewMissing: 'Sentiment sits in the greed band; the skew half has no usable direction.',
+                  skewUnknown: {
+                    insufficient: 'Sentiment sits in the greed band; fewer than 5 days of skew, so no direction is called yet.',
+                    stale: 'Sentiment sits in the greed band; skew data stops at {date}, so no direction is called yet.',
+                    discontinuous: 'Sentiment sits in the greed band; skew readings are discontinuous, so no direction is called yet.'
+                  }
                 },
                 neutral: {
                   steeper: 'Sentiment sits in the neutral band; the cost of downside protection is widening.',
                   flatter: 'Sentiment sits in the neutral band; the cost of downside protection is narrowing.',
                   flat: 'Sentiment sits in the neutral band; the cost of downside protection is little changed.',
-                  skewMissing: 'Sentiment sits in the neutral band; the skew half has no usable direction.'
+                  skewMissing: 'Sentiment sits in the neutral band; the skew half has no usable direction.',
+                  skewUnknown: {
+                    insufficient: 'Sentiment sits in the neutral band; fewer than 5 days of skew, so no direction is called yet.',
+                    stale: 'Sentiment sits in the neutral band; skew data stops at {date}, so no direction is called yet.',
+                    discontinuous: 'Sentiment sits in the neutral band; skew readings are discontinuous, so no direction is called yet.'
+                  }
                 },
                 fgMissing: {
                   steeper: 'Skew is widening; the Fear & Greed half has no usable reading.',
