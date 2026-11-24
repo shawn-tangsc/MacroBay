@@ -298,3 +298,44 @@ export function ustHasCurveLines(curve: UstCurveView): boolean {
 export function ustHasAnyReading(rows: readonly UstRow[]): boolean {
   return rows.some((row) => row.availability.state === 'values')
 }
+
+/**
+ * 光字牌（悬停读数框）的宽度，以及它离光标的偏移、离框边的安全距。
+ *
+ * 210 与 `.mi-ust__tooltip { width: 210px }` 是同一个数：JS 要先知道它才能决定放哪一边，
+ * 所以样式用例把两处钉在一起，改一处另一处会红。6 是离框边的安全距，12 是浮层与光标之间
+ * 留出的那条缝——不留缝，浮层就压在读者正在看的那一列上。
+ */
+export const UST_TOOLTIP_WIDTH = 210
+export const UST_TOOLTIP_EDGE = 6
+export const UST_TOOLTIP_OFFSET = 12
+
+/** 放右侧要占的总宽：偏移 12 + 牌宽 210 + 右边距 6 = 228（界面设计 2026-11-24 定的阈值）。 */
+const FIT = UST_TOOLTIP_OFFSET + UST_TOOLTIP_WIDTH + UST_TOOLTIP_EDGE
+/** 放左侧时左边缘落在 `x − 222`（12 + 210）：右边距那一格已经由阈值覆盖，不再重复加。 */
+const FLIP = UST_TOOLTIP_OFFSET + UST_TOOLTIP_WIDTH
+/** 牌宽 + 边距：兜底夹位时右边缘的上限是 `boxWidth − 216`。 */
+const SPAN = UST_TOOLTIP_WIDTH + UST_TOOLTIP_EDGE
+
+/**
+ * 光字牌放在光标的哪一边：
+ *
+ * - 右放得下 ⇔ `x ≤ W − 228`（**含等号**：那一点 `left = W − 216`，右边缘正好 `W − 6`）→ `left = x + 12`
+ * - 转左 ⇔ `x > W − 228`，最小转左点 `x = W − 227` → `left = x − 222`
+ * - 左放得下 ⇔ `x ≥ 228`（`x = 228` 时左边缘正好 6）；它只在右侧放不下时才轮到——两边都放得下取右侧
+ * - 两边都放不下（要 `W < 456`，当前两栏最窄 464、单栏等于卡宽，界面上到不了）→ 兜底：
+ *   先取剩余更宽的一侧，再夹进 `[6, W − 216]`；这一档允许压住光标。
+ *
+ * 旧写法（2026-11-24 修掉）是「永远放右边，越界就夹到右内边距」：最右边那几天正是读者要看的
+ * 那一列，210 宽的浮层被夹在那里正好把曲线盖住（用户截图：11-20 那列被压着）。翻边不是夹边。
+ *
+ * `x` 用十字线的横坐标（`geometry.xAt(hover)`），不是指针像素——否则线还在右边、牌子先翻了。
+ * 窄档（<800 单栏）走同一条规则，不另写一套。
+ */
+export function ustTooltipLeft(x: number, boxWidth: number): number {
+  if (boxWidth - x >= FIT) return x + UST_TOOLTIP_OFFSET
+  if (x >= FIT) return x - FLIP
+  const preferred = boxWidth - x >= x ? x + UST_TOOLTIP_OFFSET : x - FLIP
+  const ceiling = Math.max(UST_TOOLTIP_EDGE, boxWidth - SPAN)
+  return Math.min(Math.max(UST_TOOLTIP_EDGE, preferred), ceiling)
+}

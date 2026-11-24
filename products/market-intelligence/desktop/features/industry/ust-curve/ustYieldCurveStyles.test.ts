@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { UST_TOOLTIP_WIDTH } from './ustCurveModel'
+
 /**
  * 这张卡的样式必须**自成一体**，不能借用上面那张联动面板的作用域。
  *
@@ -67,6 +69,15 @@ describe('国债收益率卡的样式边界', () => {
     // 根块现在一个 border / padding 都没有（间距只有 margin），收紧不会误伤。
     expect(root).not.toMatch(/\bborder/)
     expect(root).not.toMatch(/\bpadding/)
+  })
+
+  it('keeps the tooltip width in one place: the CSS and the placement threshold agree', () => {
+    // 翻不翻边要靠 JS 先知道牌宽（`ustTooltipLeft` 的 228 = 12 + 210 + 6）。两处手抄迟早漂：
+    // 牌子改宽而阈值没跟上，就会翻晚、右侧被裁 6–30px（正是跨资产图那笔修掉的形状）。
+    const tooltip = block('.mi-ust__tooltip')
+    const width = tooltip.match(/(?:^|;)\s*width: (\d+)px/)
+    expect(width, '.mi-ust__tooltip 必须写死一个宽度').not.toBeNull()
+    expect(Number(width![1])).toBe(UST_TOOLTIP_WIDTH)
   })
 
   it('keeps every length inside the spacing scale and leaves no dead selector', () => {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 
 import type { UstCurveMode, UstCurveView } from './ustCurveModel'
+import { ustTooltipLeft } from './ustCurveModel'
 
 /**
  * 五条期限的曲线。只画 `view` 里给的线（价差与实际利率不进这里），窗口是模型切好的同一份。
@@ -113,7 +114,7 @@ export function UstCurveChart({ view, mode, ariaLabel, format }: UstCurveChartPr
 
     {hover !== undefined && day !== undefined
       ? <div className="mi-ust__tooltip" data-ust-tooltip="true"
-        style={{ left: `${Math.min(Math.max(6, geometry.xAt(hover) + 12), Math.max(6, box.width - 216))}px`, top: `${TOP}px` }}>
+        style={{ left: `${ustTooltipLeft(geometry.xAt(hover), box.width)}px`, top: `${TOP}px` }}>
         <time>{format.fullDay(day)}</time>
         {geometry.series.map((entry) => {
           const value = entry.values[hover]
