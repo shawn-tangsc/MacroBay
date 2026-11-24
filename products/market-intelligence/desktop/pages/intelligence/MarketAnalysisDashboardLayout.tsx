@@ -1,8 +1,6 @@
 import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { cloneElement, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
-import { IconButton } from '@platform/ui/components/icon-button'
 import type { MarketAnalysisReadableLocale } from '../../../contracts/marketAnalysisReadableText'
 import type { productText } from '../../shared/i18n/productText'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
@@ -21,6 +19,7 @@ import { useSampleNow } from './SampleModeProvider'
 import { drawerWidthFor } from './analysisDrawerDrag'
 import { useAnalysisDrawerDrag } from './useAnalysisDrawerDrag'
 import { useAnalysisDrawerWheel } from './useAnalysisDrawerWheel'
+import { AnalysisDrawerSurface } from './AnalysisDrawerSurface'
 import type { CrossAssetEventLine } from '../../features/industry/cross-asset/crossAssetEventLines'
 import { chartEventSelection, openEventDetailThenRecord, type SelectedCalendarEvent } from './selectedCalendarEvent'
 import './marketAnalysisWorkspace.css'
@@ -174,6 +173,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
   // 舆情块由 workspace 构造（它拥有选中舆情那份状态），portal 进抽屉里的挂点——不是复制一份。
   const [newsHost, setNewsHost] = useState<HTMLDivElement | null>(null)
   const grip = useRef<HTMLButtonElement>(null)
+  const drawerClose = useRef<HTMLButtonElement>(null)
   const [returnGripFocus, setReturnGripFocus] = useState(false)
   const closeAnalysisDrawer = useCallback(() => {
     setAnalysisDrawerOpen(false)
@@ -192,12 +192,18 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
    * 没有可注入的挂点），只认 `.global-sidebar` 一个类名；并排档不关（看板与导航都要能用）。
    */
   useEffect(() => {
-    if (!compact || !analysisDrawerOpen || drawerTier !== 'full') return
+    const modal = chatSheetOpen || (analysisDrawerOpen && drawerTier === 'full')
+    if (!compact || !modal) return
     const rail = document.querySelector<HTMLElement>('.global-sidebar')
     if (rail === null) return
     rail.setAttribute('inert', '')
     return () => { rail.removeAttribute('inert') }
-  }, [compact, analysisDrawerOpen, drawerTier])
+  }, [compact, analysisDrawerOpen, drawerTier, chatSheetOpen])
+  // 打开：焦点落到抽屉的关闭键（对比聊天框，打开就聚焦关闭），别留在被盖住的把手上。
+  useEffect(() => {
+    if (!analysisDrawerOpen) return
+    drawerClose.current?.focus()
+  }, [analysisDrawerOpen])
   // 关掉后焦点回把手：把手关着时在 DOM 里，Tab 回来就落得上。
   useEffect(() => {
     if (analysisDrawerOpen || !returnGripFocus) return
@@ -210,12 +216,14 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
    *
    * 圆钮是 `position: fixed`（right 16 / bottom 88），所以命中矩形按视口算——它不在舞台里。
    */
+  /** 抽屉宽：与样式里那条 `width` 同源（908 的布局根 → 454，吸附线 151.33）。 */
+  const drawerWidth = drawerWidthFor({ tier: drawerTier, stageWidth: layoutNode?.getBoundingClientRect().width ?? 0 })
   const drawerDrag = useAnalysisDrawerDrag({
     edge: MARKET_ANALYSIS_DRAWER.edge,
     enabled: compact,
     // 并排档按 340 算跟手与吸附线；整幅档是页宽（114 / 250 两条线就是这么来的）。
     // 与样式同源：并排档 max(50%, 420)，整幅档页宽。
-    width: drawerWidthFor({ tier: drawerTier, stageWidth: layoutNode?.getBoundingClientRect().width ?? 0 }),
+    width: drawerWidth,
     open: analysisDrawerOpen,
     // 两个面互斥：聊天框开着时右缘拖也不动（先关它再拖，别抢）。
     blocked: chatSheetOpen,
@@ -355,11 +363,11 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         />
 
   // 另有模态层开着时圆钮不渲染：它的 z（1100）比那些层（1000/1150/1200）高，压上去就是第二层入口。
-  // 抽屉开着时同样不渲染——它在右缘，圆钮正好压在抽屉的右下角，会变成压在同一块面上的第二颗入口
-  // （整幅档是模态；并排档两者重叠，也不留两颗）。
+  // 胶囊在**底部居中**，跟右半的抽屉不重叠（960 档离抽屉左沿还有 6px），所以并排档要显示——
+  // 点它 = 问一句。只有整幅档（抽屉盖住整幅、模态）才不渲染。
   // `dashboardModalOpen` 是看板报上来的（设置 / 关键指标 / 政策详情），布局不猜。
   const agentSuppressed = timelineOpen || analysisSettingsOpen || openEntry !== undefined || eventDetail !== undefined
-    || (compact && (analysisDrawerOpen || drawerDragging)) || dashboardModalOpen
+    || (compact && analysisDrawerOpen && drawerTier === 'full') || dashboardModalOpen
   return <div
     className="mi-analysis-dashboard-layout"
     data-compact={compact || undefined}
@@ -456,42 +464,31 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         timelineText={timelineText}
       />
     </div>
-    {/* 窄档的两个面（用户 2026-11-24 拍板 v3）：左抽屉＝最新 AI 结论 + 重点舆情；底部聊天框
+    {/* 窄档的两个面（用户 2026-11-24 拍板 v3）：右抽屉＝最新 AI 结论 + 重点舆情；底部聊天框
         （在 `__agent-control` 里）＝对话 + 输入 + 一条「选中事件」。互斥，开一个关另一个。
         靠哪一边只认 `MARKET_ANALYSIS_DRAWER.edge`：样式按 `data-edge` 挂左/右两套。 */}
-    {compact ? <>
-      {/* 左缘把手：视觉 4px、命中 22×128，竖直居中。整幅档没有热区，只能点它。 */}
-      <button aria-label={text.analysisWorkspace.openAnalysisDrawer} className="mi-agent-drawer__grip"
-        data-edge={MARKET_ANALYSIS_DRAWER.edge}
-        onClick={() => { setChatSheetOpen(false); setAnalysisDrawerOpen(true) }}
-        ref={grip}
-        type="button"><i /></button>
-      {/* 整幅档的遮罩：只负责变暗。**它没有关闭动作**——抽屉 `width:100%` 且 z 更高，
-          压在它上面，点它永远点不到；两档统一只有 X 与 Esc 两条关闭路。
-          并排档没有遮罩：看板要能读。 */}
-      {analysisDrawerOpen && drawerTier === 'full'
-        ? <div aria-hidden="true" className="mi-agent-drawer__scrim" data-analysis-drawer-scrim />
-        : null}
-      <aside aria-labelledby="mi-analysis-drawer-title" aria-modal={drawerTier === 'full'}
-        className="mi-agent-drawer" data-edge={MARKET_ANALYSIS_DRAWER.edge}
-        data-open={analysisDrawerOpen}
-        data-drag={drawerDragging || drawerSettling ? 'true' : undefined}
-        data-settling={drawerSettling ? 'true' : undefined}
-        data-tier={drawerTier}
-        data-analysis-drawer
-        role="dialog"
-        style={drawerDrag.offset ? { transform: `translateX(${(MARKET_ANALYSIS_DRAWER.edge === 'right' ? -1 : 1) * drawerDrag.offset}px)` } : undefined}>
-        <header className="mi-agent-drawer__head">
-          <h2 id="mi-analysis-drawer-title">{text.analysisWorkspace.analysisDrawerTitle}</h2>
-          <IconButton ariaLabelKey="pages.intelligence.portal.calendarCard.closeAgent" icon={X} onSelect={closeAnalysisDrawer} resolveText={resolveWorkspaceText} size="md" />
-        </header>
-        <div className="mi-agent-drawer__body">
-          {conclusionCardNode}
-          {/* 重点舆情：块由 workspace 构造（它拥有选中舆情那份状态），portal 到这里——不是复制一份。 */}
-          <div className="mi-agent-drawer__news" data-analysis-news-host ref={setNewsHost} />
-        </div>
-      </aside>
-    </> : null}
+    {compact
+      ? <AnalysisDrawerSurface
+        closeRef={drawerClose}
+        dragging={drawerDragging}
+        edge={MARKET_ANALYSIS_DRAWER.edge}
+        gripRef={grip}
+        newsHostRef={setNewsHost}
+        offset={drawerDrag.offset}
+        onClose={closeAnalysisDrawer}
+        onOpen={() => { setChatSheetOpen(false); setAnalysisDrawerOpen(true) }}
+        open={analysisDrawerOpen}
+        resolveText={resolveWorkspaceText}
+        settling={drawerSettling}
+        text={{
+          openAnalysisDrawer: text.analysisWorkspace.openAnalysisDrawer,
+          analysisDrawerTitle: text.analysisWorkspace.analysisDrawerTitle
+        }}
+        tier={drawerTier}
+        width={drawerWidth}>
+        {conclusionCardNode}
+      </AnalysisDrawerSurface>
+      : null}
     {/* 会话入口的落点：整页常驻，窄档也在（agent 栏本身在窄档是隐藏的）。 */}
     <div className="mi-analysis-dashboard-layout__agent-control" data-agent-control-host ref={setFloatingHost} />
   </div>

@@ -224,7 +224,12 @@
  * 否则从图标栏打开设置抽屉会被它盖住。宽档那颗可拖圆钮与浮窗面板一行不改。
  */
 .mi-agent-capsule { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; padding: 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 6px 18px rgb(0 0 0 / 32%); z-index: 990; }
-.mi-agent-capsule .icon-button { width: 24px; height: 24px; }
+.mi-agent-capsule .icon-button { width: 24px; height: 24px; position: relative; }
+/*
+ * 命中区 = 40×40，**整块都能点**：24 的钮外面用 `::after` 撑到 40（与起拖条排除的矩形同一个数）。
+ * 只有 24 可点的话，按在边缘既不开聊天也不起拖——pad 上按的正是边缘（界面设计 2026-11-24）。
+ */
+.mi-agent-capsule .icon-button::after { content: ''; position: absolute; inset: -8px; border-radius: 999px; }
 /*
  * 窄档看板的底部留白（= 胶囊 40 + 距底 12 + 4 余量 56），保证滚到底时最后一张卡完整可见、
  * 不被胶囊压住。

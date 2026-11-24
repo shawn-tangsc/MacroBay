@@ -148,3 +148,20 @@ export function wheelGesture(
   const total = base.total + Math.abs(input.deltaX)
   return { session: { direction, total, at: input.now }, fired: total >= ANALYSIS_DRAWER_WHEEL.travel }
 }
+
+/**
+ * 抽屉相对**自己宽度**的位移（百分比）：`100` = 完全在右缘外（合上），`0` = 完全进来（开着）。
+ *
+ * 方向语义写在这里，组件只负责把它变成一条 CSS：
+ * - 合上 → `100`（右边漏不出看板）；拉开 `offset` → `(宽 − offset) / 宽 × 100`（跟手 1:1）；
+ * - 开着 → `0`；回弹 → 回到 `100` 再 `display: none`。
+ *
+ * 靠左那一边符号取反。**别在组件里写 `translateX(-offset)`**：那是「从静止位往左跑」，
+ * 抽屉会停到看板左半边、右边漏一条——2026-11-24 真机就是这个。
+ */
+export function drawerSlidePercent(input: Readonly<{ offset: number; width: number; edge: 'left' | 'right'; open: boolean }>): number {
+  const width = Math.max(input.width, 1)
+  const remaining = input.open ? 0 : Math.max(width - Math.max(input.offset, 0), 0)
+  const percent = (remaining / width) * 100
+  return input.edge === 'right' ? percent : -percent
+}

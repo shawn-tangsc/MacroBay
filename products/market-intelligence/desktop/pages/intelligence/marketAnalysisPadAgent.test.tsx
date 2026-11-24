@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
+import { ANALYSIS_DRAWER_SIZE } from './analysisDrawerDrag'
 import { MARKET_ANALYSIS_COMPACT_MAX_WIDTH, MARKET_ANALYSIS_DRAWER, MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 
 /**
@@ -259,6 +260,44 @@ describe('pad 竖屏 v3：左抽屉 + 底部聊天框', () => {
     expect(readCss()).toContain(".mi-agent-drawer[data-tier='full'] { width: 100%; box-shadow: none; }")
   })
 
+  it('并排档抽屉开着时胶囊仍显示（两者不重叠）；整幅档才不渲染', async () => {
+    // 胶囊在底部居中，跟右半的抽屉不重叠（960 档离抽屉左沿还有 6px）：点它 = 问一句。
+    const side = await mountNarrow(908)
+    await act(async () => grip(side).click())
+    expect(drawer(side).getAttribute('data-open')).toBe('true')
+    expect(side.querySelector('[data-agent-floating-button]')).not.toBeNull()
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+    // 整幅档：抽屉盖住整幅、是模态，胶囊不渲染。
+    const full = await mountNarrow(748)
+    await act(async () => grip(full).click())
+    expect(full.querySelector('[data-agent-floating-button]')).toBeNull()
+  })
+
+  it('打开抽屉时焦点落到关闭键，把手开着时 inert', async () => {
+    const container = await mountNarrow(908)
+    await act(async () => grip(container).click())
+    const close = drawer(container).querySelector<HTMLButtonElement>('.icon-button')
+    expect(document.activeElement).toBe(close)
+    // 开着时把手 inert：焦点已经在关闭键上，别再 Tab 回一个被盖住的入口。
+    expect(grip(container).hasAttribute('inert')).toBe(true)
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(grip(container).hasAttribute('inert')).toBe(false)
+    expect(document.activeElement).toBe(grip(container))
+  })
+
+  it('胶囊命中区是整块 40×40（24 的钮 + 8px ::after），不是只有中间 24', async () => {
+    const css = readCss()
+    const rule = css.slice(
+      css.indexOf('.mi-agent-capsule .icon-button::after'),
+      css.indexOf('\n}', css.indexOf('.mi-agent-capsule .icon-button::after')) + 2
+    )
+    expect(rule).toContain('inset: -8px')
+    // 24 + 8 × 2 = 40：与起拖条排除的矩形同一个数。
+    expect(24 + 8 * 2).toBe(40)
+  })
+
   it('整幅档开着时左侧图标栏也 inert（并排档不关，导航要能用）', async () => {
     const rail = document.createElement('aside')
     rail.className = 'global-sidebar'
@@ -275,6 +314,16 @@ describe('pad 竖屏 v3：左抽屉 + 底部聊天框', () => {
     // 整幅档＝切到这一屏：图标栏不在布局根里、也盖不到，只能从外面关掉。
     const full = await mountNarrow(748)
     await act(async () => grip(full).click())
+    expect(rail.hasAttribute('inert')).toBe(true)
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(rail.hasAttribute('inert')).toBe(false)
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+    document.body.append(rail)
+    // 聊天框也是模态（`aria-modal`）：Tab 同样不许走到左侧图标栏。
+    const chat = await mountNarrow(908)
+    await act(async () => chat.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
     expect(rail.hasAttribute('inert')).toBe(true)
     await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
     expect(rail.hasAttribute('inert')).toBe(false)
@@ -353,6 +402,11 @@ describe('pad 竖屏 v3：左抽屉 + 底部聊天框', () => {
     expect(css).toContain(".mi-agent-drawer[data-edge='right'] { right: 0; left: auto;")
     // 并排阈值：容器 ≥900 才并排（908 是 960 窗口的内容宽）。
     expect(MARKET_ANALYSIS_DRAWER.sideMinWidth).toBe(900)
+    // 420 与 0.5 在 CSS 与 TS 各写一份，没有守卫就会漂：读样式断言两边相等。
+    expect(ANALYSIS_DRAWER_SIZE.minimum).toBe(420)
+    expect(ANALYSIS_DRAWER_SIZE.ratio).toBe(0.5)
+    expect(css).toContain('--mi-analysis-drawer-width: 420px')
+    expect(css).toContain('width: max(50%, var(--mi-analysis-drawer-width))')
     const container = await mountNarrow(908)
     expect(drawer(container).getAttribute('data-edge')).toBe('right')
     expect(grip(container).getAttribute('data-edge')).toBe('right')
@@ -422,6 +476,16 @@ describe('v4 拖动：起拖条、跟手与吸附', () => {
   const release = async () => {
     await act(async () => { window.dispatchEvent(pointer('pointerup', 0, 0)) })
   }
+  /**
+   * 抽屉相对自己宽度的位移（%）：**100 = 完全在右缘外（合上）、0 = 完全进来（开着）**。
+   * 断这个数而不是断 transform 字符串——字符串在方向写反时照样「对」，2026-11-24 真机就是这么漏的。
+   */
+  const slidePercent = (container: HTMLElement) => {
+    const transform = drawerEl(container).style.transform
+    const percent = Number(/translateX\((-?[\d.]+)%\)/u.exec(transform)?.[1])
+    expect(Number.isFinite(percent), `transform 里没有百分比：${transform}`).toBe(true)
+    return percent
+  }
 
   it('右缘起拖：左移 100 跟手 1:1，松手不到吸附线回弹', async () => {
     stubStage(908)
@@ -430,7 +494,8 @@ describe('v4 拖动：起拖条、跟手与吸附', () => {
     await press(container, 900, 400)   // 908 − 900 = 8 ≤ 24：起拖条
     await moveTo(800, 400)             // 左移 100
     expect(drawerEl(container).getAttribute('data-drag')).toBe('true')
-    expect(drawerEl(container).style.transform).toBe('translateX(-100px)')
+    // 跟手：拉出 100 → 还剩 354 / 454 在右缘外 → 从右滑进来、右边不再漏看板。
+    expect(slidePercent(container)).toBeCloseTo(((454 - 100) / 454) * 100, 2)
     await release()
     // 100 < 454 ÷ 3 = 151.33：回弹收起，带 160ms 过渡。
     expect(drawerEl(container).getAttribute('data-open')).toBe('false')
@@ -476,10 +541,10 @@ describe('v4 拖动：起拖条、跟手与吸附', () => {
     stubStage(908)
     const container = await mountNarrow(908)
     await press(container, 900, 400)
-    await moveTo(500, 400)             // 左移 400
-    expect(drawerEl(container).style.transform).toBe('translateX(-400px)')
+    await moveTo(600, 400)             // 左移 300
+    expect(slidePercent(container)).toBeCloseTo(((454 - 300) / 454) * 100, 2)
     await moveTo(300, 400)             // 左移 600 → 夹到 454
-    expect(drawerEl(container).style.transform).toBe('translateX(-454px)')
+    expect(slidePercent(container)).toBe(0)
   })
 
   it('起拖条要左移 ≥ 4px：3px 不动', async () => {
@@ -488,7 +553,8 @@ describe('v4 拖动：起拖条、跟手与吸附', () => {
     await press(container, 900, 400)
     await moveTo(897, 400)             // 左移 3
     expect(drawerEl(container).getAttribute('data-drag')).toBeNull()
-    expect(drawerEl(container).style.transform).toBe('')
+    // 没起拖：抽屉仍在右缘外（100%），一点都没露出来。
+    expect(slidePercent(container)).toBe(100)
   })
 
   it('界面中部：横向 12 竖直 3 拉抽屉；横向 12 竖直 10 不拉、交给滚动', async () => {
@@ -497,7 +563,7 @@ describe('v4 拖动：起拖条、跟手与吸附', () => {
     await press(container, 500, 300)   // 界面中部，不是起拖条
     await moveTo(488, 303)             // 12 > 8 且 12 ≥ 4.5
     expect(drawerEl(container).getAttribute('data-drag')).toBe('true')
-    expect(drawerEl(container).style.transform).toBe('translateX(-12px)')
+    expect(slidePercent(container)).toBeCloseTo(((454 - 12) / 454) * 100, 2)
     await release()
     await act(async () => root?.unmount())
     root = undefined
@@ -506,7 +572,7 @@ describe('v4 拖动：起拖条、跟手与吸附', () => {
     await press(vertical, 500, 300)
     await moveTo(488, 310)             // 12 ≥ 15？不成立 → 不抢
     expect(drawerEl(vertical).getAttribute('data-drag')).toBeNull()
-    expect(drawerEl(vertical).style.transform).toBe('')
+    expect(slidePercent(vertical)).toBe(100)
   })
 
   it('按在圆钮上拖 200 不起拖，点它仍然开聊天框', async () => {
