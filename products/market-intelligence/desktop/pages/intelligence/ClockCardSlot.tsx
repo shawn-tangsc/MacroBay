@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { createPortal } from 'react-dom'
 
 import type { productText } from '../../shared/i18n/productText'
@@ -52,7 +53,9 @@ export function ClockCardSlot({
   const reading = input_reading
   // 牌宽随名字走：布局要按解析后的名字估盒子，「两块叠了多少」才算得出来（`clockPlaqueBox`）。
   const cardText = clockCardText[locale]
-  return <SlotHost slot={slot}>{<ClockCard
+  // 看板首屏的一块：崩了就只换这一块（`ErrorBoundary` 的 error 态 + 重试），不把整页带走。
+  return <SlotHost slot={slot}>{<ErrorBoundary scope="macro-clock-card">
+    <ClockCard
     model={buildClockCardModel({
       today,
       now: nowIso,
@@ -82,7 +85,8 @@ export function ClockCardSlot({
     onOpenCalendar={onOpenDrawer}
     resolveText={resolveKey}
     {...policyPresentation({ text, probability, fed, unavailable: policyUnavailable, reloadPolicy, onConfigureSources, onManageSource, resolveKey })}
-  />}</SlotHost>
+    />
+  </ErrorBoundary>}</SlotHost>
 }
 
 function SlotHost({ slot, children }: { slot?: HTMLDivElement | null; children: React.ReactElement }): React.ReactElement {
