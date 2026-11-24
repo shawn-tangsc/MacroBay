@@ -48,6 +48,7 @@ Source: `platform/ui/components/drawer/`. Visual spec:
 | `contentPadding` | `'default' \| 'flush'` | no, default `default` | `flush` for full-bleed content. |
 | `children` | `ReactNode` | yes | Body. |
 | `className` | `string` | no | Positioning only; it must not carry a width or layout. |
+| `bodyClassName` | `string` | no | Mount point on the body node, passed to antd's `classNames.body`. Hang `container-type` on this class instead of `.ant-drawer-body`. **A class name only — never a style.** |
 | `resolveText` | `(key: string) => string` | yes | The caller's text resolver, used for `titleKey` only. |
 
 The width is `min(<size>px, 92vw)` inside the component. There is no `width`, no `style`, no
@@ -92,6 +93,12 @@ lifecycle question — whether the content exists is unaffected by it.
 - **No footer means no footer row** — not an empty wrapper kept for spacing.
 - **Two header states only.** `header="none"` still requires `ariaLabelKey`: an unnamed dialog is
   announced as "dialog".
+- **The body class is a mount point, not a second padding.** `bodyClassName` only names the body
+  node, so a caller hangs `container-type` on a class of ours instead of `.ant-drawer-body`.
+  Platform styles declare **nothing** for that class: padding still comes from the `--default` /
+  `--flush` rules and the scroll container is still antd's body. Declaring anything there would let
+  a caller change body padding — and a second source of "body padding" is how the classes drifted
+  before.
 
 ## How to verify a page that uses it
 
