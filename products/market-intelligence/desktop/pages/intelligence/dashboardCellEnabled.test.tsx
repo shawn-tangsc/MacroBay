@@ -93,6 +93,28 @@ describe('dashboard cells read only when the reader left them on', () => {
     expect(rows).toContain('eth')
   })
 
+  it('keeps the dollar row a data row while only its fallback cell is on', async () => {
+    // 真机 2026-11-25：读者关掉「美元（RealMarketAPI）」那格、只开「美元（备用）」，合成美元已经采到，
+    // 行却被整行遮成「没启用」——行状态与取源一样只看主格。一行有两格时，任一格能读就是数据行。
+    const main = QUOTES_STATUS_ROW_CELLS.dxy[0]!
+    const fallback = QUOTES_STATUS_ROW_CELLS.dxy[1]!
+    const onlyFallback = await render({
+      read: async () => ({ [main]: false, [fallback]: true }),
+      readSelection: async () => ({ [fallback]: 'twelve-data-market' })
+    })
+    const row = onlyFallback.container.querySelector('[data-status-row="dxy"]')!
+    // 遮罩行带 `data-source-state`；数据行/待接入行没有它。
+    expect(row.getAttribute('data-source-state')).toBeNull()
+    // 而且取源走的是备用格那一个（不是主格的 RealMarketAPI）。
+    expect(onlyFallback.macroQuery).toHaveBeenCalledWith({ dollarSourceId: 'twelve-data-market' })
+  })
+
+  it('says the row is off only when every cell of that row is off', async () => {
+    const [main, fallback] = QUOTES_STATUS_ROW_CELLS.dxy
+    const bothOff = await render({ read: async () => ({ [main!]: false, [fallback!]: false }) })
+    expect(bothOff.container.querySelector('[data-status-row="dxy"]')?.getAttribute('data-source-state')).toBe('disabled')
+  })
+
   it('drops the disabled 纳指 row, keeps BTC/ETH, and leaves the shared collection untouched', async () => {
     const ndxCell = QUOTES_STATUS_ROW_CELLS.index[0]!
     const on = await render(undefined)

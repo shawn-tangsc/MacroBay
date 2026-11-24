@@ -1068,7 +1068,8 @@ describe('host wiring: cells switched off and sources judged', () => {
 
   it('市场状态卡: one enable entry beside the title, landing on the cell that is off', async () => {
     const onManageSource = vi.fn()
-    const container = await renderCells({ 'quotes:usd': false }, {
+    // 一行两格：主格与备用格都关掉，这一行才叫「没启用」（只关主格时行仍按备用格读数）。
+    const container = await renderCells({ 'quotes:usd': false, 'quotes:usd-fallback': false }, {
       onManageSource,
       crossAssetClient: {
         acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),

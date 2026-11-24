@@ -47,6 +47,9 @@ export const QUOTES_STATUS_ROW_CELLS: Readonly<Record<CrossAssetStatusId, readon
   // 那一格的开关仍然管那张卡，由下面的 `macroRates` 直接读同一格。
 })
 
+/** `quotes:usd` → `usd`：同一份表算出来的格 id 要拆回格键时只在这里拆，别处不拼字符串。 */
+export const cellKeyOfId = (cellId: string): string => cellId.slice(cellId.indexOf(':') + 1)
+
 /**
  * 一格可以选哪些源：这一格的主源 + 紧跟其后的备用行（`fallback: true`）。
  * 源名仍从那一处表取，不在这里另列；配对靠表里的行结构，不靠格名里的「（备用）」后缀。

@@ -67,7 +67,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { usePolicyPathReading } from './usePolicyPathReading'
 import { useMacroIndicatorFacts } from './useMacroIndicatorFacts'
 import { cellOffFor } from './dashboardCellOff'
-import { QUOTES_ROW_CELL_KEYS, quoteRowPresentation } from './dashboardQuotesRows'
+import { firstDisabledQuotesCellKey, quoteRowPresentation, quotesRowLabelCell } from './dashboardQuotesRows'
 import { useDataChangeRevision } from './useDataChangeRevision'
 import { DashboardSettingsDrawer } from './DashboardSettingsDrawer'
 import type { CryptoDashboardText } from './cryptoDashboardText'
@@ -190,10 +190,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const { rowStates, rowStateLabels } = quoteRowPresentation({
     decisionsUsable,
     decide,
-    cellLabel: (row) => cellLabel('quotes', QUOTES_ROW_CELL_KEYS[row]),
+    cellLabel: (row) => cellLabel('quotes', quotesRowLabelCell(row)),
     sourceName: (sourceId) => resolveProductKey(`settings.intelligenceSources.sourceNames.${sourceId}`)
   })
-  const firstDisabledQuotesCell = Object.entries(QUOTES_ROW_CELL_KEYS).find(([row]) => rowStates[row as keyof typeof QUOTES_ROW_CELL_KEYS] === 'disabled')
+  const firstDisabledQuotesCell = firstDisabledQuotesCellKey(rowStates)
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const timeZone = useShellTimeZone()
   /**
@@ -426,7 +426,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
         {...(firstDisabledQuotesCell === undefined ? {} : {
-          onEnableData: () => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', firstDisabledQuotesCell[1]) })
+          onEnableData: () => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', firstDisabledQuotesCell) })
         })}
         text={crossAssetText} /> : null}
       <UstYieldCurveSection view={macroRatesView} settled={readsReady} enabled={anyReadable(['quotes', 'ust10y'])}
