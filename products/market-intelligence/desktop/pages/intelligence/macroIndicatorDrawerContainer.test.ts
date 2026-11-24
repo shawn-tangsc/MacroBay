@@ -52,10 +52,32 @@ const DAY_PANEL_MIN = 320
 const DEFAULT_CONTENT_WIDTH = 1280 - 32
 
 describe('the drawer judges its columns by its own width', () => {
-  it('declares the drawer body as the query container', () => {
-    const body = rules(drawerCss).find((rule) => rule.selector === '.mk-drawer .ant-drawer-body')
+  /**
+   * 容器锚点必须是**我们自己的类**（2026-11-24）。
+   *
+   * 以前挂的是 `.ant-drawer-body`——平台内部实现，改名就静默失效、用例还全绿。平台 `Drawer` 现在
+   * 有 `bodyClassName`（`0766aa18d`），所以锚点归我们：`<Drawer bodyClassName="mk-drawer-body">`，
+   * 容器查询挂在 `.mk-drawer .mk-drawer-body` 上，容器名不变（`mk-drawer`）。
+   */
+  it('declares the drawer body as the query container, on our own class', () => {
+    const body = rules(drawerCss).find((rule) => rule.selector === '.mk-drawer .mk-drawer__body')
     expect(body?.body).toContain('container-type: inline-size')
     expect(body?.body).toContain('container-name: mk-drawer')
+    // 反面：整张表里不许再出现 `.ant-drawer-body`——那是「拿平台内部类当锚点」的写法。
+    expect(drawerCss).not.toContain('.ant-drawer-body')
+    expect(drawerCss).not.toMatch(/\.ant-drawer-body\b/u)
+    // 正向：这个类用 `flush`（正文自带 chrome），内距归它自己；档位只有 16（主档）。
+    expect(body?.body).toContain('padding: 16px')
+    // 正文原来的 14 不在间距主档（4/6/8/10/12/16）上，直接消失：这一条规则里不许再出现它。
+    expect(body?.body).not.toContain('14px')
+  })
+
+  it('passes that class to the platform drawer instead of relying on antd internals', () => {
+    const source = readFileSync(new URL('./MacroIndicatorDrawer.tsx', import.meta.url), 'utf8')
+    // 断在**使用处**：`bodyClassName` 必须真的传给那个 Drawer，且值就是 CSS 里那个类。
+    expect(source).toMatch(/<Drawer[\s\S]*?bodyClassName="mk-drawer__body"/u)
+    // 内距不走 `default` 再叠一层：正文自带 chrome，用 `flush`。
+    expect(source).toMatch(/<Drawer[\s\S]*?contentPadding="flush"/u)
   })
 
   it('keeps the locked two-column layout as the base', () => {

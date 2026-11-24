@@ -32,12 +32,13 @@
  * 代价与前提，下一个人要知道：
  * - `container-type: inline-size` 只对**宽度来自外部**的盒子安全。哪天有人把它挪到
  *   `inline-block` / `fit-content` / `max-content` 的盒子上，宽度会静默塌成 0（如何做都量到 0 的探针实测）；
- * - 这个容器挂的是 antd 的 `.ant-drawer-body`。平台 `Drawer` 目前没有给正文单独起类的入口，
- *   所以这里依赖 antd 的那个类名：它哪天被改名，容器就消失，收放**永久失效而用例仍然全绿**
- *   （守卫读的是我们自己的样式表文本）。要根治得给平台 `Drawer` 加一个正文类（走 `classNames.body`），
- *   那是共享组件线的文件，不在这条线里顺手改。
+ * - 这个容器挂的是**我们自己的类** `.mk-drawer-body`（平台 `Drawer` 的 `bodyClassName`，`0766aa18d`
+ *   起可用）。以前挂的是 antd 的 `.ant-drawer-body`：它哪天被改名，容器就消失、收放永久失效而用例
+ *   仍然全绿（守卫读的是我们自己的样式表文本）。现在锚点归我们，平台只负责把它挂上去。
  */
-.mk-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; container-type: inline-size; container-name: mk-drawer; }
+/* 正文：`contentPadding="flush"` + 我们自己的类，内距归这一格（16 是间距主档；原来那个 14 不在
+   4/6/8/10/12/16 档上，直接消失，差的 2px 并进 16）。容器查询也挂这个类，锚点不再依赖 antd 的类名。 */
+.mk-drawer .mk-drawer__body { padding: 16px; display: flex; min-height: 0; container-type: inline-size; container-name: mk-drawer; }
 .mk-drawer .ant-drawer-footer { padding: 6px 16px; }
   border: 0;
   background: transparent;
