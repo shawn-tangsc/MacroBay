@@ -41,7 +41,11 @@
 十六进制色它看不见。这五个值的唯一守卫就是上面那条调色板用例。**十六进制门禁绿，不等于图的颜色
 被查过。**
 
-加第六条线＝在这里加第六个 token，并把两两断言的组合扩上。拿状态色（`--success`、`--danger`）
+加第六条线＝在这里加第六个 token，并把两两断言的组合扩上。守卫把五个 id 写死在用例里
+（`crossAssetChartPalette.test.ts:27`），没人列的第六个 token 它看不见——在守卫改成从样式表扫出
+token 列表之前，扩那一行是同笔要记的手工步骤，文档替守卫保证不了这件事。
+
+拿状态色（`--success`、`--danger`）
 顶替是错的，而且是有意的：状态色回答「这个状态要求读者做什么」，线的颜色回答「这是哪一条」。
 
 图内字号另有 owner：`--mi-chart-label-size: 9px`（`cryptoDashboard.css:44`）。轴标签、泳道标签、
@@ -74,7 +78,7 @@
 - 刻度数是每张图固定的：资金费率五点（`positioningAxisTicks.ts:16-31`，`steps = 4`），
   同起点收益三点（`CrossAssetReturnChart.tsx:58`，`tickSlots: 3`）。改刻度数要在同一笔里重新看标签宽度。
 - 端点标签要贴边、不许被裁：首格 `text-anchor: start`、末格 `end`、中间 `middle`
-  （`PositioningChart.tsx:265-266`）；百分比定位的刻度用 translateX 补偿
+  （`PositioningChart.tsx:267`）；百分比定位的刻度用 translateX 补偿
   （`CrossAssetReturnChart.tsx:254`）。
 - 刻度位置吸附到不超过半步的整单位，两个邻格才不会落在同一个标记上；没有单位放得下时保留真实位置
   （`positioningAxisTicks.ts:20-29`）。
@@ -83,14 +87,15 @@
 
 ## 空段不是一件事
 
-四种情况在屏幕上很像，画法必须不同。用同一个空数组表示全部，就是那个缺陷：把「读不到」报成
+五种情况在屏幕上很像，画法必须不同。用同一个空数组表示全部，就是那个缺陷：把「读不到」报成
 「没有」。
 
 | 情况 | 画法 |
 | --- | --- |
 | 整块数据读不到 | `StateView` error + 重试，绝不画一张空图（`UstYieldCurveCard.tsx:84-92`） |
 | 还没有数据，或不适用 | `StateView` empty + 平台原因，或卡片自己的那句空态句走原因槽（`UstYieldCurveCard.tsx:100`；`CapitalConditionsPanel.tsx:200-207`） |
-| 源被关掉 / 读不到 | 这条线根本不进图例：不留灰线、不占位（`CrossAssetReturnChart.tsx:20-22`、`chartLinesHiddenBy`） |
+| 某一行被关掉 | 这条线随那一行退出图例：不留灰线、不占位（`chartLinesHiddenBy`，`CrossAssetReturnChart.tsx:21`） |
+| 整条通道读不到 | 由调用点决定哪些线存在：它的 `hiddenLines` 与状态分支。图自己不猜——`CrossAssetReturnChart.tsx:37-38` 写明「读失败不在这里」 |
 | 正常显示的线，这一窗没有可比数据 | 不进图，图例说一句；原因在图标题 ⓘ 里（`linesWithoutComparableData`，`CrossAssetReturnChart.tsx:43-54`） |
 
 最后一行是一个判据喂两处，刻意如此：图例那句话和 ⓘ 里的原因不可能对不上。

@@ -48,9 +48,14 @@ exactly `color:` (`tools/danger-color-guard/dangerColorGuard.ts:69`), so a hex u
 stroke or a custom property is invisible to it. The palette test is the only guard on these five
 values. A green hex gate does not mean the chart colours were checked.
 
-Adding a sixth line means adding a sixth token here and extending the pairwise assertion. Reusing a
-status token (`--success`, `--danger`) is wrong on purpose: a status colour says what the state asks
-of the reader, and a series colour says which line this is.
+Adding a sixth line means adding a sixth token here and extending the pairwise assertion.
+The guard holds its five ids as a literal list (`crossAssetChartPalette.test.ts:27`), so a sixth
+token that nobody lists is not seen by it. Until a guard derives the token list from the stylesheet,
+extending that list is a manual step in the same change — not something the doc can promise on the
+guard's behalf.
+
+Reusing a status token (`--success`, `--danger`) is wrong on purpose: a status colour says what the
+state asks of the reader, and a series colour says which line this is.
 
 Chart type inside the plot has its own owner: `--mi-chart-label-size: 9px`
 (`cryptoDashboard.css:44`). Axis labels, lane labels and marker labels read that token and never
@@ -88,7 +93,7 @@ ticks each printing `GMT+8` is the same fact five times, and the labels collide.
   `steps = 4`), three on the same-start return chart (`CrossAssetReturnChart.tsx:58`, `tickSlots: 3`).
   Changing the count means re-reading the label widths in the same change.
 - End labels are anchored, never clipped: first `text-anchor: start`, last `end`, middle `middle`
-  (`PositioningChart.tsx:265-266`); positioned ticks get a translateX compensation
+  (`PositioningChart.tsx:267`); positioned ticks get a translateX compensation
   (`CrossAssetReturnChart.tsx:254`).
 - Tick positions snap to a round unit no wider than half a step, so two neighbours cannot land on
   the same mark; if no unit fits, the true positions are kept (`positioningAxisTicks.ts:20-29`).
@@ -98,14 +103,15 @@ ticks each printing `GMT+8` is the same fact five times, and the labels collide.
 
 ## An empty segment is not one thing
 
-Four situations look alike on screen and must not be drawn alike. One empty array for all of them is
+Five situations look alike on screen and must not be drawn alike. One empty array for all of them is
 the defect: it reports "there is nothing" for a channel that could not be read.
 
 | Situation | Rendering |
 | --- | --- |
 | The card's data could not be read at all | `StateView` error with retry — never an empty plot (`UstYieldCurveCard.tsx:84-92`) |
 | Nothing yet, or not applicable | `StateView` empty with a platform reason, or the card's own sentence through the reason slot (`UstYieldCurveCard.tsx:100`; `CapitalConditionsPanel.tsx:200-207`) |
-| The source is disabled or unreadable | The line does not enter the legend at all: no grey line, no placeholder (`CrossAssetReturnChart.tsx:20-22`, `chartLinesHiddenBy`) |
+| One row is switched off | That line leaves the legend with its row — no grey line, no placeholder (`chartLinesHiddenBy`, `CrossAssetReturnChart.tsx:21`) |
+| A whole channel could not be read | The call site decides which lines exist: its `hiddenLines` and its state branches. The chart does not guess — `CrossAssetReturnChart.tsx:37-38` says read failure is not its business |
 | The window has no comparable data for a line that is otherwise shown | The line is left out of the plot and the legend says one sentence; the reason lives in the chart title's ⓘ (`linesWithoutComparableData`, `CrossAssetReturnChart.tsx:43-54`) |
 
 The last row is one predicate feeding both places, deliberately: the legend sentence and the ⓘ can
