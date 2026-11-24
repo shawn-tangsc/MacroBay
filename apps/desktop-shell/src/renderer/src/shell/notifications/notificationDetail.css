@@ -1,0 +1,52 @@
+/*
+ * 通知详情（#46）：抽屉里的第二层视图。
+ *
+ * 间距用主档：正文块之间 10，送达组内部由行自己给（`deliveryRow.css`，行内 6）。
+ */
+.notification-detail {
+  display: grid;
+  gap: 10px;
+}
+
+/* 返回键在正文顶部的左端：平台抽屉头没有「标题前的槽」（见组件注释）。 */
+.notification-detail__leads {
+  display: flex;
+  align-items: center;
+  margin-left: -4px;
+}
+
+.notification-detail__meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-meta);
+}
+
+.notification-detail__body {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+}
+
+.notification-detail__delivery {
+  display: grid;
+  gap: 0;
+}
+
+.notification-detail__group {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  letter-spacing: 0.06em;
+}
+
+.notification-detail__rows {
+  margin: 0;
+  display: grid;
+}
+
+.notification-detail__actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}

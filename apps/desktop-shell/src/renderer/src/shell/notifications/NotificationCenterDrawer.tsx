@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -19,6 +19,7 @@ import {
   hasActionTarget,
   rowTitleId
 } from './notificationActionButton'
+import { NotificationDetailView } from './NotificationDetailView'
 
 import './notificationCenter.css'
 
@@ -29,6 +30,16 @@ import './notificationCenter.css'
  * 比不写更糟：读屏会给出一个跳到空处的指令。
  */
 export const NOTIFICATION_CENTER_PANEL_ID = 'notification-center-panel'
+
+/**
+ * 某一行那颗「详情」入口的 id：返回列表时把焦点送回它（详情里 Esc＝回列表，不是关抽屉）。
+ *
+ * 只在有详情的行上渲染（`item.poster` 存在），所以没有 poster 的行不会有这个 id——
+ * 回列表后 `getElementById` 拿到 null 时不做事，不抛。
+ */
+export function detailEntryId(id: string): string {
+  return `notification-detail-entry-${id}`
+}
 
 export const CENTER_TITLE_KEY = 'notifications.centerTitle'
 
@@ -86,6 +97,10 @@ export function NotificationCenterDrawer({
   const [state, setState] = useState<LoadState>('loading')
   const [items, setItems] = useState<readonly NotificationCenterItem[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
+  /** 第二层视图：同一条抽屉里换内容，`null`＝列表。 */
+  const [detailId, setDetailId] = useState<string | null>(null)
+  /** 回列表后要还焦点的那颗入口（详情里 Esc 的规矩：回列表 + 焦点回入口）。 */
+  const returnFocusTo = useRef<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async (): Promise<void> => {
@@ -137,6 +152,24 @@ export function NotificationCenterDrawer({
     setItems((current) => current.map((item) => (item.id === id ? next : item)))
   }
 
+  /**
+   * 详情里按 Esc：**回列表**，不是关抽屉（界面设计 2026-11-25 ①）。
+   * 抽屉的 Esc 走 `onClose`，所以这里在 `onClose` 上分流：有详情就回列表，没有才关。
+   */
+  function backToList(): void {
+    if (detailId !== null) returnFocusTo.current = detailEntryId(detailId)
+    setDetailId(null)
+  }
+
+  useEffect(() => {
+    if (detailId !== null) return
+    const target = returnFocusTo.current
+    if (target === null) return
+    returnFocusTo.current = null
+    // 列表刚重新渲染完，节点这时才在；焦点回到当初点的那颗「详情」。
+    document.getElementById(target)?.focus()
+  }, [detailId])
+
   async function deleteRead(): Promise<void> {
     const centre = source ?? createNotificationCenterSource()
     const result = await centre.deleteRead()
@@ -151,16 +184,25 @@ export function NotificationCenterDrawer({
   const recorded = items.filter((item) => !hasActionTarget(item))
   const unreadItems = actionables.filter((item) => item.state === 'unread')
   const readItems = actionables.filter((item) => item.state !== 'unread')
+  // 第二层视图找这一条：它被别处删掉时自动退回列表（`undefined` 就是列表）。
+  const detailItem = detailId === null ? undefined : items.find((item) => item.id === detailId)
 
   return (
     <Drawer
       mode="modal"
       size="large"
       open={open}
-      onClose={onClose}
-      titleKey={CENTER_TITLE_KEY}
-      resolveText={(key) => (key === CENTER_TITLE_KEY ? labels.centerTitle : '')}
-      footer={
+      /*
+        详情里 Esc/遮罩/右上关闭键**都是「退一层」**：平台 `Drawer` 只有一个 `onClose` 出口
+        （`Drawer.tsx` 的关闭键、Esc、遮罩三条都走它），所以它们与左上返回箭头同义——不是关闭键坏了。
+        列表里维持现状（关抽屉）。翻案条件：`Drawer` 将来给出前导槽或独立 `onBack` 时，把关闭键改回
+        关整个抽屉，详情里的 Esc 仍留「退一层」。
+      */
+      onClose={detailItem === undefined ? onClose : backToList}
+      /* 标题在详情里换成**这一条通知的标题**（记录里的句子，不是键）：交给 resolver 原样取回。 */
+      titleKey={detailItem === undefined ? CENTER_TITLE_KEY : detailItem.title}
+      resolveText={(key) => (key === CENTER_TITLE_KEY ? labels.centerTitle : key)}
+      footer={detailItem === undefined ? (
         <div className="notification-center-footer">
           {confirmDelete ? (
             <>
@@ -195,8 +237,10 @@ export function NotificationCenterDrawer({
             </>
           )}
         </div>
-      }>
+      ) : undefined}>
       <div id={NOTIFICATION_CENTER_PANEL_ID} data-notification-center-panel>
+      {detailItem === undefined ? (
+        <>
       {notice === null ? null : (
         <p className="notification-center-notice" role="status">
           {notice}
@@ -219,6 +263,7 @@ export function NotificationCenterDrawer({
           ) : null}
           <NotificationGroups
             labels={labels}
+            onOpenDetail={setDetailId}
             onOpenDeeplink={onOpenDeeplink}
             onOpenExternal={onOpenExternal}
             onOpenExternalFailed={showLinkFailed}
@@ -252,6 +297,18 @@ export function NotificationCenterDrawer({
           <p className="notification-center-empty-hint">{labels.centerEmptyHint}</p>
         </>
       )}
+        </>
+      ) : (
+        <NotificationDetailView
+          item={detailItem}
+          labels={labels}
+          onBack={backToList}
+          onOpenDeeplink={onOpenDeeplink}
+          onOpenExternal={onOpenExternal}
+          onOpenExternalFailed={showLinkFailed}
+          onRead={markOneRead}
+        />
+      )}
       </div>
     </Drawer>
   )
@@ -259,6 +316,7 @@ export function NotificationCenterDrawer({
 
 function NotificationGroups(props: {
   labels: PlatformText['notifications']
+  onOpenDetail: (id: string) => void
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   onOpenExternal: (url: string) => Promise<unknown>
   onOpenExternalFailed: () => void
@@ -267,7 +325,7 @@ function NotificationGroups(props: {
   readItems: readonly NotificationCenterItem[]
   recorded: readonly NotificationCenterItem[]
 }): React.ReactElement {
-  const { labels, onOpenDeeplink, onOpenExternal, onOpenExternalFailed, onRead } = props
+  const { labels, onOpenDetail, onOpenDeeplink, onOpenExternal, onOpenExternalFailed, onRead } = props
   return (
     <div className="notification-center-groups">
       {props.unreadItems.length === 0 ? null : (
@@ -275,6 +333,7 @@ function NotificationGroups(props: {
           title={labels.centerUnreadGroup}
           items={props.unreadItems}
           labels={labels}
+          onOpenDetail={onOpenDetail}
           onOpenDeeplink={onOpenDeeplink}
           onOpenExternal={onOpenExternal}
           onOpenExternalFailed={onOpenExternalFailed}
@@ -287,6 +346,7 @@ function NotificationGroups(props: {
           title={labels.centerEarlierGroup}
           items={props.readItems}
           labels={labels}
+          onOpenDetail={onOpenDetail}
           onOpenDeeplink={onOpenDeeplink}
           onOpenExternal={onOpenExternal}
           onOpenExternalFailed={onOpenExternalFailed}
@@ -299,6 +359,7 @@ function NotificationGroups(props: {
           title={labels.centerRecordedGroup}
           items={props.recorded}
           labels={labels}
+          onOpenDetail={onOpenDetail}
           onOpenDeeplink={onOpenDeeplink}
           onOpenExternal={onOpenExternal}
           onOpenExternalFailed={onOpenExternalFailed}
@@ -313,6 +374,7 @@ function Group(props: {
   title: string
   items: readonly NotificationCenterItem[]
   labels: PlatformText['notifications']
+  onOpenDetail: (id: string) => void
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   onOpenExternal: (url: string) => Promise<unknown>
@@ -327,9 +389,11 @@ function Group(props: {
         {props.items.map((item) => (
           <NotificationRow
             actionable={props.actionable === true}
+            detailable={item.poster !== undefined}
             item={item}
             key={item.id}
             labels={props.labels}
+            onOpenDetail={props.onOpenDetail}
             onOpenDeeplink={props.onOpenDeeplink}
             onOpenExternal={props.onOpenExternal}
             onOpenExternalFailed={props.onOpenExternalFailed}
@@ -357,7 +421,10 @@ export const LONG_BODY_CHARS = 90
 function NotificationRow(props: {
   item: NotificationCenterItem
   actionable: boolean
+  /** 只有这一条真有详情内容（`poster` 存在）才给入口：没有海报的行点进去只是把正文再说一遍。 */
+  detailable: boolean
   labels: PlatformText['notifications']
+  onOpenDetail: (id: string) => void
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   onOpenExternal: (url: string) => Promise<unknown>
@@ -393,6 +460,17 @@ function NotificationRow(props: {
             aria-expanded={expanded}
             onClick={() => setExpanded((current) => !current)}>
             {expanded ? labels.centerCollapse : labels.centerExpand}
+          </Button>
+        ) : null}
+        {props.detailable ? (
+          <Button
+            type="text"
+            size="small"
+            className="notification-center-link text-action"
+            id={detailEntryId(item.id)}
+            aria-describedby={rowTitleId(item.id)}
+            onClick={() => props.onOpenDetail(item.id)}>
+            {labels.detail.entry}
           </Button>
         ) : null}
       </div>

@@ -15,7 +15,7 @@ import { PosterDeliveryRow } from './PosterDeliveryRow'
 import { posterRowModel } from './posterRowModel'
 
 const text = platformText['zh-CN'].notifications.detail.poster
-const css = readFileSync(join(__dirname, 'posterDeliveryRow.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+const css = readFileSync(join(__dirname, 'deliveryRow.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 
 const channel = (
   id: string,
@@ -228,7 +228,7 @@ describe('海报行：渲染', () => {
       enabledImageChannelCount: 2,
       channels: [channel('a'), channel('b', { state: 'failed', reasonKind: 'channel-refused' })]
     }))
-    const row = host.querySelector('.notification-poster-row')
+    const row = host.querySelector('.notification-delivery-row')
     expect(row).not.toBeNull()
     expect(row?.querySelector('dt')?.textContent).toBe('海报')
     // 药丸是平台 StatusPill（`<span>`，不是按钮），档位走 bad。
@@ -236,20 +236,20 @@ describe('海报行：渲染', () => {
     expect(pill?.className).toContain('status-pill--bad')
     expect(pill?.tagName).toBe('SPAN')
     expect(pill?.textContent).toBe('未发送')
-    expect(row?.querySelector('.notification-poster-row__counts')?.textContent).toBe('1/2')
-    expect(row?.querySelector('.notification-poster-row__reason')?.textContent).toBe('通道未收下')
+    expect(row?.querySelector('.notification-delivery-row__counts')?.textContent).toBe('1/2')
+    expect(row?.querySelector('.notification-delivery-row__reason')?.textContent).toBe('通道未收下')
     // 药丸不在 `dd` 之外：读屏先念标签、再念值。
     expect(pill?.closest('dd')).toBe(row?.querySelector('dd'))
   })
 
   it('renders no row at all when the evidence is missing', async () => {
     const host = await mount(undefined)
-    expect(host.querySelector('.notification-poster-row')).toBeNull()
+    expect(host.querySelector('.notification-delivery-row')).toBeNull()
   })
 
   it('adds a ⓘ whose name is the platform sentence, and no ⓘ when there is nothing to add', async () => {
     const withHint = await mount(poster({ enabledImageChannelCount: 2, unsupportedImageChannelCount: 1, channels: [channel('a')] }))
-    const button = withHint.querySelector<HTMLButtonElement>('.notification-poster-row button')
+    const button = withHint.querySelector<HTMLButtonElement>('.notification-delivery-row button')
     expect(button).not.toBeNull()
     expect(button?.getAttribute('aria-label')).toBe('查看说明')
     expect(button?.getAttribute('aria-expanded')).toBe('false')
@@ -258,14 +258,40 @@ describe('海报行：渲染', () => {
     root = undefined
     document.body.replaceChildren()
     const without = await mount(poster())
-    expect(without.querySelector('.notification-poster-row button')).toBeNull()
+    expect(without.querySelector('.notification-delivery-row button')).toBeNull()
+  })
+
+  it('renders the separator from copy, and only when there is a reason', async () => {
+    // 有数字 + 有原因：一个分隔点。
+    const both = await mount(poster({
+      enabledImageChannelCount: 2,
+      channels: [channel('a'), channel('b', { state: 'failed', reasonKind: 'channel-refused' })]
+    }))
+    // 分隔点渲染的是**文案表里那一条**（不在这里钉具体空格：值由简报线的那张表定）。
+    expect([...both.querySelectorAll('.notification-delivery-row__separator')].map((node) => node.textContent))
+      .toEqual([text.value.separator])
+
+    // 只有数字、没有原因：不渲染分隔点。
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+    const countsOnly = await mount(poster({ enabledImageChannelCount: 2, channels: [channel('a'), channel('b')] }))
+    expect(countsOnly.querySelectorAll('.notification-delivery-row__separator')).toHaveLength(0)
+
+    // 单通道失败：没有数字，但「· 通道未收下」照旧要读得出来。
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+    const single = await mount(poster({ channels: [channel('a', { state: 'failed', reasonKind: 'channel-refused' })] }))
+    expect(single.querySelectorAll('.notification-delivery-row__separator')).toHaveLength(1)
+    expect(single.querySelector('.notification-delivery-row__reason')?.textContent).toBe('通道未收下')
   })
 
   it('keeps the value on one line and the label column at 40', () => {
     // happy-dom 不做布局：这里钉住「让一行成立」的两条声明，真机折行由界面设计复验。
-    expect(css).toMatch(/\.notification-poster-row\s*\{[^}]*grid-template-columns:\s*40px minmax\(0,\s*1fr\)/)
-    expect(css).toMatch(/\.notification-poster-row\s*>\s*dd\s*\{[^}]*white-space:\s*nowrap/)
-    expect(css).toMatch(/\.notification-poster-row\s*>\s*dd\s*\{[^}]*min-width:\s*0/)
+    expect(css).toMatch(/\.notification-delivery-row\s*\{[^}]*grid-template-columns:\s*40px minmax\(0,\s*1fr\)/)
+    expect(css).toMatch(/\.notification-delivery-row\s*>\s*dd\s*\{[^}]*white-space:\s*nowrap/)
+    expect(css).toMatch(/\.notification-delivery-row\s*>\s*dd\s*\{[^}]*min-width:\s*0/)
   })
 })
 
