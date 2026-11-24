@@ -154,6 +154,34 @@ describe('dashboard cells read only when the reader left them on', () => {
     expect(defaulted.macroQuery).toHaveBeenCalledWith({})
   })
 
+  it('asks for the fallback cell’s source when the reader turned the primary dollar cell off', async () => {
+    // 真机 2026-11-24：读者把「美元（RealMarketAPI）」那格关掉、只开「美元（备用）Twelve Data」，
+    // 美元行却还是空的——取源只看主格，仍去要真实 DXY（被套餐拒）。行是"任一格启用就在读"，
+    // 取源也必须跟着启用的那一格走，否则数据到了也不显示。
+    const fallback = await render({
+      read: async () => ({
+        [dashboardCellId('quotes', 'usd')]: false,
+        [dashboardCellId('quotes', 'usd-fallback')]: true
+      }),
+      readSelection: async () => ({
+        [dashboardCellId('quotes', 'usd')]: 'realmarketapi-market',
+        [dashboardCellId('quotes', 'usd-fallback')]: 'twelve-data-market'
+      })
+    })
+    expect(fallback.macroQuery).toHaveBeenCalledWith({ dollarSourceId: 'twelve-data-market' })
+  })
+
+  it('keeps the primary cell’s source while that cell is on, whatever the fallback cell says', async () => {
+    const both = await render({
+      read: async () => ({}),
+      readSelection: async () => ({
+        [dashboardCellId('quotes', 'usd')]: 'realmarketapi-market',
+        [dashboardCellId('quotes', 'usd-fallback')]: 'twelve-data-market'
+      })
+    })
+    expect(both.macroQuery).toHaveBeenCalledWith({ dollarSourceId: 'realmarketapi-market' })
+  })
+
   it('reads everything when the enable map cannot be read (缺省 = 启用)', async () => {
     const { crossAssetQuery, sentimentOptionsQuery, container } = await render({ read: async () => { throw new Error('unreadable') } })
     expect(crossAssetQuery).toHaveBeenCalled()

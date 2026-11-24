@@ -72,20 +72,31 @@ export function cellSourceChoices(moduleId: string, cellKey: string): readonly s
 }
 
 /**
- * 美元格选了哪个源（没选 / 选了不在这格范围内的源 → undefined，走默认规则）。
+ * 美元格读哪个源：先看这一行里**启用的那一格**（主格优先，主格关掉就看备用格）。
+ *
+ * 一行有两个格（`quotes:usd` 与 `quotes:usd-fallback`），「任一启用就算这行在读」。取源必须跟着
+ * 启用的那一格走：只按主格取的话，读者关了主格、开了备用格（十二数据的合成美元）时，这一行仍会去
+ * 要主格那个源（真机 2026-11-24：真 DXY 被套餐拒，合成那条有数也不显示）。
+ *
+ * 没选过 / 选了不在这格范围内的源 → `undefined`，走服务侧的默认规则（真实那条优先，读不到时兜底）。
+ * 两格都关 → 也不传：行已经不画了。
  *
  * 格 id 随卡片合并不是固定的：`490231e` 把「跨资产」并入「行情卡」之后，美元格只剩
  * `quotes:usd`（旧的 `cross-asset:usd` 已不存在）。所以这里仍经 `dashboardCellId` 查表，
  * 别处不会拿着一个已经消失的键去读。
  */
 export function selectedDollarSourceId(
-  selections: Readonly<Record<string, string>>
+  selections: Readonly<Record<string, string>>,
+  cells: Readonly<Record<string, boolean>> = {}
 ): string | undefined {
-  const cellId = dashboardCellId('quotes', 'usd')
-  const chosen = selections[cellId]
-  if (chosen === undefined) return undefined
-  const allowed = new Set(cellSourceChoices('quotes', 'usd'))
-  return allowed.has(chosen) ? chosen : undefined
+  for (const cellKey of ['usd', 'usd-fallback'] as const) {
+    const cellId = dashboardCellId('quotes', cellKey)
+    if (!isCellEnabled(cells, cellId)) continue
+    const chosen = selections[cellId]
+    const allowed = new Set(cellSourceChoices('quotes', cellKey))
+    return chosen !== undefined && allowed.has(chosen) ? chosen : undefined
+  }
+  return undefined
 }
 
 /** 源级启用表：`sourceId → enabled`；整表读不到时是 undefined（未知），不许当成「全都启用」。 */
