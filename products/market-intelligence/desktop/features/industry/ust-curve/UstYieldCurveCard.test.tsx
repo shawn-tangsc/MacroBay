@@ -208,6 +208,33 @@ describe('国债收益率卡', () => {
     unmount()
   })
 
+  it('drops the "纵轴" label: the two options already say what they switch', () => {
+    const { host, unmount } = mount()
+    const tools = text(host.querySelector('.mi-ust__chart-tools'))
+    // 断渲染结果，不断文案表：键还在表里（`axisLabel`），只是这一处不再画它。
+    expect(t('axisLabel')).not.toBe('')
+    expect(tools).not.toContain(t('axisLabel'))
+    // 「曲线」那一组不动；两组控件都还在，模式两档、周期四档，没有空槽。
+    expect(tools).toContain(t('curveLabel'))
+    const groups = cells(host, '.mi-ust__chart-tools .segmented')
+    expect(groups).toHaveLength(2)
+    expect(cells(groups[0]!, '.segmented__item')).toHaveLength(2)
+    expect(cells(groups[1]!, '.segmented__item')).toHaveLength(4)
+    unmount()
+  })
+
+  it('drops the same label in the English copy', () => {
+    const en = (key: string): string => resolveProductTextKey('en-US', key)
+    const { host, unmount } = mount({ resolveText: en })
+    const tools = text(host.querySelector('.mi-ust__chart-tools'))
+    const axis = resolveProductTextKey('en-US', 'pages.intelligence.portal.dashboard.ustCurve.axisLabel')
+    const curve = resolveProductTextKey('en-US', 'pages.intelligence.portal.dashboard.ustCurve.curveLabel')
+    expect(axis).not.toBe('')
+    expect(tools).not.toContain(axis)
+    expect(tools).toContain(curve)
+    unmount()
+  })
+
   it('hands the chart to a screen reader as one image, not as a keyboard trap', () => {
     const { host, unmount } = mount()
     const svg = host.querySelector('svg.mi-ust__svg')!

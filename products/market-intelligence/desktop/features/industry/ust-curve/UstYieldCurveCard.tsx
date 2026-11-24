@@ -107,7 +107,8 @@ export function UstYieldCurveCard({
     <div className="mi-ust__chart-col" key="chart">
       <div className="mi-ust__chart-tools">
         <span className="mi-ust__control">
-          <span className="mi-ust__control-label">{copy('axisLabel')}</span>
+          {/* 这里原来写着「纵轴」两个字：右边就是「收益率 / 起点归一」，已经说清这组切换的是什么，
+              用户 2026-11-24 判它是废话。删的是这处渲染，文案键 `axisLabel` 先留在表里。 */}
           <Segmented
             items={[{ value: 'level', labelKey: `${KEY}.mode.level` }, { value: 'normalized', labelKey: `${KEY}.mode.normalized` }]}
             value={mode}
