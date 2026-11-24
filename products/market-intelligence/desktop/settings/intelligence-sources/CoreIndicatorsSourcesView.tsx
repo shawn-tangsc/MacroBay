@@ -4,7 +4,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /* 只从**纯模块**取键的拼法：store 里有 `node:fs`，渲染层导入它会整页加载失败（2026-11-14）。 */
 import { coreIndicatorSourcePreferenceKey } from '../../../service/intelligence/macro-calendar/coreIndicatorSourcePreferenceKey'
-import { MACRO_INDICATOR_GROUPS } from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
+import { MACRO_INDICATOR_GROUPS, type MacroIndicatorGroupRow } from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
 /* M3（2026-11-14）：这一屏的源腿**只从 catalog 读**，不再自己去派生——腿的出处只有一处。 */
 import { metricCatalog } from '../../../service/intelligence/macro-calendar/marketCalendarMetricCatalog'
 
@@ -53,22 +53,6 @@ export type CoreIndicatorsSourcesViewProps = Readonly<{
   builtinCadenceOf?: (providerId: string) => boolean
 }>
 
-/**
- * 指标码 → 文案键：不按「组名 + 行名」拼（拼出来是「CPI 核心年率」，产品口径是「核心 CPI 年率」）。
- *
- * 导出是为了让守卫能断言**键集合等于卡片 12 行码的集合**：改名时漏一条，设置页就会少一个标题、
- * 渲染成一张没名字的卡（今晚出现过这个形状）。名字是文案，不塞进数据层——所以这里是「改名后
- * 允许改的唯一 1 处消费者」，守卫 C 的基线里写明了这条理由。
- */
-export const CORE_INDICATOR_METRIC_COPY_KEYS: Readonly<Record<string, string>> = {
-  'US.CPI.NSA.YOY': 'cpiYoy', 'US.CPI.SA.MOM': 'cpiMom',
-  'US.CORE_CPI.NSA.YOY': 'coreCpiYoy', 'US.CORE_CPI.SA.MOM': 'coreCpiMom',
-  'US.NONFARM.SA.CHANGE': 'nonfarm', 'US.UNEMPLOYMENT.SA.RATE': 'unemployment',
-  'US.AHE.SA.MOM': 'avgHourlyMom', 'US.AHE.NSA.YOY': 'avgHourlyYoy',
-  'US.PCE.SA.YOY': 'pceYoy', 'US.PCE.SA.MOM': 'pceMom',
-  'US.CORE_PCE.SA.YOY': 'corePceYoy', 'US.CORE_PCE.SA.MOM': 'corePceMom'
-}
-
 export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps): React.ReactElement {
   const t = props.resolveText
   /* 间隔/下次里的时刻按读者设置时区显示，格式化只在这里取一次。 */
@@ -76,16 +60,19 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
   /* 一次建索引，整屏共用：每个指标的腿都从这张索引取，组件自己不派生。 */
   const catalog = metricCatalog()
 
-  const cellFor = (metricKey: string): React.ReactElement | null => {
-    /* 标题取不到名字就**整张不出**：拼出一个空键只会渲染成空白标题 + 一行源，
-       读者看到的是一张「没有名字的卡」（用户 2026-11-14 截图里的那 7 张）。 */
-    const copyKey = CORE_INDICATOR_METRIC_COPY_KEYS[metricKey]
-    if (copyKey === undefined) return null
+  const cellFor = (row: MacroIndicatorGroupRow): React.ReactElement | null => {
+    const metricKey = row.metricKey
+    /* 名字（设置页显示名）不按「组名 + 行名」拼：拼出来是「CPI 核心年率」，产品口径是「核心 CPI 年率」。
+       文案键跟着分组行走（`metricNameKey`），这里不另列表——12 个码在本文件里一个字都不出现。 */
+    const name = t(`settings.intelligenceSources.coreIndicators.metricNames.${row.metricNameKey}`)
+    /* 解析器对未知键返回空串（不回退成键名）：取不到名字就**整张不出**，
+       读者看到的会是一张「没有名字的卡」（用户 2026-11-14 截图里的那 7 张）。 */
+    if (name === '') return null
     /* 名字取不到就不渲染这一行——绝不把 provider id 印给读者。 */
     const rows: readonly Readonly<{ source: CoreIndicatorValueSource; name: string }>[] =
       (catalog.get(metricKey)?.sources ?? []).flatMap((source) => {
-        const name = props.sourceNameOf(source.providerId)
-        return name === undefined ? [] : [{ source, name }]
+        const sourceName = props.sourceNameOf(source.providerId)
+        return sourceName === undefined ? [] : [{ source, name: sourceName }]
       })
     /* 一条腿都没有：整张卡也不出。留一张带边框的空白卡，读者只会以为它坏了。 */
     if (rows.length === 0) return null
@@ -100,7 +87,7 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
       key={metricKey}
       style={{ ['--cell-span' as string]: columns }}>
       <div className="business-cell__title">
-        {t(`settings.intelligenceSources.coreIndicators.metricNames.${copyKey}`)}
+        {name}
       </div>
       <div className="business-cell__items" style={{ ['--cell-items' as string]: columns }}>
         {rows.map(({ source, name }) => {
@@ -164,7 +151,7 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
               {t(`settings.intelligenceSources.coreIndicators.groups.${group.titleKey}`)}
             </div>
             <div className="business-cell-grid">
-              {group.rows.map((row) => cellFor(row.metricKey))}
+              {group.rows.map((row) => cellFor(row))}
             </div>
           </section>
         })}

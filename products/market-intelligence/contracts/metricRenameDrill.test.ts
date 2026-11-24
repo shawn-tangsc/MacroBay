@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { MACRO_INDICATOR_GROUP_METRIC_KEYS } from '../service/intelligence/macro-calendar/macroIndicatorCardGroups'
+import { MACRO_INDICATOR_CARD_KEYS } from '../service/intelligence/macro-calendar/macroIndicatorCardGroups'
 
 /**
  * 守卫 D｜换码演练的**静态那一半**（架构师规格 §3、Chief 2026-11-14 定的两段判据）。
@@ -12,8 +12,9 @@ import { MACRO_INDICATOR_GROUP_METRIC_KEYS } from '../service/intelligence/macro
  *
  * - **消费者 0**：盘口、政策路径、回填、卡片渲染、读数服务——改名后**一个字都不用动**。
  *   这一条查它们有没有把这 12 个码写死；写死一处，改名时就必须去改，判据就不成立了。
- * - **名称映射 1 处**：设置页那 12 条 `CORE_INDICATOR_METRIC_COPY_KEYS` 允许保留（名字是产品文案），
- *   它的键集合由 `CoreIndicatorsSourcesView.test.tsx` 另有一条守卫钉住。
+ * - **名称映射 0 处**：设置页那份 12 条 `metricKey → 文案键` 的清单已经去掉——显示名跟着分组行
+ *   （`metricNameKey`）走，码本身从分组表派生。所以设置页现在也是「消费者」，不再按码写。
+ *   「12 个码有名字」这件事由 `CoreIndicatorsSourcesView.test.tsx` 另有一条守卫钉住（中英两套）。
  *
  * 为什么不真改生产文件去「改名」：那需要在生产代码里开缝（每处加可选参数），缝本身就成了新隐患。
  * 静态查「消费者有没有硬编码」是同一件事的可验证形式；概念归属本身另有双向守卫
@@ -44,7 +45,7 @@ describe('守卫 D：换码后消费者一处都不用改', () => {
     const offenders: string[] = []
     for (const relative of CONSUMER_FILES) {
       const source = readFileSync(join(PRODUCT_ROOT, relative), 'utf8')
-      for (const key of MACRO_INDICATOR_GROUP_METRIC_KEYS) {
+      for (const key of MACRO_INDICATOR_CARD_KEYS) {
         if (source.includes(`'${key}'`)) offenders.push(`${relative}: ${key}`)
       }
     }
@@ -53,14 +54,13 @@ describe('守卫 D：换码后消费者一处都不用改', () => {
   })
 
   /**
-   * 反向：这 12 个码只允许出现在「数据表 + 那唯一一处名称映射」里。
-   * 出现第三个地方 = 又一个按码建的表，改名时会被漏掉（今晚那次就是这样漏的）。
+   * 反向：这 12 个码只允许出现在「数据表」里。出现别处 = 又一个按码建的表，改名时会被漏掉
+   * （今晚那次就是这样漏的）。**设置页与卡片读数都不在名单里**：它们只读派生的码表。
    */
-  it('keeps the twelve codes inside the data tables and the one name map', () => {
+  it('keeps the twelve codes inside the data tables, not in consumers', () => {
     const allowed = new Set<string>([
       'contracts/metricKeyConcept.ts',
       'service/intelligence/macro-calendar/macroIndicatorCardGroups.ts',
-      'service/intelligence/macro-calendar/macroIndicatorCardFacts.ts',
       'service/intelligence/macro-calendar/marketCalendarCodeNames.ts',
       'service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts',
       'service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts',
@@ -72,12 +72,10 @@ describe('守卫 D：换码后消费者一处都不用改', () => {
       'service/intelligence/macro-calendar/fredIndicatorYoY.ts',
       'service/intelligence/macro-calendar/coreIndicatorValueSources.ts',
       'service/intelligence/macro-calendar/marketCalendarStandardBackfill.ts',
-      'service/intelligence/macro-calendar/narwhal-calendar/narwhalSeriesPrimaryMetric.ts',
-      // 唯一允许的消费者：设置页的名称映射（键集合由另一条守卫钉住）。
-      'desktop/settings/intelligence-sources/CoreIndicatorsSourcesView.tsx'
+      'service/intelligence/macro-calendar/narwhal-calendar/narwhalSeriesPrimaryMetric.ts'
     ])
     const offenders: string[] = []
-    for (const key of MACRO_INDICATOR_GROUP_METRIC_KEYS) {
+    for (const key of MACRO_INDICATOR_CARD_KEYS) {
       for (const [relative, source] of productionSources()) {
         if (!source.includes(`'${key}'`)) continue
         if (!allowed.has(relative)) offenders.push(`${relative}: ${key}`)

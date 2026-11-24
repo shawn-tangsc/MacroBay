@@ -23,7 +23,7 @@ import {
   type DashboardSourceModule
 } from './dashboardSourceModules'
 import {
-  MACRO_INDICATOR_GROUP_METRIC_KEYS,
+  MACRO_INDICATOR_CARD_KEYS,
   MACRO_INDICATOR_GROUPS
 } from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
 
@@ -177,7 +177,7 @@ export function BusinessSettingsView(props: {
     if (business === 'coreIndicators') {
       return props.resolveText('settings.intelligenceSources.businessSubtitle.coreIndicators')
         .replace('{groups}', String(MACRO_INDICATOR_GROUPS.length))
-        .replace('{indicators}', String(MACRO_INDICATOR_GROUP_METRIC_KEYS.length))
+        .replace('{indicators}', String(MACRO_INDICATOR_CARD_KEYS.length))
     }
     const template = business === 'dashboard'
       ? props.resolveText('settings.intelligenceSources.businessSubtitle.modules')
