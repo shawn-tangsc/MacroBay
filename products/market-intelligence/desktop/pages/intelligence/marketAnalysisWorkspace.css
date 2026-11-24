@@ -141,21 +141,62 @@
 }
 
 /*
- * 窄档的会话：底部上滑抽屉（原型 `2026-11-24-pad-agent-drawer.html`）。
+ * 窄档的两个面（用户 2026-11-24 拍板 v3，原型 `2026-11-24-pad-edge-handle-v3.html`）：
+ * 左抽屉＝最新 AI 结论 + 重点舆情；底部聊天框＝对话 + 输入 + 一条「选中事件」。两者互斥。
  *
- * 高度是**定死的**（84%，800 档 88%），不随内容长：空会话时下半必然空着，而输入框是这块里唯一
- * 要能被肌肉记忆按到的东西——让它随消息条数上下跳是最贵的代价。
+ * 三个面各有归属、不许互相搬：看板是数据卡，抽屉是「读」，聊天框是「问」。
  *
- * 层次沿用 tokens.css 那张表：antd 抽屉 1000 → 这颗圆钮 1100。遮罩压在 1000 上、抽屉在它上面
- * 一层，两层都**低于圆钮**；抽屉开着时圆钮根本不渲染（不是压上去），所以不会出现第二层入口。
+ * **翻边只改一处**：靠哪一边由 `MARKET_ANALYSIS_DRAWER.edge` 决定，下面左右两套规则都以
+ * `data-edge` 为键；340 的宽度与 900 的并排阈值同理，不在样式里散落。
+ *
+ * 层次沿用 tokens.css 那张表：antd 抽屉 1000 → 圆钮 1100。左抽屉与它的遮罩都在 1000–1001，
+ * 低于圆钮；整幅档开着时圆钮根本不渲染（不是压上去），所以不会出现第二层入口。
+ */
+.mi-analysis-dashboard-layout { --mi-analysis-drawer-width: 340px; }
+/* 左抽屉与把手的定位参照：整条落在页内容区的左缘（不是视口左缘，那是外壳侧栏）。
+   **只在窄档加**：宽档一个定位上下文都不多，逐像素不变。 */
+.mi-analysis-dashboard-layout[data-compact] { position: relative; }
+/* 并排档：看板**让位**（908 的容器里剩 568），不是被盖住。整幅档不让位——抽屉就是整幅。 */
+.mi-analysis-dashboard-layout__panes[data-drawer='side'][data-edge='left'] { margin-left: var(--mi-analysis-drawer-width); }
+.mi-analysis-dashboard-layout__panes[data-drawer='side'][data-edge='right'] { margin-right: var(--mi-analysis-drawer-width); }
+.mi-analysis-drawer { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; z-index: 1001; background: var(--surface); }
+.mi-analysis-drawer[data-edge='left'] { left: 0; right: auto; border-right: 1px solid var(--border); box-shadow: 12px 0 32px rgb(0 0 0 / 28%); }
+.mi-analysis-drawer[data-edge='right'] { right: 0; left: auto; border-left: 1px solid var(--border); box-shadow: -12px 0 32px rgb(0 0 0 / 28%); }
+.mi-analysis-drawer[data-tier='side'] { width: var(--mi-analysis-drawer-width); }
+/* 整幅档：盖住整幅，等于切视图（这一档看板不能读）。 */
+.mi-analysis-drawer[data-tier='full'] { width: 100%; box-shadow: none; }
+.mi-analysis-drawer[data-open='false'] { display: none; }
+.mi-analysis-drawer__head { display: flex; align-items: center; gap: 8px; flex: none; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.mi-analysis-drawer__head h2 { margin: 0; color: var(--text); font-size: var(--font-body); font-weight: 600; }
+.mi-analysis-drawer__head > :last-child { margin-left: auto; }
+.mi-analysis-drawer__body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: hidden; padding: 10px 0; }
+/* 重点舆情：自己滚，标题与结论卡不动。 */
+.mi-analysis-drawer__news { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding: 0 12px; }
+/* 整幅档的遮罩：点它关闭。并排档没有遮罩——那边要求看板能读，不是模态。 */
+.mi-analysis-drawer__scrim { position: absolute; inset: 0; z-index: 1000; background: rgb(0 0 0 / 58%); }
+/*
+ * 左缘把手：视觉 4px、命中 22×128，竖直居中。整条落在页的 12px 左边距里（遮 0 个内容像素）。
+ * z 与遮罩同层、低于抽屉：抽屉一开它就被盖住，不再当第二颗入口。
+ */
+.mi-analysis-drawer__grip { position: absolute; top: 50%; transform: translateY(-50%); width: 22px; height: 128px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; z-index: 1000; }
+.mi-analysis-drawer__grip[data-edge='left'] { left: 0; }
+.mi-analysis-drawer__grip[data-edge='right'] { right: 0; }
+.mi-analysis-drawer__grip i { width: 4px; height: 128px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.mi-analysis-drawer__grip:hover i,
+.mi-analysis-drawer__grip:focus-visible i { background: var(--accent); }
+.mi-analysis-drawer__grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/*
+ * 窄档的会话：底部上滑聊天框（同一份原型）。
+ *
+ * 高度 **40dvh 起、70dvh 封顶，中间随内容长**：输入框贴视口底，所以长高不会让它上下跳；
+ * 用 `dvh` 而不是 `vh`——软键盘弹起时框跟着缩，输入框不会被键盘吃掉（pad 上必须）。
+ *
+ * 层次：遮罩 1000、聊天框 1001，都低于圆钮 1100；框开着时圆钮不渲染。
  */
 .mi-agent-sheet__scrim { position: fixed; inset: 0; z-index: 1000; background: rgb(0 0 0 / 58%); }
-.mi-agent-sheet { position: fixed; left: 0; right: 0; bottom: 0; height: 84%; display: flex; flex-direction: column; z-index: 1001; border-top: 1px solid var(--border); border-radius: 12px 12px 0 0; background: var(--surface); box-shadow: 0 -12px 32px rgb(0 0 0 / 35%); }
+.mi-agent-sheet { position: fixed; left: 0; right: 0; bottom: 0; height: auto; min-height: 40dvh; max-height: 70dvh; display: flex; flex-direction: column; z-index: 1001; border-top: 1px solid var(--border); border-radius: 12px 12px 0 0; background: var(--surface); box-shadow: 0 -12px 32px rgb(0 0 0 / 35%); }
 .mi-agent-sheet[data-open="false"] { display: none; }
-@container mi-analysis-dashboard (max-width: 800px) {
-  /* 800 档纵向更少，抽屉再高一点：露出的看板留一张结论卡的上半。 */
-  .mi-agent-sheet { height: 88%; }
-}
 .mi-agent-sheet__handle { display: grid; place-items: center; height: 20px; flex: none; }
 .mi-agent-sheet__handle i { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); }
 .mi-agent-sheet__head { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; flex: none; }
@@ -165,6 +206,9 @@
 /* 舆情块按自身容器收放（它自带 container）；抽屋里给它一条下边框，和对话分开。 */
 .mi-agent-sheet__body > .mi-news-sentiment { padding: 0 12px 8px; border-bottom: 1px solid var(--border); }
 .mi-agent-sheet__body > .mi-analysis-chat { flex: 1; min-height: 0; }
+/* 窄档圆钮钉在右下：这一支没有拖拽，用 `right/bottom` 跟边（同一条 16），转屏、改窗口都不跑位。
+   宽档仍用挂载时算出的像素坐标，可拖。 */
+.mi-agent-floating__button[data-compact] { left: auto; top: auto; right: 16px; bottom: 16px; }
 
 /* Change rows read as a list of named metrics with both values, so a conclusion
    states what moved without showing the stored machine encoding. */

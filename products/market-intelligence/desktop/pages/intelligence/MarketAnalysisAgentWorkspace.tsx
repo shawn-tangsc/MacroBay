@@ -61,6 +61,20 @@ type Props = {
   compact?: boolean
   /** 另有模态层开着：圆钮不渲染。 */
   suppressed?: boolean
+  /**
+   * 窄档底部抽屉的开关，报给布局根：抽屉开着时那一层要整体 `inert`（键盘也走不进去）。
+   * 抽屉挂在布局根的 portal 挂点上，只有布局根能关掉看板那一层，所以状态要报上去。
+   */
+  onSheetOpenChange?: (open: boolean) => void
+  /**
+   * 左抽屉里「重点舆情」的挂点（由布局根渲染，窄档才有）。
+   *
+   * 舆情块从这里 portal 过去：它带着「选中舆情」那份状态住在本组件里，复制一份就会两份状态。
+   * 宽档不传——舆情仍在本栏里。
+   */
+  newsHost?: HTMLDivElement | null
+  /** 受控的聊天框开关：两个面互斥，布局根要能关它（开左抽屉就关聊天框）。 */
+  sheetOpen?: boolean
 }
 
 /**
@@ -77,7 +91,7 @@ const CLOSE_AGENT_KEY = 'pages.intelligence.portal.calendarCard.closeAgent'
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenSettings, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, floatingHost, compact = false, suppressed = false, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenSettings, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, floatingHost, compact = false, suppressed = false, onSheetOpenChange, newsHost, sheetOpen, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const resolveProductText = useProductTextKey()
   const contextRenderers = useMemo(
@@ -221,13 +235,15 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
     onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}
   />
   // 右栏现在只有一块（日历卡那行已搬走）：没有可拖的两块，`--mi-chat-percent` 与拖拽状态一并撤掉。
+  // 窄档：底部聊天框只装对话（含「选中事件」那一条），舆情另走左抽屉（v3 的三块归属）。
   const floating = <AgentFloatingControl
     closeKey={CLOSE_AGENT_KEY}
     compact={compact}
-    onOpenChange={setChatOpen}
+    {...(sheetOpen === undefined ? {} : { open: sheetOpen })}
+    onOpenChange={(next) => { setChatOpen(next); onSheetOpenChange?.(next) }}
     resolveText={resolveProductText}
     suppressed={suppressed}
-    text={floatingText}>{compact ? <>{newsNode}{chatPanel}</> : chatPanel}</AgentFloatingControl>
+    text={floatingText}>{chatPanel}</AgentFloatingControl>
   const control = floatingHost === undefined || floatingHost === null ? floating : createPortal(floating, floatingHost)
   return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title}>
     {/* The policy card keeps its own row; the calendar and the news share what is left in half. */}
@@ -237,9 +253,11 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
     {/* 日历卡那一行搬走后这里只剩一块：不再有可拖的两块，也不留一条空带。
         卡与舆情之间靠 `--mi-agent-gap`（12）隔开——两块都有边框，贴 0 会成 2px 双线。 */}
     {card === undefined ? null : <div className="mi-analysis-agent-workspace__card">{card}</div>}
-    {/* 窄档时这一块搬进底部抽屉（原型：重点舆情在对话上面）——不是复制一份，是同一个节点换个位置。 */}
+    {/* 窄档时这一块搬进左抽屉（v3：重点舆情与 AI 结论同住一个面）——同一个节点换个位置，不复制。 */}
     {compact ? null : newsNode}
     </div>
+    {/* 窄档：舆情 portal 到左抽屉的挂点上。 */}
+    {compact && newsHost ? createPortal(newsNode, newsHost) : null}
     {control}
   </aside>
 }

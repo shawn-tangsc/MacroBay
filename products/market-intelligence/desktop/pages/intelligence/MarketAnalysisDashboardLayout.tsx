@@ -1,6 +1,8 @@
 import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
-import { cloneElement, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { cloneElement, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { X } from 'lucide-react'
+import { IconButton } from '@platform/ui/components/icon-button'
 import type { MarketAnalysisReadableLocale } from '../../../contracts/marketAnalysisReadableText'
 import type { productText } from '../../shared/i18n/productText'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
@@ -33,6 +35,23 @@ import './marketAnalysisWorkspace.css'
  * 所以这里量根元素的 inline-size 就等于量那条查询的量；用例盯着两边一致。
  */
 export const MARKET_ANALYSIS_COMPACT_MAX_WIDTH = 1303
+
+/**
+ * 左抽屉（AI 分析与舆情）的形态：**一处配置，翻边只改这里**。
+ *
+ * 用户 2026-11-24 的触发方式还在改（「往左滚 / 按住往左拖」「从右边往左边弹」），落边随时可能翻。
+ * 所以「靠哪一边」只在这一个字段里写死，样式按 `data-edge` 挂左/右两套；翻边改这一处，
+ * 340 的宽度与 900 的并排阈值同理——不在样式里散落。
+ */
+export const MARKET_ANALYSIS_DRAWER = {
+  edge: 'right' as 'left' | 'right',
+  /** 并排档的抽屉宽：908 的容器里看板剩 568（与旧 agent 栏的下限同值）。 */
+  width: 340,
+  /** ≥ 这个容器宽：并排（看板让位 340）；更窄：整幅遮盖（等于切视图）。 */
+  sideMinWidth: 900
+} as const
+
+export type MarketAnalysisDrawerTier = 'side' | 'full'
 
 export type MarketAnalysisDashboardInjection = Readonly<{
   conclusionSlot?: (node: HTMLDivElement | null) => void
@@ -111,16 +130,24 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
   const [floatingHost, setFloatingHost] = useState<HTMLDivElement | null>(null)
   // 窄档判定跟 CSS 容器查询同一把尺子：布局根就是这个容器，量它自己的 inline-size。
   const [layoutNode, setLayoutNode] = useState<HTMLDivElement | null>(null)
-  const [compact, setCompact] = useState(false)
+  const [layoutWidth, setLayoutWidth] = useState(0)
+  // 首帧就量一次：ResizeObserver 是异步的，等它回调时已经按宽档画过一帧（圆钮的坐标那一刻是浮窗那套），
+  // 窄屏上会闪一下再跳回右下。布局阶段同步量，绘制前就落定。
+  useLayoutEffect(() => {
+    if (layoutNode === null) return
+    setLayoutWidth(layoutNode.getBoundingClientRect().width)
+  }, [layoutNode])
   useEffect(() => {
     if (layoutNode === null || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? 0
-      setCompact(width > 0 && width <= MARKET_ANALYSIS_COMPACT_MAX_WIDTH)
+      setLayoutWidth(entries[0]?.contentRect.width ?? 0)
     })
     observer.observe(layoutNode)
     return () => observer.disconnect()
   }, [layoutNode])
+  const compact = layoutWidth > 0 && layoutWidth <= MARKET_ANALYSIS_COMPACT_MAX_WIDTH
+  /** 并排档（看板让位 340，仍可读）还是整幅档（遮盖，等于切视图）。 */
+  const drawerTier: MarketAnalysisDrawerTier = layoutWidth >= MARKET_ANALYSIS_DRAWER.sideMinWidth ? 'side' : 'full'
   // 视图切换的键：与界面原来的「市场看板 / 数字货币解读 Agent」逐字一致，只是不再从已解析的句子回填。
   const resolveWorkspaceText = useProductTextKey()
   const [binding, setBinding] = useState<AnalysisWorkspaceBinding>()
@@ -128,6 +155,31 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
   const [openEntryId, setOpenEntryId] = useState<string>()
   const [timelineOpen, setTimelineOpen] = useState(false)
   const [analysisSettingsOpen, setAnalysisSettingsOpen] = useState(false)
+  // 底部聊天框（只有对话 + 输入 + 一条「选中事件」）开着没有。
+  const [chatSheetOpen, setChatSheetOpen] = useState(false)
+  // 左抽屉（最新 AI 结论 + 重点舆情）开着没有。两个面互斥：开一个关另一个。
+  const [analysisDrawerOpen, setAnalysisDrawerOpen] = useState(false)
+  // 舆情块由 workspace 构造（它拥有选中舆情那份状态），portal 进抽屉里的挂点——不是复制一份。
+  const [newsHost, setNewsHost] = useState<HTMLDivElement | null>(null)
+  const grip = useRef<HTMLButtonElement>(null)
+  const [returnGripFocus, setReturnGripFocus] = useState(false)
+  const closeAnalysisDrawer = useCallback(() => {
+    setAnalysisDrawerOpen(false)
+    setReturnGripFocus(true)
+  }, [])
+  // Esc 关抽屉。开着时键盘焦点在抽屉里，Esc 是它唯一能退出的路（并排档没有遮罩可点）。
+  useEffect(() => {
+    if (!analysisDrawerOpen) return
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') closeAnalysisDrawer() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [analysisDrawerOpen, closeAnalysisDrawer])
+  // 关掉后焦点回把手：把手关着时在 DOM 里，Tab 回来就落得上。
+  useEffect(() => {
+    if (analysisDrawerOpen || !returnGripFocus) return
+    grip.current?.focus()
+    setReturnGripFocus(false)
+  }, [analysisDrawerOpen, returnGripFocus])
   const [conclusionHost, setConclusionHost] = useState<HTMLDivElement | null>(null)
   const [policyHost, setPolicyHost] = useState<HTMLDivElement | null>(null)
   // Frozen at mount: a new instant per render would re-query the calendar on every render.
@@ -215,12 +267,13 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           onRefresh={cardData.reload}
         />
 
-  // 另有模态层开着时圆钮不渲染：它的 z（1100）比那些层（1000/1150/1200）高，压上去就是第二层入口。
-  const agentSuppressed = timelineOpen || analysisSettingsOpen || openEntry !== undefined || eventDetail !== undefined
-  return <div className="mi-analysis-dashboard-layout" ref={setLayoutNode}>
-    <div className="mi-analysis-dashboard-layout__panes">
-      <div className="mi-analysis-dashboard-layout__dashboard">
-        {conclusionHost ? createPortal(<LatestAnalysisConclusionCard
+  /**
+   * 「最新 AI 结论」那张卡：**同一个节点**。
+   *
+   * 宽档 portal 进 agent 栏顶部（`policySlot`）；窄档搬进左抽屉（v3 的「AI 分析」那一块，
+   * 带着「查看完整结论」进时间线）。两处只有一处渲染——搬位置，不是复制一份。
+   */
+  const conclusionCardNode = <LatestAnalysisConclusionCard
           text={detailText}
           // 读不到时用 productText 里既有那口径句（与抽屉同一句），不另写一版。
           workspaceText={{
@@ -239,7 +292,22 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           openTimelineLabel={text.analysisDrawer.open}
           enableAnalysisLabel={text.analysisTimeline.enableAnalysis}
           analysisOffHint={text.analysisTimeline.analysisOffHint}
-        />, conclusionHost) : null}
+        />
+
+  // 另有模态层开着时圆钮不渲染：它的 z（1100）比那些层（1000/1150/1200）高，压上去就是第二层入口。
+  // 抽屉开着时同样不渲染——它在右缘，圆钮正好压在抽屉的右下角，会变成压在同一块面上的第二颗入口
+  // （整幅档是模态；并排档两者重叠，也不留两颗）。
+  const agentSuppressed = timelineOpen || analysisSettingsOpen || openEntry !== undefined || eventDetail !== undefined
+    || (compact && analysisDrawerOpen)
+  return <div className="mi-analysis-dashboard-layout" data-compact={compact || undefined} ref={setLayoutNode}>
+    {/* 遮蔽整层用 `inert`：键盘 Tab 走不进去、点不动（遮罩只管指针与视觉，那是另一件事）。
+        底部聊天框是全宽模态；左抽屉只有整幅档才是模态，并排档看板必须仍可读。 */}
+    <div className="mi-analysis-dashboard-layout__panes"
+      data-drawer={compact && analysisDrawerOpen ? drawerTier : undefined}
+      data-edge={MARKET_ANALYSIS_DRAWER.edge}
+      inert={compact && (chatSheetOpen || (analysisDrawerOpen && drawerTier === 'full'))}>
+      <div className="mi-analysis-dashboard-layout__dashboard">
+        {conclusionHost && !compact ? createPortal(conclusionCardNode, conclusionHost) : null}
         {/* The dashboard owns its layout; it renders the mount point and this
             layout only supplies the ref, so `children` gets the injected prop. The calendar's
             event-title vocabulary and the chart's click travel the same way: the page reads the
@@ -286,6 +354,13 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         floatingHost={floatingHost}
         compact={compact}
         suppressed={agentSuppressed}
+        newsHost={compact ? newsHost : undefined}
+        {...(compact ? { sheetOpen: chatSheetOpen } : {})}
+        onSheetOpenChange={open => {
+          setChatSheetOpen(open)
+          // 两个面互斥：开聊天就关左抽屉（不卸载——草稿与舆情滚动位置都留着）。
+          if (open) setAnalysisDrawerOpen(false)
+        }}
         railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
         text={text}
         timeline={timeline}
@@ -312,6 +387,34 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         timelineText={timelineText}
       />
     </div>
+    {/* 窄档的两个面（用户 2026-11-24 拍板 v3）：左抽屉＝最新 AI 结论 + 重点舆情；底部聊天框
+        （在 `__agent-control` 里）＝对话 + 输入 + 一条「选中事件」。互斥，开一个关另一个。
+        靠哪一边只认 `MARKET_ANALYSIS_DRAWER.edge`：样式按 `data-edge` 挂左/右两套。 */}
+    {compact ? <>
+      {/* 左缘把手：视觉 4px、命中 22×128，竖直居中。整幅档没有热区，只能点它。 */}
+      <button aria-label={text.analysisWorkspace.openAnalysisDrawer} className="mi-analysis-drawer__grip"
+        data-edge={MARKET_ANALYSIS_DRAWER.edge}
+        onClick={() => { setChatSheetOpen(false); setAnalysisDrawerOpen(true) }}
+        ref={grip}
+        type="button"><i /></button>
+      {/* 整幅档的遮罩：点它关闭。并排档没有遮罩——看板要能读。 */}
+      {analysisDrawerOpen && drawerTier === 'full'
+        ? <div aria-hidden="true" className="mi-analysis-drawer__scrim" data-analysis-drawer-scrim onClick={closeAnalysisDrawer} />
+        : null}
+      <aside aria-labelledby="mi-analysis-drawer-title" aria-modal={drawerTier === 'full'}
+        className="mi-analysis-drawer" data-edge={MARKET_ANALYSIS_DRAWER.edge}
+        data-open={analysisDrawerOpen} data-tier={drawerTier} data-analysis-drawer role="dialog">
+        <header className="mi-analysis-drawer__head">
+          <h2 id="mi-analysis-drawer-title">{text.analysisWorkspace.analysisDrawerTitle}</h2>
+          <IconButton ariaLabelKey="pages.intelligence.portal.calendarCard.closeAgent" icon={X} onSelect={closeAnalysisDrawer} resolveText={resolveWorkspaceText} size="md" />
+        </header>
+        <div className="mi-analysis-drawer__body">
+          {conclusionCardNode}
+          {/* 重点舆情：块由 workspace 构造（它拥有选中舆情那份状态），portal 到这里——不是复制一份。 */}
+          <div className="mi-analysis-drawer__news" data-analysis-news-host ref={setNewsHost} />
+        </div>
+      </aside>
+    </> : null}
     {/* 会话入口的落点：整页常驻，窄档也在（agent 栏本身在窄档是隐藏的）。 */}
     <div className="mi-analysis-dashboard-layout__agent-control" data-agent-control-host ref={setFloatingHost} />
   </div>

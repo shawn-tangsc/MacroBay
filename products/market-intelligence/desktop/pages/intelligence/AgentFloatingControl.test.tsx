@@ -235,13 +235,13 @@ it('colours the direction tag from the stylesheet, with fallbacks for scopes wit
 })
 
 /**
- * 窄档：底部上滑抽屉（用户 2026-11-24 选型，原型 `2026-11-24-pad-agent-drawer.html`）。
+ * 窄档：底部上滑聊天框（用户 2026-11-24 拍板 v3，原型 `2026-11-24-pad-edge-handle-v3.html`）。
  *
  * 钉的是四件事，每一件都能把实现改坏单独打红：
- * ① 抽屉开着时圆钮**不渲染**（不是压上去）；
+ * ① 聊天框开着时圆钮**不渲染**（不是压上去）；
  * ② 遮罩盖住整页（看板不可点）——没有遮罩就等于两栏共存；
  * ③ Esc / 点遮罩都能关，关掉后焦点回圆钮；
- * ④ 抽屉里不出现第二层抽屉（浮窗面板在窄档根本不渲染）。
+ * ④ 聊天框里不出现第二层浮窗（浮窗面板在窄档根本不渲染）。
  */
 async function renderCompact() {
   const host = document.createElement('div')
@@ -296,18 +296,20 @@ it('hides the round button while another modal layer is open', async () => {
   expect(host.querySelector('[data-agent-floating-button]')).toBeNull()
 })
 
-it('sizes the sheet 84% (88% at the 800 step) and keeps both layers under the round button', async () => {
+it('sizes the chat sheet 40–70dvh (dvh, so the keyboard shrinks it) under the round button', async () => {
   const { readFileSync } = await import('node:fs')
   const { join } = await import('node:path')
   const css = readFileSync(join(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css'), 'utf8')
   const sheet = css.slice(css.indexOf('.mi-agent-sheet {'), css.indexOf('\n}', css.indexOf('.mi-agent-sheet {')) + 2)
-  expect(sheet).toContain('height: 84%')
+  // 40 起、70 封顶，中间随内容长：输入框贴视口底，长高不会让它上下跳。
+  expect(sheet).toContain('min-height: 40dvh')
+  expect(sheet).toContain('max-height: 70dvh')
+  expect(sheet).toContain('height: auto')
+  // `dvh` 不是 `vh`：软键盘弹起时框跟着缩，输入框不会被键盘吃掉（pad 上必须）。
+  expect(sheet.match(/\d+d?vh/g)).toEqual(['40dvh', '70dvh'])
   expect(sheet).toContain('bottom: 0')
   expect(sheet).toContain('border-radius: 12px 12px 0 0')
-  // 800 档更高：同一个容器查询里换高，不另开一套宽度。
-  const narrow = css.slice(css.indexOf('(max-width: 800px)'))
-  expect(narrow).toContain('.mi-agent-sheet { height: 88%; }')
-  // 遮罩与抽屉都在圆钮（1100）之下：开着时圆钮不渲染，所以两者不会叠出第二层入口。
+  // 遮罩与聊天框都在圆钮（1100）之下：开着时圆钮不渲染，所以两者不会叠出第二层入口。
   const scrim = css.slice(css.indexOf('.mi-agent-sheet__scrim {'), css.indexOf('\n}', css.indexOf('.mi-agent-sheet__scrim {')) + 2)
   expect(scrim).toContain('inset: 0')
   expect(scrim).toContain('z-index: 1000')

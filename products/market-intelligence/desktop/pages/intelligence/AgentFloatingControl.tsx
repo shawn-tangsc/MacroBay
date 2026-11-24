@@ -29,6 +29,13 @@ import { IconButton } from '@platform/ui/components/icon-button'
  * - 关掉后**焦点回圆钮**：圆钮在开着时不渲染，所以等它回到 DOM 之后再聚焦；
  * - **常挂载、只是不可见**：关掉不卸载会话（会话本身在 workspace 的 hook 里，面板卸载也不会丢，
  *   但输入框的草稿会），所以抽屉第一次打开后一直留在树上，用 `display` 收起来。
+ *
+ * **键盘**：抽屉开着时，布局根给「看板那一层」设 `inert`（`MarketAnalysisDashboardLayout`），
+ * 于是 Tab 与指针都走不进去；遮罩只负责变暗和「点它关闭」，不是键盘的拦法。
+ *
+ * **组件表达不了，登记在这里**：平台 `Drawer` 只有四个**宽度**档、只有右侧呈现，没有 placement、
+ * 也没有高度档——底部上滑 ＋ 百分比高度（84% / 800 档 88%）它表达不了。所以抽屉的结构与样式留在
+ * 本组件里，没有去改平台 `Drawer`（那会同时动 16 个调用点的契约），也没有直接 import antd `Drawer`。
  */
 
 /** The button's box size, which the drag clamp needs as a number. */
@@ -69,21 +76,27 @@ function defaultPosition(): { x: number; y: number } {
 
 export type AgentFloatingControlText = Readonly<{ open: string; close: string; title: string; clear: string }>
 
-export function AgentFloatingControl({ children, text, onOpenChange, onClear, compact = false, suppressed = false, closeKey, resolveText }: Readonly<{
+export function AgentFloatingControl({ children, text, onOpenChange, onClear, compact = false, suppressed = false, open: controlledOpen, closeKey, resolveText }: Readonly<{
   children: ReactNode
   text: AgentFloatingControlText
   onOpenChange?: (open: boolean) => void
   /** Empties the conversation; the panel leaves what to do about history to the caller. */
   onClear?: () => void
-  /** 窄档（看板侧容器 ≤1303）：打开的是底部上滑抽屉，不是浮窗面板。 */
+  /** 窄档（看板侧容器 ≤1303）：打开的是底部上滑聊天框，不是浮窗面板。 */
   compact?: boolean
-  /** 另有模态层开着（时间轴、事件详情、设置）：圆钮不渲染——它 z 比那些层高，压在上面就是第二层入口。 */
+  /** 另有模态层开着（时间轴、事件详情、设置、整幅档的左抽屉）：圆钮不渲染——它 z 比那些层高，压在上面就是第二层入口。 */
   suppressed?: boolean
+  /**
+   * 受控开关：窄档的两个面互斥，**布局根**要知道聊天框开着没有（开抽屉就关它），也要能关它。
+   * 不传就是本组件自己管（宽档的浮窗面板一直如此）。
+   */
+  open?: boolean
   /** 抽屉关闭控件的读屏名（i18n 键，由调用方给；平台 `IconButton` 只收键）。 */
   closeKey: string
   resolveText: (key: string) => string
 }>): React.ReactElement {
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlledOpen ?? ownOpen
   const [position, setPosition] = useState(defaultPosition)
   // 抽屉第一次打开之后就一直留在树上（关掉只是不可见），别让关一次就把会话界面卸载掉。
   const [everOpened, setEverOpened] = useState(false)
@@ -95,7 +108,7 @@ export function AgentFloatingControl({ children, text, onOpenChange, onClear, co
   const dragged = useRef(false)
   const grab = useRef<{ dx: number; dy: number } | null>(null)
   const change = (next: boolean) => {
-    setOpen(next)
+    if (controlledOpen === undefined) setOwnOpen(next)
     if (compact && next) setEverOpened(true)
     if (!next) setReturnFocus(true)
     onOpenChange?.(next)
@@ -128,7 +141,7 @@ export function AgentFloatingControl({ children, text, onOpenChange, onClear, co
 
   if (compact) {
     return <>
-      {/* 遮罩盖住整页：看板不可点，滚动位置不动（没有把它挪走、也没有给它加锁）。 */}
+      {/* 遮罩：变暗 + 点它关闭。看板「点不动、聚焦不了」由布局根那一层的 `inert` 管，遮罩不承担键盘。 */}
       {open ? <div aria-hidden="true" className="mi-agent-sheet__scrim" data-agent-sheet-scrim onClick={() => change(false)} /> : null}
       {open || everOpened ? <section aria-label={text.title} aria-modal="true" className="mi-agent-sheet" data-agent-sheet data-open={open} role="dialog">
         <div aria-hidden="true" className="mi-agent-sheet__handle"><i /></div>
@@ -138,12 +151,14 @@ export function AgentFloatingControl({ children, text, onOpenChange, onClear, co
         </header>
         <div className="mi-agent-sheet__body">{children}</div>
       </section> : null}
-      {/* 抽屉开着时圆钮不渲染（不是压上去）；别的模态层开着时也不渲染。 */}
+      {/* 抽屉开着时圆钮不渲染（不是压上去）；别的模态层开着时也不渲染。
+          窄档这一支没有拖拽，位置交给 CSS 的 `right/bottom`（同一条 16）：挂载时算出的像素坐标
+          只在那一刻成立，转屏、改窗口就离开右下了。坐标只留给可拖的宽档。 */}
       {open || suppressed ? null : <button aria-expanded={open} aria-label={text.open} className="mi-agent-floating__button"
         data-agent-floating-button
+        data-compact
         onClick={() => change(true)}
         ref={button}
-        style={{ left: position.x, top: position.y }}
         type="button">
         <Bot aria-hidden="true" size={18} />
       </button>}
