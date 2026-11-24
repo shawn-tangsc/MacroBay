@@ -14,6 +14,7 @@ import {
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 import { axisTicks } from './positioningAxisTicks'
 import { MARKER_CHIP, POSITIONING_CHART_VIEW, type LiquidationMarkLayout } from './positioningLiquidationMarkers'
+import { placePositioningTooltip } from './positioningTooltip'
 
 import type { PositioningPanelText } from './positioningText'
 
@@ -213,7 +214,9 @@ export function PositioningChart({ positioning, funding, text, marks }: Readonly
         ))}
       </svg>
       {hovered && hover ? (
-        <div className="mi-positioning-panel__tooltip" style={tooltipStyle(hover)}>
+        <div className="mi-positioning-panel__tooltip" style={placePositioningTooltip({
+          x: hover.left, y: hover.top, boxWidth: hover.width, boxHeight: hover.height
+        })}>
           <strong>{formatTime(hovered.observedAt)}</strong>
           {(['btc', 'eth'] as const).map(asset => {
             const notional = positioning[asset][hover!.index]?.notionalUsd
@@ -241,18 +244,4 @@ function linePath(points: readonly DashboardPositioningPoint[], x: (ms: number) 
 
 export function formatRate(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(4)}%`
-}
-
-const TOOLTIP = Object.freeze({ width: 214, height: 76, offset: 14, inset: 4 })
-
-/**
- * Places the tooltip beside the pointer and flips it to the other side when the preferred side
- * would leave the chart, so the reading never sits on top of what it is describing.
- */
-function tooltipStyle(hover: Readonly<{ left: number; top: number; width: number; height: number }>): Readonly<{ left: number; top: number }> {
-  const { width, height, offset, inset } = TOOLTIP
-  const fitsRight = hover.left + offset + width <= hover.width - inset
-  const left = fitsRight ? hover.left + offset : Math.max(inset, hover.left - offset - width)
-  const top = Math.min(Math.max(inset, hover.top - height / 2), Math.max(inset, hover.height - height - inset))
-  return { left, top }
 }
