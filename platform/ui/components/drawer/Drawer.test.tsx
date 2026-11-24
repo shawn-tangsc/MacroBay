@@ -11,7 +11,7 @@ import { Drawer, DRAWER_SIZES, type DrawerProps } from './Drawer'
 import { DRAWER_CLOSE_KEY, resolveDrawerText } from './drawerText'
 
 /**
- * `min(420px, 92vw)` 这类值在 happy-dom 里会被样式解析器丢掉，量 `style.width` 只会得到空串。
+ * `min(420px, 94vw)` 这类值在 happy-dom 里会被样式解析器丢掉，量 `style.width` 只会得到空串。
  * 所以把传给 antd `Drawer` 的 props 拦下来断言，同时照常渲染真正的组件——DOM 行为照样测。
  */
 const passedProps: Record<string, unknown>[] = []

@@ -34,7 +34,7 @@ import { Drawer } from '@platform/ui/components/drawer'
 | --- | --- | --- | --- |
 | `open` | `boolean` | 是 | 是否显示。 |
 | `onClose` | `() => void` | 是 | 遮罩点击、Esc（仅 modal）与关闭键共用。 |
-| `size` | `DrawerSize` | 是 | `narrow` 420、`large` 640、`wide` 860、`full` 1040。不给默认值：每次调用回答一次。 |
+| `size` | `DrawerSize` | 是 | `narrow` 420、`large` 640、`wide` 860、`full` 1280。不给默认值：每次调用回答一次。 |
 | `mode` | `'modal' \| 'inline'` | 否，默认 `modal` | `modal` 有遮罩、锁焦点、Esc 关；`inline` 在页面流内。 |
 | `side` | `'left' \| 'right'` | 否，默认 `right` | 只对 `mode="inline"` 有意义；浮层一律右置。 |
 | `header` | `'titled' \| 'none'` | 否，默认 `titled` | 有标题栏，或整块不要。 |
@@ -49,7 +49,7 @@ import { Drawer } from '@platform/ui/components/drawer'
 | `bodyClassName` | `string` | 否 | 正文节点上的挂载点类名，透传 antd 的 `classNames.body`。要在正文上挂 `container-type` 时用它，别挂 `.ant-drawer-body`。**只收类名，不收样式。** |
 | `resolveText` | `(key: string) => string` | 是 | 调用方的文案解析，只用于 `titleKey`。 |
 
-宽度是组件内的 `min(<档位>px, 92vw)`。没有 `width`、`style`、`styles`、`mask`、`closable`、
+宽度是组件内的 `min(<档位>px, 94vw)`。没有 `width`、`style`、`styles`、`mask`、`closable`、
 `placement`、`getContainer`——这些正是同一只抽屉长出十二种宽度的来源。
 
 ### 四档
@@ -59,7 +59,7 @@ import { Drawer } from '@platform/ui/components/drawer'
 | `narrow` | 420 | 设置面板、单列表单 |
 | `large` | 640 | 两列详情、检查器 |
 | `wide` | 860 | Agent 配置、看板面板 |
-| `full` | 1040 | 最宽的沉浸面板 |
+| `full` | 1280 | 最宽的沉浸面板 |
 
 ### 透传清单
 
@@ -87,7 +87,7 @@ import { Drawer } from '@platform/ui/components/drawer'
 
 ## 怎么验用了它的页面
 
-1. **宽度**：DevTools 里内容容器的宽度等于该档位的像素，且不是你传进去的值；窄窗口下封顶 `92vw`。
+1. **宽度**：DevTools 里内容容器的宽度等于该档位的像素，且不是你传进去的值；窄窗口下封顶 `94vw`。
 2. **关闭**：右上角关闭键 Tab 可达，念出来是「关闭抽屉」/`Close drawer`，不是键名、也不是空。
 3. **模式**：`modal` 会压暗页面、锁焦点、Esc 可关；`inline` 没有遮罩、**打开不动焦点**、焦点在页面别处按 Esc 也能关、关掉后焦点还在原处。面板 DOM 上的 `aria-modal` 也是分档的：`inline` **没有这个属性**，`modal` 为 `"true"`。
 4. **页脚**：不传页脚的抽屉底部没有空条。
