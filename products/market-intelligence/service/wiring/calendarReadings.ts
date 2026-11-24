@@ -10,7 +10,7 @@ import { createStandardMonthPageReader } from '../intelligence/macro-calendar/ma
 import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt } from '../intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
 import { zeroXRouterCalendarSchedulerFeeds, zeroXRouterCalendarSchedulerPolicy }
   from '../intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
-import { createNarwhalCalendarBriefingRefresh } from '../intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
+import { createMarketCalendarBriefingRefresh } from '../intelligence/macro-calendar/macroCalendarBriefingCatchUp'
 import { registerCalendarEventReminder } from '../intelligence/macro-calendar/registerCalendarEventReminder'
 import { registerCalendarIntegrityJob } from '../intelligence/macro-calendar/marketCalendarIntegrityJob'
 import { latestCurrentWriteFailure, type CalendarStandardWriteLayer }
@@ -145,11 +145,11 @@ export function wireCalendarReadings(input: Readonly<{
   // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
   // A command, not a query — it opens network requests and writes attempts — so it is injected
   // separately from the read surface above, and the brief never constructs a client of its own.
-  // 日报的「跑一次采集」＝排一次 Narwhal tick（与 `triggerCollection` 同一条路）。
-  // 旧源那条 `refreshNow` 会随它一起删；语义没变：排上作业才算触发，排不上就如实说失败。
+  // 日报的「跑一次采集」＝按 `sourceIds` 逐个排 0xRouter 三路的作业（与 `triggerCollection` 同一条路）。
+  // 语义没变：排上作业才算触发，排不上就如实说失败。
   // 「排上了」不等于「采到了」：排完等作业到终态（最多 20 秒），按终态回答；超时就是超时，
   // 不写成失败。判 `collected` 与 `unchanged` 看**数据有没有真的写进来**，不看作业跑没跑。
-  input.intelligenceModule.bindBriefingCalendarRefresh(createNarwhalCalendarBriefingRefresh({
+  input.intelligenceModule.bindBriefingCalendarRefresh(createMarketCalendarBriefingRefresh({
     jobRuntime: input.jobRuntime,
     // **补采必须按**下发名单**排**（不是写死一路）：名单来自 `listSchedules()`，这里给出
     // sourceId → 作业定义的映射；名单里没有的源跳过，删源时这份映射自然变短。

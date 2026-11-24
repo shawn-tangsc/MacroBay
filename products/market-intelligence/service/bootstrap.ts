@@ -78,8 +78,8 @@ import { createStandardMonthPageReader } from './intelligence/macro-calendar/mar
 import { eventTypeNameByCode, nameByMetricKey } from './intelligence/macro-calendar/marketCalendarCodeNames'
 import { narwhalSourcePolicy } from './intelligence/application/narwhalSourcePolicy'
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
-import { createNarwhalCalendarBriefingRefresh }
-  from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
+import { createMarketCalendarBriefingRefresh }
+  from './intelligence/macro-calendar/macroCalendarBriefingCatchUp'
 import { readStandardTableLastWrittenAt }
   from './intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'

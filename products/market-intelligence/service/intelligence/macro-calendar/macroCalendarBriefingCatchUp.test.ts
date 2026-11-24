@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { createNarwhalCalendarBriefingRefresh, NARWHAL_CALENDAR_BRIEFING_CATCH_UP_CEILING_MS }
-  from './narwhalCalendarBriefingCatchUp'
+import { createMarketCalendarBriefingRefresh, MARKET_CALENDAR_BRIEFING_CATCH_UP_CEILING_MS }
+  from './macroCalendarBriefingCatchUp'
 
 const DEFINITION = 'market-intelligence.refreshNarwhalCalendarTick.automatic'
 
@@ -21,7 +21,7 @@ function harness(input: Readonly<{
   const calls: { waited: { runId: string; timeoutMs?: number } | undefined; enqueued: string[] } = {
     waited: undefined, enqueued: []
   }
-  const refresh = createNarwhalCalendarBriefingRefresh({
+  const refresh = createMarketCalendarBriefingRefresh({
     definitionId: DEFINITION,
     readLastWrittenAt: () => writes.length > 0 ? writes.shift()! : null,
     jobRuntime: {
@@ -60,8 +60,8 @@ describe('日报补跑：排上作业后等结果', () => {
   it('等待最多 20 秒：调用方给 90 秒也只等 20 秒，超时按「超时」回答而不是「失败」', async () => {
     const { refresh, calls } = harness({ writes: [null], wait: { state: 'timeout' } })
     const verdict = await refresh({ timeoutMs: 90_000 })
-    expect(calls.waited?.timeoutMs).toBe(NARWHAL_CALENDAR_BRIEFING_CATCH_UP_CEILING_MS)
-    expect(verdict).toEqual({ state: 'timeout', timeoutMs: NARWHAL_CALENDAR_BRIEFING_CATCH_UP_CEILING_MS })
+    expect(calls.waited?.timeoutMs).toBe(MARKET_CALENDAR_BRIEFING_CATCH_UP_CEILING_MS)
+    expect(verdict).toEqual({ state: 'timeout', timeoutMs: MARKET_CALENDAR_BRIEFING_CATCH_UP_CEILING_MS })
   })
 
   it('作业失败、被中断、排不进去、等不到记录——四种都算失败，并带上原因码', async () => {
