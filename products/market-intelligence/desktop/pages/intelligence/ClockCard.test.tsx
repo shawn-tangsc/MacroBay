@@ -197,7 +197,7 @@ it('colours only the expected numbers in the hover detail', async () => {
   expect(pce).not.toBeNull()
   await act(async () => pceButton.click())
   const rows = [...document.querySelectorAll('.mi-clock__category-detail li')].map((row) => row.textContent)
-  expect(rows).toContain('核心 PCE 年率（季调） 3.12% · 11–25 · 1 天后')
+  expect(rows).toContain('核心 PCE 年率（季调） 预期 3.12% · 11–25 · 1 天后')
   const values = [...document.querySelectorAll('.mi-clock__category-value')].map((node) => node.textContent)
   expect(values).toEqual(['3.12%'])
   // 整行不是橘色：只有数字那层带类，「未提供」那行一个都没有。
@@ -224,4 +224,24 @@ it('takes the expected-value colour from the caution token', () => {
   const rule = /\.mi-clock__category-value \{([^}]*)\}/u.exec(css)?.[1] ?? ''
   expect(rule).toContain('color: var(--caution)')
   expect(rule).not.toMatch(/#[0-9a-f]{3,8}/iu)
+})
+
+/**
+ * 颜色不是标签（情报模块产品经理 2026-11）：把橘色那一层拿掉，读者仍然要读得出这是预期值。
+ * 黑白截图、色觉障碍、读屏三种场景里只剩文字，所以句子里那个词是必需的，颜色只作强化。
+ */
+it('still reads as an expectation after the colour is gone', async () => {
+  const { host } = await render()
+  const pce = [...host.querySelectorAll<HTMLButtonElement>('button.mi-clock__category-name')]
+    .find((button) => button.textContent === 'PCE')!
+  await act(async () => pce.click())
+  const row = [...document.querySelectorAll<HTMLElement>('.mi-clock__category-detail li')]
+    .find((node) => (node.textContent ?? '').includes('3.12%'))!
+  // 把上色那一层当成普通文字：句子本身必须还写着「预期」。
+  row.querySelector('.mi-clock__category-value')!.replaceWith(...Array.from(row.querySelector('.mi-clock__category-value')!.childNodes))
+  expect(row.textContent).toContain('预期 3.12%')
+  // 两种语言都不能只剩一个裸数字：名字与数字之间必须有词。
+  for (const locale of ['zh-CN', 'en-US'] as const) {
+    expect(clockCardText[locale].categoryEntry, `${locale} 的预期句`).toMatch(/\{name\} [^{}]+ \{value\}/u)
+  }
 })
