@@ -150,6 +150,15 @@ Readonly<{ x: number; y: number }> {
   }
 }
 
+/** 角度 → **SVG 用户坐标**（不加卡内距）：SVG 里的箭头按这个画。 */
+export function clockRingPointSvg(angle: number, radius: number): Readonly<{ x: number; y: number }> {
+  const radians = angle * Math.PI / 180
+  return {
+    x: clockCardCenter.svgX + radius * Math.sin(radians),
+    y: clockCardCenter.svgY - radius * Math.cos(radians)
+  }
+}
+
 /**
  * 牌子最大宽度（用户 2026-11-21：「这个事件面板太宽了」，长名字顶出卡右缘被裁）。
  *

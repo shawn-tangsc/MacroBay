@@ -56,7 +56,8 @@ export function ClockCardSlot({
     model={buildClockCardModel({
       today,
       now: nowIso,
-      plaqueNames: cardText.names,
+      names: cardText.names,
+      categoryNames: cardText.categories,
       metrics: clockScheduleMetrics({
         today,
         events: events.map((event) => ({

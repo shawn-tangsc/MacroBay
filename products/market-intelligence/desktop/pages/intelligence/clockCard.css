@@ -19,15 +19,20 @@
   /* 牌子最大宽度（用户 2026-11-21：「这个事件面板太宽了」）：长名字两行也装得下，又不越过环。
      这个数在 `clockCardModel.clockPlaqueMaxWidth` 里也有一份，用于横向夹取；
      两处必须同值，由 `ClockCard.test.tsx` 的守卫用例盯着。 */
-  --mi-clock-plaque-max-width: 96px;
-  /* 牌子的最小盒：与 `clockPlaqueLayout.clockPlaqueMinWidth / clockPlaqueOneLineHeight` 同值（守卫用例盯着）。 */
-  --mi-clock-plaque-min-width: 62px;
-  --mi-clock-plaque-min-height: 37px;
   /* 环上的按钮、溢出行、说明行、状态行：**高于所有牌子**（牌子的层级现在由模型按「离现在近的在上」给，
      最高一块 = 4 + 牌数 − 1，这些行不许被牌子压住）。与 `clockPlaqueOverlayZ` 同值。 */
   --mi-clock-overlay-z: 100;
+  /* 四个大类的固定色（用户 2026-11）：**只给箭头**，名字与浮层文字一律 --text。 */
+  --mi-clock-cat-rate: #b994ff;
+  --mi-clock-cat-cpi: #63d8d2;
+  --mi-clock-cat-payrolls: #ef9ecb;
+  --mi-clock-cat-pce: #7fb8f5;
 }
 [data-theme='light'] .mi-clock {
+  --mi-clock-cat-rate: #7a4fd0;
+  --mi-clock-cat-cpi: #12857f;
+  --mi-clock-cat-payrolls: #b4448a;
+  --mi-clock-cat-pce: #2f6bb8;
   --mi-clock-time-past: #a880a2;
   --mi-clock-time-future: #d3daeb;
   --mi-clock-node-past-bg: #e997dd;
@@ -83,40 +88,43 @@
 .mi-clock__delta { font-size: var(--font-meta); line-height: 1.3; color: var(--accent); font-variant-numeric: tabular-nums; }
 .mi-clock__face-action { border: 0; background: none; padding: 0; font: inherit; font-size: var(--font-meta); color: var(--accent); text-decoration: underline; cursor: pointer; }
 
-/* 指标牌：位置与透明度由数据算（left/top/--o 行内给），这里只定形状。 */
-.mi-clock__node { position: absolute; width: auto; min-width: var(--mi-clock-plaque-min-width); max-width: var(--mi-clock-plaque-max-width); min-height: var(--mi-clock-plaque-min-height); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px 4px; line-height: 1.35;
-  border: 1px solid var(--mi-clock-node-future-bd); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 1px 2px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 7%);
-  font-size: var(--font-meta); color: var(--muted); cursor: pointer; z-index: var(--mi-clock-z, 4); transform: translate(-50%, -50%);
-  opacity: var(--o, 1); transition: opacity 300ms ease-out; } /* 只过渡 opacity，z-index 必须瞬间跳变 */
-/* 层级由模型给（`--mi-clock-z`，按「离现在近的在上」排好；与中央主位同一个指标的那块沉到最下）。
-   抬起（悬停/聚焦）那一块由组件用行内 z-index 置顶——不许在 CSS 里再写一份层级，两处会比大小。 */
-/* 名字允许折两行、超长省略（用户 2026-11-21：长名字原来 `nowrap`，把盒子撑到卡外被裁）。
-   两行放得下「核心 PCE 年率（季调）」这类名字；再长就省略号，不撑宽盒子。 */
-.mi-clock__node-name { color: var(--text); max-width: 100%; text-align: center; overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-/* 没上环的「×N」不画；数值行保持单行。 */
-.mi-clock__node b { color: var(--text-secondary); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* 值与距离同一行（用户 2026-11：「距离时间呢？」）：名字最多两行 + 这一行，牌高仍在 37–44px，
-   不为距离改时钟几何。
-   视觉定稿（界面设计候选 A，用户 2026-11「时间不够醒目」）：**距离最亮最重**（`--text` + 650，9.50:1），
-   值降一档（`--text-secondary` + 500，6.29:1，仍过小字 AA）。只换颜色与字重，不加字号档、不染状态色。 */
-.mi-clock__node-meta { display: flex; align-items: baseline; justify-content: center; gap: 6px; line-height: 1.2; max-width: 100%; }
-.mi-clock__node-when { font-size: var(--font-meta); color: var(--text); font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.mi-clock__node--past { background: var(--mi-clock-node-past-bg); border-color: var(--mi-clock-node-past-bd); }
-.mi-clock__node:not(.mi-clock__node--past) { background: var(--mi-clock-node-future-bg); }
-.mi-clock__node--past span, .mi-clock__node--past b { color: var(--text); }
-.mi-clock__node:hover, .mi-clock__node:focus-visible { opacity: 1; }
+/* 四支大类箭头（用户 2026-11 第三版）：纯装饰、不可点，颜色按大类固定。
+   `fill` 只在这里出现；名字与浮层文字不跟着染色（浅色主题下青色做 11px 文字不够对比度）。 */
+.mi-clock__arrow { stroke: none; }
+.mi-clock__arrow.is-rate { fill: var(--mi-clock-cat-rate); }
+.mi-clock__arrow.is-cpi { fill: var(--mi-clock-cat-cpi); }
+.mi-clock__arrow.is-payrolls { fill: var(--mi-clock-cat-payrolls); }
+.mi-clock__arrow.is-pce { fill: var(--mi-clock-cat-pce); }
 
-/* 溢出行（`还有 N 个发布不在环上`）：**必须绝对定位**。它是卡里的一行说明，不是文档流里的段落——
-   落回文档流就跑到卡左上角压住钟面（0.4.5 #40）。
-   行高不是 11px：行内那颗 ⓘ 是 `IconButton size="sm"`（22×22，尺寸只有 sm/md 两档），
-   所以这一行实际占 22px；字号仍是 --font-meta（11px）。 */
-.mi-clock__overflow { position: absolute; left: 12px; right: 12px; bottom: 16px; margin: 0; display: flex; gap: 4px; align-items: center; font-size: var(--font-meta); line-height: 1.2; color: var(--muted); z-index: var(--mi-clock-overlay-z, 100); }
+/* 名字挂在轨道外侧：坐标由模型算（`left/top` 是盒子中心），这里只负责绝对定位与居中。
+   少了 `position: absolute` 的那一版，四个名字会落回文档流、从左上一列往下排（2026-11-24 真机）。 */
+.mi-clock__category { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; z-index: 4; }
+/* 名字是一张**圆角小卡**（用户 2026-11）：底用 `--surface-raised`（两套主题都有语义），
+   描边用类别色 45% 混 border——沿用本卡 `.mi-clock__badge` 已有的写法，不新增色值，
+   也不把类别色拿去染 11px 文字（浅色主题下青色做文字不过线）。 */
+.mi-clock__category-name { margin: 0; font: inherit; border-radius: 6px; padding: 1px 2px;
+  background: var(--surface-raised); border: 1px solid var(--border);
+  font-size: var(--font-meta); font-weight: 600; line-height: 1.35; color: var(--text); white-space: nowrap; cursor: pointer; }
+.mi-clock__category[data-category='rate'] .mi-clock__category-name { border-color: color-mix(in srgb, var(--mi-clock-cat-rate) 45%, var(--border)); }
+.mi-clock__category[data-category='cpi'] .mi-clock__category-name { border-color: color-mix(in srgb, var(--mi-clock-cat-cpi) 45%, var(--border)); }
+.mi-clock__category[data-category='payrolls'] .mi-clock__category-name { border-color: color-mix(in srgb, var(--mi-clock-cat-payrolls) 45%, var(--border)); }
+.mi-clock__category[data-category='pce'] .mi-clock__category-name { border-color: color-mix(in srgb, var(--mi-clock-cat-pce) 45%, var(--border)); }
+.mi-clock__category-name:hover, .mi-clock__category-name:focus-visible, .mi-clock__category-name[aria-expanded='true'] {
+  color: var(--accent); }
+/* 浮层里的一行行读数：与卡上其余文字同字号档，不新造尺寸。 */
+.mi-clock__category-detail { display: grid; gap: 2px; font-size: var(--font-meta); line-height: 1.35; color: var(--text); }
+.mi-clock__category-detail > strong { font-weight: 650; }
+.mi-clock__category-detail > ul { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; }
+.mi-clock__category-detail li { white-space: nowrap; }
+
+/* 卡的数据形状不合（宿主没跟上）时显示这一句，不白屏。 */
+.mi-clock__shape-unreadable { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: var(--font-meta); color: var(--muted); }
+
 /* 政策块降级说明：与状态行同字号档（--font-meta）。默认排在溢出行那一格上；**溢出行在时**整体上移，
    两行不压在一起（16 + 行高 22 + 2）。用兄弟选择器而不是写死一个更大的 bottom：
    没有溢出行时它回到 16，不会凭空悬空一层。 */
 .mi-clock__policy-note { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; gap: 8px; align-items: center; font-size: var(--font-meta); line-height: 1.2; color: var(--muted); z-index: var(--mi-clock-overlay-z, 100); }
-.mi-clock__overflow ~ .mi-clock__policy-note { bottom: 40px; }
 .mi-clock__policy-action { border: 0; background: none; padding: 0; color: var(--accent); font-size: var(--font-meta); cursor: pointer; text-decoration: underline; }
 
 .mi-clock__foot { position: absolute; left: 12px; right: 12px; bottom: 1px; height: 14px; display: flex; align-items: center; gap: 8px; padding-top: 0; line-height: 1; font-size: var(--font-meta); color: var(--muted); z-index: var(--mi-clock-overlay-z, 100); }
@@ -131,7 +139,6 @@
 
 /* 减少动效：流光整段隐藏，只剩 12 点那个绿点；牌不再过渡（设计如此，不是没实现）。 */
 @media (prefers-reduced-motion: reduce) {
-  .mi-clock__node { transition: none; }
 }
 
 /* 叠在卡右上角：绝对定位，不参与布局——环、牌、主位的计算值一个都不变。 */

@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { helpTrigger } from '@platform/ui/components/popover'
 
-import type { ClockCardModel, ClockCenterFace, ClockPlaque, ClockPlaqueStacked } from './clockCardModel'
-import { clockCardCenter, clockCardGeometry, clockPlaqueRaisedZ } from './clockCardModel'
+import { Popover } from '@platform/ui/components/popover'
+
+import type { ClockCardModel, ClockCenterFace, ClockRingArrow } from './clockCardModel'
+import { clockCardCenter, clockCardGeometry } from './clockCardModel'
 import { clockSvgGeometry, clockSvgMarks, clockTickRadius } from './clockCardSvg'
 import './clockCard.css'
 
@@ -67,6 +69,19 @@ export type ClockCardText = Readonly<{
   calendarAction: string
   /** ⓘ 里那句来源说明。 */
   sourceNote: string
+  /* ── 四支大类箭头（用户 2026-11 第三版）：环上只写这四个词 ── */
+  categories: Readonly<Record<'rate' | 'cpi' | 'payrolls' | 'pce', string>>
+  /** 名字按钮的可访问名：`{name}，{date} · {days} 天后`。 */
+  categoryAria: string
+  categoryNext: string
+  categoryEntry: string
+  categoryEntryNoValue: string
+  categoryEntryOdds: string
+  categoryScheduleUnreadable: string
+  categoryNoRelease: string
+  categoryNameDemoted: string
+  /** 数据形状不合时那一句（宿主没跟上新契约），不白屏。 */
+  shapeUnreadable: string
   /** 没上环的指标那一行：`{name} 未上环：{reason}`。 */
   unplaced: Readonly<Record<'no-period' | 'period-out-of-range' | 'no-next-release' | 'crowded', string>>
   unplacedLine: string
@@ -146,20 +161,16 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
    * 不给牌子 `tabIndex`：它们不点击、不展开，做成可聚焦就是假控件（读屏会以为这里能操作）。
    */
   const [raised, setRaised] = useState<string | undefined>(undefined)
-  const center = model.center
   /**
-   * 没上环的发布清单（`not-selected`）：逐条写「名字 · 日期 · 几天后」。
-   * 每个发布日只上一块牌；同一天其余的一级指标在这里列全——不在一行里堆 12 个名字。
+   * **旧形状不要白屏**（2026-11-24 真机崩过）：热更新或宿主没跟上时，`arrows` / `notes` /
+   * `text.categories` 可能还是上一版的样子。这里是首屏的一张卡，缺字段就按「这一类没画出来」处理，
+   * 不许整页跟着炸。
    */
-  const overflowItems = model.unplaced
-    .filter((entry) => entry.reason === 'not-selected')
-    .map((entry) => text.overflowItem
-      .replace('{name}', text.names[entry.nameKey] ?? entry.nameKey)
-      .replace('{date}', entry.date ?? '—')
-      .replace('{days}', String(entry.daysUntil ?? 0)))
-  // 中央是利率路径面时，环上没有「中央那一块」可沉底（政策牌与中央不同源），只有指标面才有。
-  const centerPlaqueId = center?.kind === 'metric' ? `${center.metricKey}:future` : undefined
-
+  const arrows = Array.isArray(model.arrows) ? model.arrows : []
+  const notes = Array.isArray(model.notes) ? model.notes : []
+  const categories = text.categories ?? {}
+  const categoryLabel = (category: keyof typeof categories): string => categories[category] ?? String(category)
+  const center = model.center
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
   // 用户 2026-11 拍板 A 方案后卡是 252×248（几何常量一处来源），仍**不用 transform 缩放**：
   // `transform` 为单位矩阵，只由外层容器决定它放在哪、旁边是谁。
@@ -168,6 +179,15 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
    * 它曾经写死过 `transform-origin: 156px 153px`——卡一缩小，旋转轴就偏出去 39px，光斑转到环外，
    * 用户看到的只是「流光不见了」。现在两个变量由这里给，改尺寸只改几何常量。
    */
+  /**
+   * 数据形状不合（宿主还在传上一版）时**不白屏**：整卡换成一句「暂时读不到」。
+   * 2026-11-24 真机崩过一次——`arrows` / `notes` / `categories` 缺任何一个都会抛在渲染里。
+   */
+  if (!Array.isArray(model.arrows) || !Array.isArray(model.notes) || text.categories === undefined) {
+    return <section className="mi-clock mi-clock--shape" aria-label={text.ariaLabel}>
+      <p className="mi-clock__shape-unreadable" data-clock-shape-unreadable>{text.shapeUnreadable}</p>
+    </section>
+  }
   return <section className="mi-clock" aria-label={text.ariaLabel}
     style={{ '--mi-clock-center-x': `${clockCardCenter.svgX}px`, '--mi-clock-center-y': `${clockCardCenter.svgY}px` } as React.CSSProperties}>
       <svg className="mi-clock__svg" viewBox={`0 0 ${clockCardGeometry.svgWidth} ${clockCardGeometry.svgHeight}`} aria-hidden="true">
@@ -200,12 +220,16 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           <path d={clockSvgGeometry.flowFan} fill="url(#miClockFlowGrad)" clipPath="url(#miClockFlowClip)" />
         </g></g>
 
-        {/* 12 点「现在点」：环连着，这是位置标记，不是断口收口。 */}
-        <circle className="mi-clock__nowmark" cx={clockCardCenter.svgX} cy={clockSvgMarks.nowMarkY} r="3.5" />
+        {/* 12 点只剩一颗 2.5px 的圆点：原来那支「现在」小三角删掉（用户 2026-11）——
+            环上已经有四支类别箭头，再来一支无色彩的同形三角会被读成第五类。也不写「现在」二字。 */}
+        <circle className="mi-clock__nowmark" cx={clockCardCenter.svgX} cy={clockSvgMarks.nowMarkY} r="2.5" />
         <circle className="mi-clock__zoneend" cx={clockSvgMarks.zoneEndA.x} cy={clockSvgMarks.zoneEndA.y} r="3.5" />
         <circle className="mi-clock__zoneend" cx={clockSvgMarks.zoneEndB.x} cy={clockSvgMarks.zoneEndB.y} r="3.5" />
-        <path className="mi-clock__now" d={clockSvgGeometry.pointer} />
-        <text className="mi-clock__now" x={clockCardCenter.svgX} y={clockSvgMarks.nowLabelY} textAnchor="middle" fontSize="11">{text.now}</text>
+
+        {/* 四支大类箭头（用户 2026-11 第三版）：从环内朝外指，箭尖在 r101、底边 r91。
+            纯装饰、不可点（`aria-hidden` 在 svg 上），信息全在名字那颗按钮的浮层里。 */}
+        {arrows.map((arrow: ClockRingArrow) => <path key={arrow.category} className={`mi-clock__arrow is-${arrow.category}`}
+          d={arrow.path} aria-hidden="true" />)}
       </svg>
 
       {/* 中央两张面（用户 2026-11-21 拍板，42 号文件）：平时利率路径，±24 小时内切成指标。
@@ -216,34 +240,26 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           {...(notice === undefined ? {} : { notice })} />
       </div>}
 
-      {/* 指标牌：位置、透明度和层级都由模型算（`z` 按「离现在近的在上」排好）。
-          原型是 <button> 但没有动作，故渲染成不可点的节点（规范：行容器不是按钮）；
-          悬停恢复 100% 的视觉保留。
-          牌上三样：名字、值（有才显示）、**距离**（用户 2026-11：「距离时间呢？」）。
-          距离并进值那一行，牌高仍在 37–44px，不为它改时钟几何。
-          近了不合并：两块各自一块牌、各写自己的名字与天数，允许叠住（上限在布局里），
-          鼠标移到哪块，哪块就抬到最前并整块可读（用户 2026-11）。
-          **只对鼠标抬，不给牌子 tabIndex**：牌不点击也不展开，给它焦点就是假控件。
-          遮挡只是视觉问题——牌上的名字与天数是**真实文本**，读屏照读，被盖住的那块信息不丢。 */}
-      {model.plaques.map((plaque: ClockPlaqueStacked) => {
-        const distance = plaqueDistance(plaque, text)
-        return <div
-          key={plaque.id}
-          className={`mi-clock__node${plaque.zone === 'past' ? ' mi-clock__node--past' : ''}`}
-          data-clock-plaque={plaque.zone}
-          data-clock-metric={plaque.metricKey}
-          {...(plaque.id === centerPlaqueId ? { 'data-center': true } : {})}
-          onMouseEnter={() => setRaised(plaque.id)}
-          onMouseLeave={() => setRaised(undefined)}
-          style={{
-            left: plaque.x, top: plaque.y, '--o': plaque.opacity, '--mi-clock-z': plaque.z,
-            ...(raised === plaque.id ? { zIndex: clockPlaqueRaisedZ } : {})
-          } as React.CSSProperties}>
-          <span className="mi-clock__node-name">{plaqueName(plaque.nameKey, text)}</span>
-          {plaque.value === undefined && distance === undefined ? null : <span className="mi-clock__node-meta">
-            {plaque.value === undefined ? null : <b>{plaque.value}</b>}
-            {distance === undefined ? null : <span className="mi-clock__node-when">{distance}</span>}
-          </span>}
+      {/* 四类的名字（用户 2026-11 第三版）：挂在轨道外侧、箭头正外侧、水平居中，用正文色。
+          名字是**真按钮**：hover / Tab 聚焦打开同一浮层，click 钉住，Esc 关且焦点回位——
+          环上唯一的可点元素就是这四个名字，箭头本身是装饰。 */}
+      {arrows.map((arrow: ClockRingArrow) => {
+        const name = arrow.name
+        if (name === undefined) return null
+        return <div key={arrow.category} className="mi-clock__category" data-category={arrow.category}
+          style={{ left: name.x, top: name.y } as React.CSSProperties}>
+          <Popover
+            content={<ClockCategoryDetail arrow={arrow} text={text} />}
+            trigger={({ expanded, onSelect, onMouseEnter, onMouseLeave, onFocus, onBlur }) => <button
+              type="button"
+              className="mi-clock__category-name"
+              aria-expanded={expanded}
+              aria-label={categoryAria(arrow, text)}
+              onClick={onSelect}
+              onMouseEnter={onMouseEnter}
+              onMouseLeave={onMouseLeave}
+              onFocus={onFocus}
+              onBlur={onBlur}>{categoryLabel(arrow.category)}</button>} />
         </div>
       })}
 
@@ -251,13 +267,6 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       <div className="mi-clock__action">
         <IconButton ariaLabelKey={actionLabelKey} icon={Calendar} size="sm" variant="overlay" resolveText={resolveText} onSelect={onOpenCalendar} />
       </div>
-
-      {/* 每个发布日一块牌（用户 2026-11-21 更正）：同一天没被选上的其余发布在这行里，
-          点 ⓘ 列全（名字 · 日期 · 几天后）。计数为 0 时整行不渲染——不写「还有 0 个」。 */}
-      {overflowItems.length === 0 ? null : <p className="mi-clock__overflow" data-clock-overflow>
-        <span>{text.overflowLine.replace('{count}', String(overflowItems.length))}</span>
-        {helpTrigger({ text: overflowItems.join('；') })}
-      </p>}
 
       {/* 政策块的降级说明：**看得见**的一行（不是只藏在 ⓘ 里），未启用时还带一条去设置的路。
           只在政策那一块表达：主位与另外三块牌照常画。 */}
@@ -276,42 +285,54 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
             交互（原生 `title` 在键盘/触屏上唤不出来，且与上面的浮层不一致）。
             内容只放这里该说的：来源说明 + 撞牌让位 + 其他没上环的原因；`not-selected`（同一天没被选为代表）由上面那行溢出行单独表达，**两处不重复**。 */}
         <span className="mi-clock__info">
-          {helpTrigger({ text: [text.sourceNote, ...unplacedLines(model, text, policyState)].join('｜') })}
+          {helpTrigger({ text: [text.sourceNote, ...ringNoteLines(notes, text)].join('｜') })}
         </span>
       </div>
   </section>
 }
 
 /**
- * 没上环的指标写成一行说明（ⓘ 的提示文字）：取不到周期、周期不合理、没有下一期，
- * 三种原因各一句。ⓘ 的第一行「来源说明」由入口那行拼，这里只给后面几行。**不许静默消失**。
+ * 环上没画出来的原因写成一行（ⓘ 里）：排期读不到、30 天内没有发布、名字被降级。
+ * 溢出行删掉了（用户 2026-11：「本来就是几个大类」），但这些原因**不能跟着消失**。
  */
-function unplacedLines(model: ClockCardModel, text: ClockCardText, policyState?: 'disabled' | 'unreadable'): string[] {
-  // 撞牌让位的写成「名字 + 还有几天」（最多 3 项，其余折成条数）；其余原因逐条写原因。
-  const crowded = model.unplaced.filter((entry) => entry.reason === 'crowded')
-  const shown = crowded.slice(0, 3).map((entry) =>
-    text.crowdedLine.replace('{name}', text.names[entry.nameKey] ?? entry.nameKey).replace('{days}', String(entry.daysUntil ?? 0)))
-  const rest = crowded.length - shown.length
-  const crowdedLine = crowded.length === 0 ? undefined : text.crowdedLead
-    .replace('{count}', String(crowded.length))
-    .replace('{items}', [...shown, ...(rest > 0 ? [text.crowdedMore.replace('{count}', String(rest))] : [])].join('、'))
-  // `not-selected`（同一天没被选为代表）由卡片下沿那行单独表达，不混进 ⓘ。
-  const lines = model.unplaced
-    .filter((entry) => entry.reason !== 'crowded' && entry.reason !== 'not-selected')
-    .map((entry) => text.unplacedLine
-      .replace('{name}', text.names[entry.nameKey] ?? entry.nameKey)
-      .replace('{reason}', text.unplaced[entry.reason as keyof typeof text.unplaced]))
-  const policy = policyState === undefined ? [] : [policyState === 'disabled' ? text.policyDisabled : text.policyUnreadable]
-  return [...policy, ...(crowdedLine === undefined ? [] : [crowdedLine]), ...lines]
+function ringNoteLines(notes: ClockCardModel['notes'], text: ClockCardText): string[] {
+  return (notes ?? []).map((note) => {
+    const name = text.categories?.[note.category] ?? String(note.category)
+    if (note.reason === 'schedule-unreadable') return text.categoryScheduleUnreadable.replace('{name}', name)
+    if (note.reason === 'name-demoted') return text.categoryNameDemoted.replace('{name}', name)
+    return text.categoryNoRelease.replace('{name}', name)
+  })
 }
 
-/**
- * 中央两张面（用户 2026-11-21 拍板，42 号文件 §四）：
- * 平时是**利率路径面**；只在某条一级指标发布前后各 24 小时内切成**指标面**。
- *
- * 行数上限 5（界面设计实测：最高组合态 100.9，离刻度内沿 r=92 只剩 2.7px）。
- * 数值态走 `--font-metric-md`，句子态走 `--font-body`——同一槽位不许两种字号混用。
- */
+/** 名字按钮的可访问名：`利率，12-09 · 15 天后`。 */
+function categoryAria(arrow: ClockRingArrow, text: ClockCardText): string {
+  return text.categoryAria
+    .replace('{name}', text.categories?.[arrow.category] ?? String(arrow.category))
+    .replace('{date}', shortMonthDay(arrow.date))
+    .replace('{days}', String(arrow.daysUntil))
+}
+
+/** 浮层：大类名 + 下一期日期·天数 + 该类每条指标一行（利率类带概率）。 */
+function ClockCategoryDetail({ arrow, text }: Readonly<{ arrow: ClockRingArrow; text: ClockCardText }>): React.ReactElement {
+  return <div className="mi-clock__category-detail">
+    <strong>{text.categories?.[arrow.category] ?? String(arrow.category)}</strong>
+    <span>{text.categoryNext.replace('{date}', shortMonthDay(arrow.date)).replace('{days}', String(arrow.daysUntil))}</span>
+    <ul>
+      {arrow.entries.map((entry) => {
+        const name = text.names[entry.nameKey] ?? entry.nameKey
+        const when = text.categoryNext.replace('{date}', shortMonthDay(entry.date)).replace('{days}', String(entry.daysUntil))
+        if (entry.probability !== undefined) {
+          return <li key={entry.metricKey}>{text.categoryEntryOdds.replace('{name}', name).replace('{value}', entry.probability).replace('{when}', when)}</li>
+        }
+        if (entry.value === undefined) {
+          return <li key={entry.metricKey}>{text.categoryEntryNoValue.replace('{name}', name).replace('{when}', when)}</li>
+        }
+        return <li key={entry.metricKey}>{text.categoryEntry.replace('{name}', name).replace('{value}', entry.value).replace('{when}', when)}</li>
+      })}
+    </ul>
+  </div>
+}
+
 function ClockFace({ center, text, policyState, notice }: Readonly<{
   center: ClockCenterFace
   text: ClockCardText
@@ -418,25 +439,4 @@ function faceAction(label: string | undefined, onAction: (() => void) | undefine
 /** `2026-12-09` → `12–09`：会议日来自政策读数的日期串，不做时区换算（它是「哪一天开会」）。 */
 function shortMonthDay(date: string): string {
   return date.length >= 10 ? `${date.slice(5, 7)}–${date.slice(8, 10)}` : date
-}
-/**
- * 牌上的距离（用户 2026-11：「距离时间呢？」）：未来牌「N 天后」、过去牌「N 天前」。
- * 当天发布写「今天」，不写「0 天后」——那读着像还没发生。
- */
-function plaqueDistance(plaque: ClockPlaque, text: ClockCardText): string | undefined {
-  if (plaque.zone === 'past') {
-    if (plaque.daysAgo === undefined) return undefined
-    return plaque.daysAgo === 0 ? text.today : text.daysAgo.replace('{days}', String(plaque.daysAgo))
-  }
-  if (plaque.daysUntil === undefined) return undefined
-  return plaque.daysUntil === 0 ? text.today : text.daysUntil.replace('{days}', String(plaque.daysUntil))
-}
-
-/**
- * 牌上的名字：政策利率那一格的值是**盘口主推档的概率**，不是利率水平——
- * 名字必须带「概率」，否则 90.9% 会被读成利率（用户 2026-11-20 报的就是这个）。
- */
-/** 牌上的名字：直接从文案表取。政策牌也是「政策利率」——概率不进牌（中央已经有）。 */
-function plaqueName(nameKey: string, text: ClockCardText): string {
-  return text.names[nameKey] ?? nameKey
 }

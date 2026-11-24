@@ -1,21 +1,30 @@
 /**
- * 宏观时钟卡的编排：一天里画成什么样——牌挂在哪、中央是哪张面、谁没上环。
+ * 宏观时钟卡的编排：一天里画成什么样——四支大类箭头挂在哪、中央是哪张面、哪一类没画出来。
  *
- * 拆分（2026-11-21，文件过 500 行硬线）：
- * - 牌子几何、角度、夹取与撞牌的判据 → `clockPlaqueLayout`
+ * 用户 2026-11 改了形态：环上不再挂指标牌，改成**四个大类各一支箭头**（利率 / CPI / 非农 / PCE），
+ * 名字挂在轨道外侧，鼠标移到名字上才显示该类当期看板的具体值。牌那一套（宽度上限、重叠、
+ * 径向错开、叠放层级）连同它的常量与用例一起删掉了——新形态没有宽度问题。
+ *
+ * 模块分工：
+ * - 几何、角度、圆心 → `clockPlaqueLayout`
+ * - 箭头形状、名字摆放与避让 → `clockRingArrows`
+ * - 大类归属 → `clockRingCategories`
  * - 中央两张面与 ±24 小时窗口 → `clockCenterFace`
- *
- * 这里只留编排与对外类型。**导出面不变**：调用方仍从本文件取几何、窗口与牌类型。
  */
 import {
-  POLICY_METRIC_KEY, arrangePlaques, clockCardGeometry, clockDayGap, clockFutureAngle, clockFutureOpacity,
-  clockPastAngle, clockPeriodIsUsable, clockPlaqueBox, clockRepresentativeRank, clockRingPoint, clampPlaqueX,
-  type ClockPlaque, type ClockPlaqueStacked
+  POLICY_METRIC_KEY, clockDayGap, clockFutureAngle, clockRingPoint
 } from './clockPlaqueLayout'
 import { clockCenterFace, selectCenterWindow, type ClockCenterFace } from './clockCenterFace'
+import {
+  clockArrowGeometry, clockArrowPath, clockNameWidth,
+  placeClockNames, type ClockRingArrow, type ClockRingArrowEntry, type ClockRingNote
+} from './clockRingArrows'
+import { clockCategoryOf, clockRingCategories, type ClockRingCategory } from './clockRingCategories'
 
 export * from './clockPlaqueLayout'
 export * from './clockCenterFace'
+export * from './clockRingCategories'
+export * from './clockRingArrows'
 
 export type ClockScheduleMetric = Readonly<{
   /** 指标码（`US.CPI.NSA.YOY` 这类）；同一指标可以同时挂过去与未来两块。 */
@@ -45,202 +54,116 @@ export type ClockScheduleMetric = Readonly<{
   deltaDirection?: 'above' | 'below'
 }>
 
-/**
- * 没上环的指标与原因：**必须留一行交代**，不许静默消失。
- * - `no-period`：读不到周期 P；
- * - `period-out-of-range`：P 不在合理区间；
- * - `no-next-release`：没有下一期日程（未来区无处可挂）。
- */
-export type ClockUnplacedReason = 'no-period' | 'period-out-of-range' | 'no-next-release' | 'crowded'
-/** 环上只放一个指标（用户 2026-11-21）：其余一级指标不是「放不下」，是**没被选中**——原因要分开写。 */
-export type ClockUnplaced = Readonly<{
-  metricKey: string
-  nameKey: string
-  reason: ClockUnplacedReason | 'not-selected'
-  /** 被撞牌让位时的「还有几天」：交代行要写出来，读者才知道挪走的是哪一条。 */
-  daysUntil?: number
-  /** 这一项的发布日期（`not-selected` 的溢出清单要写「哪天、几天后」）。 */
-  date?: string
-}>
-
-/**
- * 环上的代表：**每个发布日一个**。
- *
- * 同一天多个一级指标时，先取有盘口预期的（那是读者抬头要看的数），再按代表优先级，
- * 最后按码字典序（只为可复现）。没有盘口的日期照样返回——牌要挂，只是不显示数字。
- */
-export function selectRingMetrics(metrics: readonly ClockScheduleMetric[]): readonly ClockScheduleMetric[] {
-  const hasMarket = (metric: ClockScheduleMetric): number => metric.nextRelease?.expectedFromMarket === true ? 0 : 1
-  const byDate = new Map<string, ClockScheduleMetric[]>()
-  for (const metric of metrics) {
-    if (metric.metricKey === POLICY_METRIC_KEY || metric.nextRelease === undefined) continue
-    const list = byDate.get(metric.nextRelease.date)
-    if (list === undefined) byDate.set(metric.nextRelease.date, [metric])
-    else list.push(metric)
-  }
-  return [...byDate.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([, sameDay]) => [...sameDay].sort((left, right) => hasMarket(left) - hasMarket(right)
-      || clockRepresentativeRank(left.metricKey) - clockRepresentativeRank(right.metricKey)
-      || left.metricKey.localeCompare(right.metricKey))[0]!)
-}
-
-/**
- * 窗口内的指标必须**出现在环上**（中央切成它的时候，环上不能挂着另一个）。
- * 同一发布日就替掉当天的代表；不是同一天就补进去。
- */
-function ringWithWindow(ring: readonly ClockScheduleMetric[], windowMetric: ClockScheduleMetric | undefined): readonly ClockScheduleMetric[] {
-  if (windowMetric === undefined) return ring
-  if (ring.some((metric) => metric.metricKey === windowMetric.metricKey)) return ring
-  const day = windowMetric.nextRelease?.date
-  if (day === undefined) return [...ring, windowMetric]
-  const replaced = ring.map((metric) => (metric.nextRelease?.date === day ? windowMetric : metric))
-  return replaced.includes(windowMetric) ? replaced : [...ring, windowMetric]
-}
-
 export type ClockCardModel = Readonly<{
-  plaques: readonly ClockPlaqueStacked[]
+  arrows: readonly ClockRingArrow[]
   center?: ClockCenterFace
-  unplaced: readonly ClockUnplaced[]
+  notes: readonly ClockRingNote[]
 }>
 
 /**
- * 一天里这张卡画成什么样：牌挂在哪、中央是哪一张面、谁没上环。
+ * 一天里这张卡画成什么样：四支大类箭头、中央那张面、哪一类没画出来。
  *
  * `today` 是**显示时区的日期**（`YYYY-MM-DD`）：卡上的天数跟读者看到的那一天走。
  * `now` 是**此刻的 ISO 时刻**（可选）：中央的 ±24 小时窗口按它算；不给就只有利率路径面。
- * `plaqueNames` 是牌上名字的解析结果（`nameKey` → 文字）：牌的宽度由名字决定，
- * 「两块叠了多少」只能按盒子算，所以布局必须拿到名字，不许拿 `nameKey` 顶。
+ * `names` 是名字文字（名字键 → 文字）：名字盒宽度只能按文字算，拿键顶会算错。
  */
 export function buildClockCardModel(input: Readonly<{
   today: string
   now?: string
   metrics: readonly ClockScheduleMetric[]
-  plaqueNames: Readonly<Record<string, string>>
+  /** 指标名（`nameKey` → 文字）：浮层里逐条写名字用。 */
+  names: Readonly<Record<string, string>>
+  /** 四个大类名（利率 / CPI / 非农 / PCE）：只有这四个词上环。 */
+  categoryNames: Readonly<Record<ClockRingCategory, string>>
 }>): ClockCardModel {
-  const plaques: ClockPlaque[] = []
-  const unplaced: ClockUnplaced[] = []
-  /**
-   * **中央的窗口先于环上那一个**（42 号文件 §二）：窗口内的指标优先上环，
-   * 否则会出现「中央已经切成某个指标，环上却挂着另一个」。
-   */
   const window = input.now === undefined ? undefined : selectCenterWindow({ now: input.now, metrics: input.metrics })
-  /**
-   * **环上每个发布日一块牌**（用户 2026-11-21 更正）：CPI、非农不能因为 PCE 更近就消失。
-   * 窗口内的指标必须上环（否则中央切成它、环上却没有），同一天以它替掉当天的代表。
-   */
-  const ring = ringWithWindow(selectRingMetrics(input.metrics), window?.metric)
-  const ringKeys = new Set(ring.map((metric) => metric.metricKey))
-
-  for (const metric of input.metrics) {
-    const isPolicy = metric.metricKey === POLICY_METRIC_KEY
-    const isSelected = ringKeys.has(metric.metricKey)
-    // 没被选中的一级指标：**不是放不下**，是没选中；日期与天数也带上，溢出清单要能说清漏的是哪一条。
-    if (!isPolicy && !isSelected) {
-      // 没有下一期日程的，原因照旧如实写（「没有下一期」不是「没被选中」）。
-      if (metric.nextRelease === undefined) {
-        unplaced.push({ metricKey: metric.metricKey, nameKey: metric.nameKey, reason: 'no-next-release' })
-        continue
-      }
-      const daysUntil = clockDayGap(input.today, metric.nextRelease.date)
-      unplaced.push({
-        metricKey: metric.metricKey, nameKey: metric.nameKey, reason: 'not-selected',
-        date: metric.nextRelease.date,
-        ...(Number.isNaN(daysUntil) ? {} : { daysUntil })
-      })
-      continue
-    }
-    const pastDays = metric.lastRelease === undefined ? undefined : clockDayGap(metric.lastRelease.date, input.today)
-    const periodUsable = clockPeriodIsUsable(metric.periodDays)
-    // 过去区：有上次发布、周期可信、且还在保留期 P/3 内才挂。
-    if (metric.lastRelease !== undefined) {
-      if (metric.periodDays === undefined || !Number.isFinite(metric.periodDays) || pastDays === undefined || Number.isNaN(pastDays)) {
-        unplaced.push({ metricKey: metric.metricKey, nameKey: metric.nameKey, reason: 'no-period' })
-      } else if (!periodUsable) {
-        unplaced.push({ metricKey: metric.metricKey, nameKey: metric.nameKey, reason: 'period-out-of-range' })
-      } else if (pastDays >= 0 && pastDays < metric.periodDays * clockCardGeometry.pastRetentionRatio) {
-        const angle = clockPastAngle(pastDays, metric.periodDays!)
-        const point = clockRingPoint(angle)
-        plaques.push({
-          id: `${metric.metricKey}:past`, metricKey: metric.metricKey, nameKey: metric.nameKey, zone: 'past',
-          angle, x: clampPlaqueX(point.x), y: point.y, opacity: 1, daysAgo: pastDays,
-          ...(metric.lastRelease.value === undefined ? {} : { value: metric.lastRelease.value }),
-          ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
-        })
-      }
-    }
-
-    // 未来区：有下一期就挂；没有就留一行交代。
-    if (metric.nextRelease === undefined) {
-      unplaced.push({ metricKey: metric.metricKey, nameKey: metric.nameKey, reason: 'no-next-release' })
-      continue
-    }
-    const daysUntil = clockDayGap(input.today, metric.nextRelease.date)
-    if (Number.isNaN(daysUntil) || daysUntil < 0) {
-      unplaced.push({ metricKey: metric.metricKey, nameKey: metric.nameKey, reason: 'no-next-release' })
-      continue
-    }
-    const angle = clockFutureAngle(daysUntil)
-    const point = clockRingPoint(angle)
-    plaques.push({
-      id: `${metric.metricKey}:future`, metricKey: metric.metricKey, nameKey: metric.nameKey, zone: 'future',
-      angle, x: clampPlaqueX(point.x), y: point.y, opacity: round4(clockFutureOpacity(daysUntil)), daysUntil,
-      date: metric.nextRelease.date,
-      /**
-       * 政策牌的位置表达「哪一天开会」，**概率留在中央**（用户 2026-11：中央只显示加息概率是对的，
-       * 错的是「还有多少天」没上环）。同一个数不在牌和中央各写一遍。
-       */
-      ...(isPolicy || metric.nextRelease.expected === undefined ? {} : { value: metric.nextRelease.expected }),
-      ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
-    })
-  }
-
   const center = clockCenterFace({ today: input.today, metrics: input.metrics,
     ...(window === undefined ? {} : { window }) })
+  return {
+    ...buildRingArrows(input),
+    ...(center === undefined ? {} : { center })
+  }
+}
 
-  /**
-   * 摆放（用户 2026-11-21 新口径）：**不合并**——很近的两块各自成牌、各写自己的名字与天数，
-   * 允许叠，但叠住的比例有上限；超了就沿径向错开，一组最多两块叠住，第三块算位置不足。
-   * 层级（离现在近的在上）与错开都在 `arrangePlaques` 里算，这里只给尺寸与次序。
-   */
-  const arrangement = arrangePlaques(plaques, {
-    sizeOf: (plaque) => clockPlaqueBox(input.plaqueNames[plaque.nameKey] ?? plaque.nameKey),
-    order: (left, right) => plaquePlacementOrder(left, right, window?.metric.metricKey),
-    ...(center?.kind === 'metric' ? { sinkId: `${center.metricKey}:future` } : {})
+/** 摆好位置前的一个大类：角度、日期、这一类的全部指标。 */
+type ClockRingAnchor = Readonly<{
+  category: ClockRingCategory
+  angle: number
+  date: string
+  daysUntil: number
+  entries: readonly ClockRingArrowEntry[]
+}>
+
+/** 每个大类一支箭头：位置取该类**最近一期**发布，其余日期只在浮层里。 */
+function buildRingArrows(input: Readonly<{
+  today: string
+  metrics: readonly ClockScheduleMetric[]
+  names: Readonly<Record<string, string>>
+  categoryNames: Readonly<Record<ClockRingCategory, string>>
+}>): Readonly<{ arrows: readonly ClockRingArrow[]; notes: readonly ClockRingNote[] }> {
+  const notes: ClockRingNote[] = []
+  const grouped = new Map<ClockRingCategory, ClockRingArrowEntry[]>()
+  const unreadable = new Set<ClockRingCategory>()
+  for (const metric of input.metrics) {
+    const category = clockCategoryOf(metric.metricKey)
+    const next = metric.nextRelease
+    if (next === undefined) continue
+    const daysUntil = clockDayGap(input.today, next.date)
+    if (Number.isNaN(daysUntil)) { unreadable.add(category); continue }
+    // 过去期不挂箭头：只有「今天及以后」的那一期才算下一期。
+    if (daysUntil < 0) continue
+    const entry: ClockRingArrowEntry = {
+      metricKey: metric.metricKey,
+      nameKey: metric.nameKey,
+      date: next.date,
+      daysUntil,
+      ...(next.expected === undefined ? {} : { value: next.expected }),
+      // 政策没有「预期值」，那个数是盘口主推档的概率——同一格，浮层里按概率说。
+      ...(metric.metricKey === POLICY_METRIC_KEY && next.expected !== undefined
+        ? { probability: next.expected } : {})
+    }
+    const list = grouped.get(category)
+    if (list === undefined) {
+      grouped.set(category, [entry])
+    } else {
+      list.push(entry)
+    }
+  }
+
+  const anchors: ClockRingAnchor[] = []
+  for (const category of clockRingCategories) {
+    const entries = (grouped.get(category) ?? []).slice()
+      .sort((left, right) => left.daysUntil - right.daysUntil || left.metricKey.localeCompare(right.metricKey))
+    if (entries.length === 0) {
+      notes.push({ category, reason: unreadable.has(category) ? 'schedule-unreadable' : 'no-release' })
+      continue
+    }
+    const nearest = entries[0]!
+    anchors.push({ category, angle: clockFutureAngle(nearest.daysUntil), date: nearest.date,
+      daysUntil: nearest.daysUntil, entries })
+  }
+
+  // 名字只能容纳「大类名」：宽度按文案表里那一行算（英文 Rate/CPI/Jobs/PCE 也走同一条）。
+  const placed = placeClockNames(anchors.map((anchor) => ({
+    category: anchor.category,
+    angle: anchor.angle,
+    width: clockNameWidth(input.categoryNames?.[anchor.category] ?? anchor.category)
+  })))
+  for (const category of placed.demoted) notes.push({ category, reason: 'name-demoted' })
+
+  const arrows: ClockRingArrow[] = anchors.map((anchor) => {
+    const name = placed.names[anchor.category]
+    const tip = clockRingPoint(anchor.angle, clockArrowGeometry.tipRadius)
+    return {
+      category: anchor.category,
+      angle: anchor.angle,
+      date: anchor.date,
+      daysUntil: anchor.daysUntil,
+      tip,
+      path: clockArrowPath(anchor.angle),
+      ...(name === undefined ? {} : { name }),
+      entries: anchor.entries
+    }
   })
-  for (const plaque of arrangement.crowded) {
-    unplaced.push({
-      metricKey: plaque.metricKey, nameKey: plaque.nameKey, reason: 'crowded',
-      ...(plaque.daysUntil === undefined ? {} : { daysUntil: plaque.daysUntil })
-    })
-  }
-  return { plaques: arrangement.plaques, ...(center === undefined ? {} : { center }), unplaced }
-}
-
-/**
- * 摆放次序：**先放的占住原位，后放的那块让位**。
- *
- * 1. 未来区先于过去区；
- * 2. 窗口内那个指标最优先——否则会出现「中央已经切成某个指标，环上却只有政策牌」；
- * 3. 指标发布牌优先于政策牌（政策日期在下面那张利率路径卡里还能看到，发布牌让位那天就没了）；
- * 4. 其余按离现在更近的在前。
- */
-function plaquePlacementOrder(left: ClockPlaque, right: ClockPlaque, windowKey: string | undefined): number {
-  if (left.zone !== right.zone) return left.zone === 'future' ? -1 : 1
-  if (left.zone === 'future') {
-    const leftRing = windowKey !== undefined && left.metricKey === windowKey
-    const rightRing = windowKey !== undefined && right.metricKey === windowKey
-    if (leftRing !== rightRing) return leftRing ? -1 : 1
-    const leftPolicy = left.metricKey === POLICY_METRIC_KEY ? 1 : 0
-    const rightPolicy = right.metricKey === POLICY_METRIC_KEY ? 1 : 0
-    if (leftPolicy !== rightPolicy) return leftPolicy - rightPolicy
-  }
-  const leftDays = left.zone === 'future' ? left.daysUntil ?? Number.POSITIVE_INFINITY : left.daysAgo ?? Number.POSITIVE_INFINITY
-  const rightDays = right.zone === 'future' ? right.daysUntil ?? Number.POSITIVE_INFINITY : right.daysAgo ?? Number.POSITIVE_INFINITY
-  return leftDays - rightDays || left.metricKey.localeCompare(right.metricKey)
-}
-
-/** 透明度落到 4 位小数：原型写 `.914`，多出来的浮点尾巴不该出现在行内样式里。 */
-function round4(value: number): number {
-  return Number(value.toFixed(4))
+  return { arrows, notes }
 }
