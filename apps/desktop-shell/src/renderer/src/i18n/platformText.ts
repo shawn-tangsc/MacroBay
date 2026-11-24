@@ -1350,8 +1350,11 @@ export type PlatformText = {
         state: { sent: string; unconfirmed: string; failed: string; noImage: string }
         counts: { all: (count: number) => string; partial: (failed: number, total: number) => string }
         /**
-         * 计数与原因之间那个「·」：两段字号不同（数字弱化、原因是正文色），只能拆两个节点，
+         * 数字与原因之间那个「·」：两者字号不同（数字弱化、原因是正文色），只能是两个节点，
          * 连接符就得是文案而不是 CSS——**可见标点也算文案**，零字面量。
+         *
+         * 值里**不带空格**：节点之间由布局的 `gap` 给间隙，字符串再带就多出两边的空格。
+         * 渲染条件是「有原因」——单通道没有数字时也要读作「未发送 · 通道未收下」。
          */
         value: { separator: string }
         reason: {
@@ -2819,7 +2822,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
             partial: (failed, total) => `${failed}/${total}`,
           },
           value: {
-            separator: ' · ',
+            separator: '·',
           },
           reason: {
             timeout: '出图超时',
@@ -4276,7 +4279,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
             partial: (failed, total) => `${failed}/${total}`,
           },
           value: {
-            separator: ' · ',
+            separator: '·',
           },
           reason: {
             timeout: 'render timed out',
