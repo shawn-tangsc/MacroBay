@@ -37,22 +37,33 @@ export function ExpectationPanel({ locale, policyText, policyReading, releaseEve
   const text = macroIndicatorDrawerText[locale]
   const series = useExpectationSeries(policyReading, releaseEvents, text)
   const host = useRef<HTMLDivElement | null>(null)
-  const [width, setWidth] = useState(0)
+  /**
+   * 图的尺寸**只从容器量**：宽、高都测，不再用「卡高 − 内距」算一遍。
+   *
+   * 两个坑都踩过：① 高度写死（默认 330）会让这一格比钟表卡高，整排缩不下来；
+   * ② 高度用「卡高 − 常数」算，就多了一份别人不知道的高度常量，卡一改就对不上，
+   * 底部的日期轴会被 `overflow: hidden` 切掉。量出来是多少就画多少。
+   */
+  const [size, setSize] = useState({ width: 0, height: 0 })
+  const measure = useCallback(() => {
+    const node = host.current
+    if (node === null) return
+    const rect = node.getBoundingClientRect()
+    setSize({ width: Math.floor(rect.width), height: Math.floor(rect.height) })
+  }, [])
   const attach = useCallback((node: HTMLDivElement | null) => {
     host.current = node
-    if (node === null) return
-    setWidth(Math.floor(node.getBoundingClientRect().width))
-  }, [])
+    if (node !== null) measure()
+  }, [measure])
   useEffect(() => {
     const node = host.current
     if (node === null || typeof ResizeObserver === 'undefined') return undefined
-    const observer = new ResizeObserver(() => setWidth(Math.floor(node.getBoundingClientRect().width)))
+    const observer = new ResizeObserver(measure)
     observer.observe(node)
     return () => observer.disconnect()
-  }, [])
-  // 绘图区按容器量：减掉左右内距与上下留白（与原型 330 高一致，不写死 264 之外的数）。
-  const plotWidth = Math.max(0, width - 52 - 12)
-  const plotHeight = height - 16 - 34
+  }, [measure])
+  const plotWidth = Math.max(0, size.width)
+  const plotHeight = Math.max(0, size.height)
   const delta = series.delta
   const deltaText = delta === undefined ? text.rateNoHistory
     : Math.abs(delta) < 0.05 ? text.rateFlat
@@ -67,7 +78,7 @@ export function ExpectationPanel({ locale, policyText, policyReading, releaseEve
     </header>
     <div className="mk-dash-expectation__plot" ref={attach}>
       {pending ? null
-        : series.points.length > 0 && plotWidth > 0
+        : series.points.length > 0 && plotWidth > 0 && plotHeight > 0
         ? <ExpectationChart points={series.points} events={series.eventMarks} height={plotHeight} width={plotWidth}
           latest={delta === undefined ? {} : { changeBp: delta }}
           text={{
