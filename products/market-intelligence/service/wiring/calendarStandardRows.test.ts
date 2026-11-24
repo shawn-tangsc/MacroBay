@@ -36,7 +36,9 @@ describe('启动链：syncOfficialStandardRowsAtStartup', () => {
       })
     }
     seed('narwhal', '2026-10-03', 4.1)
-    seed('0xrouter', '2026-10-04', 4.2)
+    // 两家**期次都由源给出**（narwhal / 官方 BLS）。0xrouter 的期次是推出来的，按 ③ 的期次闸
+    // 这一组属于「不可比·来源没有给统计期」，不记冲突——用它当样本，测的就不是冲突记录了。
+    seed('macro-calendar-bls', '2026-10-04', 4.2)
     const run = (): void => syncOfficialStandardRowsAtStartup({
       database, listEffectiveMonthAsOf: noRevisions, now: () => new Date('2026-11-18T00:00:00.000Z')
     })
