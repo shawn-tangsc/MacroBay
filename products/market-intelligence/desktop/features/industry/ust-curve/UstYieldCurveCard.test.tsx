@@ -195,14 +195,16 @@ describe('国债收益率卡', () => {
     const { host, unmount } = mount()
     expect(cells(host, 'path.mi-ust__line').map((path) => path.getAttribute('data-tenor')))
       .toEqual(['3m', '2y', '5y', '10y', '30y'])
-    expect(host.querySelector('.mi-ust__zero')).toBeNull()
-
-    const normalized = cells(host, '.segmented__item').find((item) => text(item) === t('mode.normalized'))
-    expect(normalized).toBeTruthy()
-    act(() => { normalized!.click() })
-    // 归一模式必有 0 线，图的读屏名换成「起点归一」那一句。
+    // 默认是「起点归一」（用户 2026-11-24）：归一模必有 0 线，读屏名也是归一那一句。
     expect(host.querySelector('.mi-ust__zero')).not.toBeNull()
     expect(host.querySelector('svg.mi-ust__svg')?.getAttribute('aria-label')).toBe(t('ariaNormalized'))
+
+    const level = cells(host, '.segmented__item').find((item) => text(item) === t('mode.level'))
+    expect(level).toBeTruthy()
+    act(() => { level!.click() })
+    // 切到收益率：0 线消失，读屏名换成水平值那一句。
+    expect(host.querySelector('.mi-ust__zero')).toBeNull()
+    expect(host.querySelector('svg.mi-ust__svg')?.getAttribute('aria-label')).toBe(t('ariaLevel'))
     unmount()
   })
 
@@ -212,8 +214,64 @@ describe('国债收益率卡', () => {
     // 数据就在旁边的表里；键盘用户不该被塞进一个只有视觉反馈的陷阱。
     expect(svg.getAttribute('role')).toBe('img')
     expect(svg.hasAttribute('tabindex')).toBe(false)
-    expect(svg.getAttribute('aria-label')).toBe(t('ariaLevel'))
+    expect(svg.getAttribute('aria-label')).toBe(t('ariaNormalized'))
     unmount()
+  })
+
+  it('opens on the from-start reading: the switch sits on it, the axis is bp, and the baseline is named', () => {
+    const { host, unmount } = mount()
+    // 选中态由切换器自己给（`aria-pressed`），不是靠样式猜的。
+    const normalized = cells(host, '.segmented__item').find((item) => text(item) === t('mode.normalized'))!
+    const level = cells(host, '.segmented__item').find((item) => text(item) === t('mode.level'))!
+    expect(normalized.getAttribute('aria-pressed')).toBe('true')
+    expect(level.getAttribute('aria-pressed')).toBe('false')
+
+    // 纵轴刻度是基点（相对窗口起点的变化），不是百分数。
+    const yTicks = cells(host, 'svg g text.mi-ust__axis').map(text)
+    expect(yTicks.length).toBeGreaterThan(0)
+    for (const tick of yTicks) expect(tick).toContain('bp')
+
+    // 页脚那行基线说明在（`UstFooter` 的 normalized 分支）：五条线共有起点时写那一天。
+    const base = sentence('templates.footBase')
+    expect(base).toContain('{date}')
+    expect(text(host.querySelector('.mi-ust__foot'))).toContain(base.slice(0, base.indexOf('{date}')))
+    unmount()
+  })
+
+  it('flips the tooltip to the left of the last column, and the numbers follow the axis reading', () => {
+    // 图框宽度在 happy-dom 里量不到（clientWidth 恒为 0），给一个真实宽度布局才铺得开。
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    const height = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 800 })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 240 })
+    const { host, unmount } = mount()
+    try {
+      const svg = host.querySelector('svg.mi-ust__svg')!
+      // 最右一列：图的右缘 = 800 − 112 = 688；指针落在这里，十字线就在最后一根上。
+      act(() => { svg.dispatchEvent(new MouseEvent('mousemove', { clientX: 688, bubbles: true })) })
+      const tooltip = host.querySelector<HTMLElement>('[data-ust-tooltip]')!
+      expect(tooltip).not.toBeNull()
+      // 右边放不下（800 − 688 = 112 < 228）→ 翻到左侧 688 − 12 − 210 = 466，右缘 676 不越界。
+      expect(tooltip.style.left).toBe('466px')
+      expect(parseFloat(tooltip.style.left) + 210).toBeLessThanOrEqual(800 - 6)
+      // 默认归一：牌上的数是 bp。
+      const normalizedValues = cells(tooltip, 'b').map(text)
+      expect(normalizedValues.length).toBeGreaterThan(0)
+      for (const value of normalizedValues) expect(value).toContain('bp')
+
+      // 切到收益率：同一列、同一位置，牌上的数换成百分数——牌跟着轴的读法走。
+      const level = cells(host, '.segmented__item').find((item) => text(item) === t('mode.level'))!
+      act(() => { level.click() })
+      const next = host.querySelector<HTMLElement>('[data-ust-tooltip]')!
+      expect(next.style.left).toBe('466px')
+      const levelValues = cells(next, 'b').map(text)
+      expect(levelValues.length).toBe(normalizedValues.length)
+      for (const value of levelValues) expect(value).toMatch(/%$/)
+    } finally {
+      unmount()
+      if (width) Object.defineProperty(HTMLElement.prototype, 'clientWidth', width)
+      if (height) Object.defineProperty(HTMLElement.prototype, 'clientHeight', height)
+    }
   })
 
   it('names the common baseline in the footer, never one line\'s earlier first day', () => {
@@ -226,9 +284,7 @@ describe('国债收益率卡', () => {
           reading(series.real10y), reading(series.breakeven10y)]
       })
     })
-    const normalized = cells(host, '.segmented__item').find((item) => text(item) === t('mode.normalized'))
-    act(() => { normalized!.click() })
-
+    // 默认就是起点归一，不用先点一次切换器。
     const foot = text(host.querySelector('.mi-ust__foot'))
     const base = sentence('templates.footBase')
     expect(foot).toContain(base.replace('{date}', late.window[0]!.period))
@@ -244,9 +300,6 @@ describe('国债收益率卡', () => {
         readings: [reading(series.us3m), reading(series.us10y, window(30, () => 4, '2026-05-01'))]
       })
     })
-    const normalized = cells(host, '.segmented__item').find((item) => text(item) === t('mode.normalized'))
-    act(() => { normalized!.click() })
-
     const foot = text(host.querySelector('.mi-ust__foot'))
     expect(foot).toContain(sentence('templates.footBasePerLine'))
     unmount()

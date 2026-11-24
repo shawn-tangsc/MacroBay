@@ -51,7 +51,9 @@ export function UstYieldCurveCard({
   snapshot, state, sourceDisabled = false, resolveText, timeZone, locale = 'zh-CN', admittedSeriesIds, onRefresh, onEnableSource
 }: UstYieldCurveCardProps): ReactElement {
   const [range, setRange] = useState<UstCurveRange>('3m')
-  const [mode, setMode] = useState<UstCurveMode>('level')
+  // 默认看「起点归一」（用户 2026-11-24）：进来先看五条线相对窗口起点怎么走，收益率仍可切换。
+  // 只是默认值，不持久化——用户要的不是「记住上次选择」。
+  const [mode, setMode] = useState<UstCurveMode>('normalized')
   const copy = (key: string): string => resolveText(`${KEY}.${key}`)
 
   const rows = useMemo(() => buildUstRows({ snapshot, ...(admittedSeriesIds === undefined ? {} : { admittedSeriesIds }) }),
