@@ -373,6 +373,16 @@ describe('crypto intelligence dashboard', () => {
     expect(footRule).toContain('grid-row: 2')
     expect(footRule).toContain('margin-top: 6px')
     expect(footRule).toContain('min-height: 22px')
+    // 整行居中（用户 2026-11-24）：三格的名字不再「名称贴左、值顶右」。四档间距见下面两条。
+    expect(footRule).toContain('justify-content: center')
+    expect(footRule).toContain('gap: 8px')
+    expect(cssBlock(styles, '.mi-defensive-premium__col-foot-head {')).toContain('gap: 6px')
+    // 带 `.col-foot` 前缀是有意的：基础那条 `gap: 6px` 写在后面，同权重会把 4 赢回去。
+    expect(cssBlock(styles, '.mi-defensive-premium__col-foot .mi-defensive-premium__headline-tail--foot {'))
+      .toContain('gap: 4px')
+    // 居中考的那条 `margin-left: auto` 必须被盖掉，否则整组又被推回行末。
+    expect(cssBlock(styles, '.mi-defensive-premium__col-foot .mi-defensive-premium__headline-tail {'))
+      .toContain('margin-left: 0')
     expect(styles).not.toContain('.mi-defensive-premium__notes {')
     // 档位词在图下那一行、11/650、居中（用户 2026-11-24）：它不再绝对定位、也不再占卡头中轨。
     const bucketRule = cssBlock(styles, '.mi-defensive-premium__gauge-bucket {')

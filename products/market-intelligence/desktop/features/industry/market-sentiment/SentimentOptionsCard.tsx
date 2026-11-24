@@ -123,17 +123,19 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                       : null}
             {/* 格名下移到图下（用户 2026-11-24）：与两侧的名字同一行，行高 22、与图间距 6。 */}
             <div className="mi-defensive-premium__col-foot" data-half-foot="fear-greed">
-              {/* 行名只有格名（用户 2026-11-22）：量程就在刻度上（0/50/100），不再后缀一遍。 */}
-              <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
-              <Popover resolveText={dataText} lines={[
-                { labelKey: `${TEXT_PREFIX}.fearGreed.info.volatility` },
-                percentile
-                  ? { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentile`, params: { percentile: String(percentile.value) } }
-                  : { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentileInsufficient` },
-              ]} trigger={triggerProps => (
-                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.fearGreed.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
-              )} />
-              {/* 名字行右端：这一格的值在仪表盘那一列，这里只放「偏旧」这类陈旧状态（AC-20 照旧要标）。 */}
+              <div className="mi-defensive-premium__col-foot-head">
+                {/* 行名只有格名（用户 2026-11-22）：量程就在刻度上（0/50/100），不再后缀一遍。 */}
+                <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
+                <Popover resolveText={dataText} lines={[
+                  { labelKey: `${TEXT_PREFIX}.fearGreed.info.volatility` },
+                  percentile
+                    ? { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentile`, params: { percentile: String(percentile.value) } }
+                    : { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentileInsufficient` },
+                ]} trigger={triggerProps => (
+                  <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.fearGreed.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
+                )} />
+              </div>
+              {/* 这一格的值在仪表盘那一列，这里只放「偏旧」这类陈旧状态（AC-20 照旧要标）。 */}
               {fearGreed?.state === 'available' && fearGreed.stale
                 ? <span className="mi-defensive-premium__headline-tail" data-stale="fear-greed">
                   <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
@@ -174,23 +176,25 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                 : skew === undefined ? null : <>
                     <StateSlot tone="unreadable" sentence={skewUnavailableText(skew, text)} />
                 </>}
-            {/* 右半的格名、半条 ⓘ 与读数一起下移到图下（用户 2026-11-24）：名字在左、值在右端，
-                名字不折行不截断，挤的时候折的是右端那串（英文在 1040 下会折，判据只看名字）。 */}
+            {/* 右半的格名、半条 ⓘ 与读数一起下移到图下（用户 2026-11-24），整行**居中**：
+                名字、ⓘ、分隔号、值依次排，读数不再顶到行末；名字不折行不截断，挤的时候折的是读数那串。 */}
             <div className="mi-defensive-premium__col-foot" data-half-foot="skew">
-              <h3 id={SKEW_HEADING_ID}>{text.skew.name}</h3>
-              <Popover resolveText={dataText} lines={[
-                { labelKey: `${TEXT_PREFIX}.skew.info.definition` },
-                { labelKey: `${TEXT_PREFIX}.skew.info.relative` },
-                { labelKey: `${TEXT_PREFIX}.skew.info.since` },
-              ]} trigger={triggerProps => (
-                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
-              )} />
+              <div className="mi-defensive-premium__col-foot-head">
+                <h3 id={SKEW_HEADING_ID}>{text.skew.name}</h3>
+                <Popover resolveText={dataText} lines={[
+                  { labelKey: `${TEXT_PREFIX}.skew.info.definition` },
+                  { labelKey: `${TEXT_PREFIX}.skew.info.relative` },
+                  { labelKey: `${TEXT_PREFIX}.skew.info.since` },
+                ]} trigger={triggerProps => (
+                  <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
+                )} />
+              </div>
               {skew?.state === 'available'
-                ? <span className="mi-defensive-premium__headline-tail">
+                ? <span className="mi-defensive-premium__headline-tail mi-defensive-premium__headline-tail--foot" data-half-readout>
                   <strong className="mi-defensive-premium__headline-value" data-skew-value>{skew.latest.riskReversal.toFixed(1)}</strong>
                   <span>{text.skew.unit}</span>
                   {skew.direction.kind === 'unknown' ? null : <>
-                    <span aria-hidden="true">·</span>
+                    <span aria-hidden="true" className="mi-defensive-premium__foot-sep">·</span>
                     <span data-skew-direction={skew.direction.kind}>{text.skew.direction[skew.direction.kind]} · {text.skew.direction.window}</span>
                   </>}
                   {skew.stale

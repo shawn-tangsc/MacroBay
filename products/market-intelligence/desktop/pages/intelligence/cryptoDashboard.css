@@ -197,14 +197,26 @@
   min-width: 0;
 }
 /* 图下那一行（用户 2026-11-24：三个名字 恐惧与贪婪 ｜ 极度恐惧 ｜ BTC 期权偏斜 同处一行）：
-   与图间距 6、行高 22、11/500 的格名 + ⓘ，右半右端再接读数。0/1/2/3–29/满窗都只有这一行，
-   所以各点数形态等高（卡高 257）。名字不折行不截断，挤的时候折的是右端那串读数。 */
+   与图间距 6、行高 22、11/500 的格名 + ⓘ，右半再接读数。0/1/2/3–29/满窗都只有这一行，
+   所以各点数形态等高（卡高 257）。
+   排法（界面 2026-11-24 定的四档间距）：**整行居中**，名称↔ⓘ 6、ⓘ↔读数 8、数值↔单位 4、
+   读数↔方向尾巴 8；不额外加「·」——ⓘ 已经把名称与读数隔开，再加一个只是噪声。
+   只有这张卡这样排（用户对这张卡点名），别拿它去改看板其他卡的「名称贴左、值顶右」。 */
 .mi-defensive-premium__col > .mi-defensive-premium__col-foot {
-  grid-row: 2; display: flex; align-items: center; gap: 6px; min-width: 0;
+  grid-row: 2; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0;
   min-height: 22px; margin-top: 6px;
   font-size: var(--font-meta); line-height: var(--line-meta);
 }
+/* 名称 + ⓘ 是一组（6），整组与读数之间由上面的 `gap: 8` 给。 */
+.mi-defensive-premium__col-foot-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .mi-defensive-premium__col-foot h3 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 500; white-space: nowrap; }
+/* 居中之后不再有「顶到行末」这件事：那套 `margin-left: auto` 会把整组推回右边。 */
+.mi-defensive-premium__col-foot .mi-defensive-premium__headline-tail { margin-left: 0; }
+/* 读数内部：数值↔单位 4；读数↔方向尾巴 8 = gap 4 + 分隔号自己的 4。
+   选择器带上前缀是有意的：基础那条 `.mi-defensive-premium__headline-tail { gap: 6px }` 写在后面，
+   同权重会被它赢回去（实测数值↔单位量到 6、分隔号前量到 10）。 */
+.mi-defensive-premium__col-foot .mi-defensive-premium__headline-tail--foot { gap: 4px; }
+.mi-defensive-premium__headline-tail--foot .mi-defensive-premium__foot-sep { margin-inline-start: 4px; }
 /* 中列那一行只有档位词，居中对齐两侧的格名。 */
 .mi-defensive-premium__col-foot--gauge { justify-content: center; }
 /* 图与同类状态块钉在**第 1 行**（固定 168）：上面直接就是头栏，读者一眼就是图。 */
