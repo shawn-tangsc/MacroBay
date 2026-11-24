@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { marketCalendarCodeTable } from './marketCalendarCodeTable'
 import { nameByMetricKey } from './marketCalendarCodeNames'
 import { macroCalendarReleaseValueMappings, metricKeySuffixFor }
   from './macroCalendarReleaseValueMappingPolicy'
@@ -34,5 +35,21 @@ describe('官方发布映射：码必须与单位/口径一致', () => {
       .filter((row) => nameByMetricKey[row.metricKey] === undefined)
       .map((row) => row.metricKey)
     expect(missing.sort()).toEqual([...officialCodesAwaitingName].sort())
+  })
+})
+
+/**
+ * 上面两条只证明「码有名字」「码尾与单位/口径相符」——拼得上的码未必真是一张存在的码。
+ * 这一列是**码本体**（事件键前缀是发布身份，码是指标身份，两套命名的段本来就不同，
+ * 只是六行碰巧拼得上）。写标准表时拿它当身份，指向一个不存在的码，就会造出一行没有码的行。
+ */
+describe('官方发布映射：码本体必须存在于标准码表', () => {
+  it('每行的 metricKey 都在 marketCalendarCodeTable 里', () => {
+    for (const mapping of macroCalendarReleaseValueMappings) {
+      expect(
+        marketCalendarCodeTable[mapping.metricKey],
+        `${mapping.event}：${mapping.metricKey} 不在标准码表里`
+      ).toBeDefined()
+    }
   })
 })
