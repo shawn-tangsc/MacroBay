@@ -266,8 +266,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, disabled: !anyReadable(['capital', 'stablecoin'], ['capital', 'etf']), now, reloadKey: capitalReloadKey, revision: dataRevision })
   // One macro read feeds two readers: the 市场状态 table inside the panel and the 来源状态 strip
   // below, so the strip cannot disagree with the figures it is describing.
-  // 美元格选了源就按选的那条读；没选过（缺键）与今天一样，走默认主源。
-  // 主格关掉、只开备用格时按备用格选的源读（两格同属美元这一行，见 `QUOTES_STATUS_ROW_CELLS`）。
+  // 美元格按「启用的那一格」选的源读：主格关掉就看备用格（两格同属美元这一行，见 `QUOTES_STATUS_ROW_CELLS`）；没选过走默认主源。
   const dollarSourceId = selectedDollarSourceId(cellState.selections, cellState.cells)
   const macroView = useMacroMarketSnapshot({
     client: macroMarketClient,
