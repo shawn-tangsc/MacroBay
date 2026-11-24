@@ -348,7 +348,14 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
   // `dashboardModalOpen` 是看板报上来的（设置 / 关键指标 / 政策详情），布局不猜。
   const agentSuppressed = timelineOpen || analysisSettingsOpen || openEntry !== undefined || eventDetail !== undefined
     || (compact && (analysisDrawerOpen || drawerDragging)) || dashboardModalOpen
-  return <div className="mi-analysis-dashboard-layout" data-compact={compact || undefined} onPointerDown={drawerDrag.onPointerDown} ref={setLayoutNode}>
+  return <div
+    className="mi-analysis-dashboard-layout"
+    data-compact={compact || undefined}
+    onPointerDown={drawerDrag.onPointerDown}
+    ref={setLayoutNode}
+    /* 拖动期间：禁止选中文字、`touch-action: pan-y`（纵向仍可滚，横向归抽屉），
+       也不让图的框选/双击吃到这一下。松手即撤，别把整页的手势都改掉。 */
+    style={drawerDragging ? { userSelect: 'none', touchAction: 'pan-y' } : undefined}>
     {/* 遮蔽整层用 `inert`：键盘 Tab 走不进去、点不动（遮罩只管指针与视觉，那是另一件事）。
         底部聊天框是全宽模态；左抽屉只有整幅档才是模态，并排档看板必须仍可读。 */}
     <div className="mi-analysis-dashboard-layout__panes"

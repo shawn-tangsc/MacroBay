@@ -502,6 +502,20 @@ describe('v4 拖动：起拖条、跟手与吸附', () => {
     expect(drawerEl(container).getAttribute('data-open')).toBe('false')
   })
 
+  it('拖动期间禁止选中文字、touch-action 是 pan-y，松手即撤', async () => {
+    stubStage(908)
+    const container = await mountNarrow(908)
+    const root = rootEl(container)
+    expect(root.style.userSelect).toBe('')
+    await press(container, 900, 400)
+    await moveTo(800, 400)
+    expect(root.style.userSelect).toBe('none')
+    expect(root.style.touchAction).toBe('pan-y')
+    await release()
+    expect(root.style.userSelect).toBe('')
+    expect(root.style.touchAction).toBe('')
+  })
+
   it('拖出后指针离开不收回：只有 X 与 Esc 能关', async () => {
     stubStage(908)
     const container = await mountNarrow(908)
