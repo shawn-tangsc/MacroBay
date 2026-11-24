@@ -71,18 +71,18 @@
    （apps/desktop-shell styles.css 的 `.ant-drawer-*`），这里是我们自己画的壳，得自己声明。 */
 .mi-analysis-drawer--overlay { position: fixed; z-index: var(--layer-modal-top); -webkit-app-region: no-drag; }
 .mi-agent-drawer[data-placement="right"] { inset: 0 0 0 auto; width: min(1280px, 94vw); border-right: 0; border-left: 1px solid var(--border); box-shadow: -12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); }
-.mi-agent-drawer__controls { display: flex; align-items: center; gap: 6px; flex: none; }
-.mi-agent-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
+.mi-analysis-drawer__controls { display: flex; align-items: center; gap: 6px; flex: none; }
+.mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
 .mi-analysis-conclusion-card__body { display: grid; gap: 6px; padding-left: 10px; border-left: 2px solid transparent; }
-.mi-agent-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
-.mi-agent-drawer__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.mi-agent-drawer__footer { display: flex; align-items: center; gap: 4px; padding: 6px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--font-meta); }
-.mi-agent-drawer__meta time { color: var(--muted); font-size: 10.5px; }
-.mi-agent-drawer__meta span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.mi-agent-drawer__body { min-height: 0; overflow: auto; padding: 16px; }
-.mi-agent-drawer__body .mi-analysis-timeline__state { display: flex; align-items: center; gap: 6px; }
+.mi-analysis-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
+.mi-analysis-drawer__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.mi-analysis-drawer__footer { display: flex; align-items: center; gap: 4px; padding: 6px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--font-meta); }
+.mi-analysis-drawer__meta time { color: var(--muted); font-size: 10.5px; }
+.mi-analysis-drawer__meta span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mi-analysis-drawer__body { min-height: 0; overflow: auto; padding: 16px; }
+.mi-analysis-drawer__body .mi-analysis-timeline__state { display: flex; align-items: center; gap: 6px; }
 @keyframes mi-analysis-drawer-in { from { transform: translateX(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .mi-agent-drawer { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .mi-analysis-drawer { animation: none; } }
 /* The column is a flex stack: the policy card sits above the split, which owns the rest. */
 .mi-analysis-agent-workspace { display: flex; flex-direction: column;
  min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); color: var(--text); }
