@@ -1338,11 +1338,22 @@ export type PlatformText = {
      * 数字与原因在值那一行拼接；`hint.*` 是 ⓘ 里的两句（逐通道一行 / 不支持图片的那句）。
      */
     detail: {
+      /** 详情是抽屉里的第二层视图：返回键的读屏名。 */
+      back: string
+      /** 通知中心每行那颗文字动作的可见字。 */
+      entry: string
+      /** 详情「送达」组的组名，以及组里「文字」那一行的行名；海报那行用下面的 `poster.label`。 */
+      group: string
+      text: string
       poster: {
         label: string
         state: { sent: string; unconfirmed: string; failed: string; noImage: string }
         counts: { all: (count: number) => string; partial: (failed: number, total: number) => string }
-        value: { withReason: (counts: string, reason: string) => string }
+        /**
+         * 计数与原因之间那个「·」：两段字号不同（数字弱化、原因是正文色），只能拆两个节点，
+         * 连接符就得是文案而不是 CSS——**可见标点也算文案**，零字面量。
+         */
+        value: { separator: string }
         reason: {
           timeout: string
           renderFailed: string
@@ -2791,6 +2802,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
        * 四态词不带参数（`StatusPill` 只收 `labelKey`），数字紧跟药丸之后用 `counts.*`。
        */
       detail: {
+        back: '返回',
+        entry: '详情',
+        group: '送达',
+        text: '文字',
         poster: {
           label: '海报',
           state: {
@@ -2804,7 +2819,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
             partial: (failed, total) => `${failed}/${total}`,
           },
           value: {
-            withReason: (counts, reason) => `${counts} · ${reason}`,
+            separator: ' · ',
           },
           reason: {
             timeout: '出图超时',
@@ -4244,6 +4259,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerUnknownHint: 'Bulk actions are unavailable for now: notifications cannot be read right now.',
       /** The poster row inside a notification detail (#46); the four state words carry no parameters. */
       detail: {
+        back: 'Back',
+        entry: 'Details',
+        group: 'Delivery',
+        text: 'Text',
         poster: {
           label: 'Poster',
           state: {
@@ -4257,7 +4276,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
             partial: (failed, total) => `${failed}/${total}`,
           },
           value: {
-            withReason: (counts, reason) => `${counts} · ${reason}`,
+            separator: ' · ',
           },
           reason: {
             timeout: 'render timed out',
