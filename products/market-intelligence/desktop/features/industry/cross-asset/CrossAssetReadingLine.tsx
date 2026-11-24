@@ -88,7 +88,17 @@ export function CrossAssetReadingLine({ reading, text }: { reading: CrossAssetRe
               : fill(copy.noDriverSeveral, { detail })
           })()}
         </p>}
-        {reading.refuted.length > 0 ? <p className="mi-cross-asset__reading-nearest" data-reading-nearest={reading.refuted[0]!.scenario}>
+        {/* One leg short: list what the legs we *do* have rule out. Every entry is disproven by a leg that
+            arrived, so it holds whatever the missing leg would have said (user, 2026-11-24: do not stop the
+            whole reading when only one leg is absent). */}
+        {reading.reason !== 'no-match' && reading.refuted.length > 0
+          ? <ul className="mi-cross-asset__reading-refuted" data-reading-ruled-out={reading.refuted.length}>
+            {reading.refuted.map(item => <li key={`${item.scenario}-${item.leg}`} data-reading-ruled-out={item.scenario}>
+              {fill(copy.ruledOut, { scenario: scenarioName(item.scenario), leg: legName(item.leg) })}
+            </li>)}
+          </ul>
+          : null}
+        {reading.reason === 'no-match' && reading.refuted.length > 0 ? <p className="mi-cross-asset__reading-nearest" data-reading-nearest={reading.refuted[0]!.scenario}>
           {fill(copy.nearestMiss, { scenario: scenarioName(reading.refuted[0]!.scenario), leg: legName(reading.refuted[0]!.leg) })}
         </p> : null}
       </>}

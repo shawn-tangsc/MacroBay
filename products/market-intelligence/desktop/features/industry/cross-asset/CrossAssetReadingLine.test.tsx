@@ -74,6 +74,9 @@ it('refuses outside 24h, and shows no correlation beside a window it does not be
 it('refuses with the leg named when a leg has no value, and when none fits', async () => {
   const missing = await host({ state: 'undetermined', reason: 'legs-missing', leg: 'gold', refuted: [] })
   expect(missing.querySelector('[data-reading-reason="legs-missing"]')?.textContent).toContain(text.reading.legs.gold)
+  // 缺腿那句不再写「数据不足，暂不判」：说缺哪条、判不出哪一档。
+  expect(missing.querySelector('[data-reading-reason="legs-missing"]')?.textContent)
+    .toBe(text.reading.undetermined['legs-missing'].replace('{leg}', text.reading.legs.gold))
   const stale = await host({ state: 'undetermined', reason: 'stale', leg: 'btc', refuted: [] })
   expect(stale.querySelector('[data-reading-reason="stale"]')?.textContent).toContain(text.reading.legs.btc)
   const noMatch = await host({ state: 'undetermined', reason: 'no-match', refuted: [{ scenario: 'risk-on', leg: 'dxy' }] })
@@ -83,6 +86,22 @@ it('refuses with the leg named when a leg has no value, and when none fits', asy
   expect(nearest).toContain(text.reading.scenarios['risk-on'])
   expect(nearest).toContain(text.reading.legs.dxy)
   expect(noMatch.querySelector('[data-reading-refuted]')).toBeNull()
+})
+
+it('with one leg missing, still says what the other legs rule out', async () => {
+  // 用户 2026-11-24 的截图：美元这一窗没有数据，纳指在涨 → 要求纳指走平的「加密独立」不成立。
+  const ruled = await host({
+    state: 'undetermined', reason: 'legs-missing', leg: 'dxy',
+    refuted: [{ scenario: 'crypto-specific', leg: 'index' }]
+  })
+  const items = [...ruled.querySelectorAll('li[data-reading-ruled-out]')]
+  expect(items).toHaveLength(1)
+  const sentence = items[0]?.textContent ?? ''
+  expect(sentence).toContain(text.reading.scenarios['crypto-specific'])
+  expect(sentence).toContain(text.reading.legs.index)
+  // 这是「能排除」，不是「最接近」：缺腿时不给最近的那一档，因为那一档根本没判。
+  expect(ruled.querySelector('[data-reading-nearest]')).toBeNull()
+  expect(ruled.querySelector('[data-reading-reason="legs-missing"]')).not.toBeNull()
 })
 
 it('describes what the legs actually did when no scenario fits, instead of only saying it cannot tell', async () => {

@@ -572,6 +572,8 @@ mi: miText['zh-CN'],
                 // 没有剧本匹配时：说清**最接近**的那个剧本，以及是哪条腿没走成——只点名字读起来像半句话，
                 // 甚至像自相矛盾（「看不出是哪一种」+「不像 X」）。
                 nearestMiss: '最接近的是 {scenario}，但 {leg}没走成',
+                // 缺腿时「按仅有的数据能排除什么」：每一条都是被读到的某条腿否掉的，与缺的那条无关。
+                ruledOut: '能排除 {scenario}（{leg}没走成）',
                 // 认不出组合时的兜底描述：不是"我不知道"，而是把四条腿说成人话，读者能拿上表逐格核对。
                 noDriverNone: '几条线都在自己的平常波动里，看不出有谁在推',
                 noDriverOne: '只有 {direction}，其余几条都在自己的平常波动里',
@@ -584,8 +586,9 @@ mi: miText['zh-CN'],
                 relative: 'BTC−纳指 {btcMinusIndex} · ETH−BTC {ethMinusBtc}',
                 undetermined: {
                   'window-not-judged': '这个窗口不做解读：相关性固定按 24 小时算，切回 24H',
-                  'legs-missing': '数据不足，暂不判：{leg}这条腿在该窗口没有数据',
-                  stale: '数据不足，暂不判：{leg}的数据已停止更新',
+                  // 缺腿时不再整条停住：说清缺哪条、判不出哪一档，能排除的另起一行列出来（用户 2026-11-24）。
+                  'legs-missing': '{leg}这一窗没有数据，判不出是哪一档',
+                  stale: '{leg}的数据已停止更新，判不出是哪一档',
                   'no-match': '看不出是哪一种：几条线没走出能被认出的组合'
                 },
                 notices: {
@@ -2226,6 +2229,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 verdict: 'Like: {scenario} · {story}',
                 refuted: 'Unlike {scenario} ({leg} {direction})',
                 nearestMiss: 'Closest was {scenario}, but {leg} did not move that way',
+                // What the legs we do have rule out, when one leg has no value.
+                ruledOut: 'Rules out {scenario} ({leg} did not move that way)',
                 noDriverNone: 'Every line is inside its own usual range — nothing is pushing',
                 noDriverOne: 'Only {direction}; the rest are inside their own usual range',
                 noDriverSeveral: 'Several lines are moving on their own ({detail}), but they do not form a scenario',
@@ -2236,8 +2241,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 relative: 'BTC−index {btcMinusIndex} · ETH−BTC {ethMinusBtc}',
                 undetermined: {
                   'window-not-judged': 'This window is not interpreted: the correlation is always the 24-hour one — switch back to 24H',
-                  'legs-missing': 'Not enough data to judge: {leg} has no value in this window',
-                  stale: 'Not enough data to judge: {leg} stopped updating',
+                  // A missing leg no longer stops the whole reading: name it, say the scenario cannot be
+                  // pinned, and list what the legs we do have rule out (user, 2026-11-24).
+                  'legs-missing': '{leg} has no value in this window, so the scenario cannot be pinned down',
+                  stale: '{leg} stopped updating, so the scenario cannot be pinned down',
                   'no-match': 'No recognisable combination: these lines do not fit any of the five scenarios'
                 },
                 notices: {
