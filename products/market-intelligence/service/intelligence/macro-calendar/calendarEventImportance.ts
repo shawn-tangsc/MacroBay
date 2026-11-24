@@ -198,6 +198,31 @@ export const calendarImportanceRows: readonly CalendarImportanceRow[] = Object.f
   { country: 'US', family: 'COINCIDENT_INDEX', tier: 'low', basis: 'PRD §10 单列：CB 同步 / 滞后指标：回头看，无时效性，低' },
   { country: 'US', family: 'CONFERENCE_BOARD_LAG_METRIC', tier: 'low', basis: 'PRD §10 单列：CB 同步 / 滞后指标：回头看，无时效性，低' },
   { country: 'US', family: 'WHOLESALE_INVENTORY', tier: 'low', basis: 'PRD §10 R3 跟已列族：PRD §2 低档已列「批发库存」的变体' },
+  // —— PRD §10.2（2026-11-24 产品第二批定档）：回填后仍缺档的 18 个美国码族 / 33 行 ——
+  // 中 4 族 / 低 14 族、无高。这一批**没有一族「不补」**：18 族在日历上都有真实行、也都判得出族。
+  // 「不补」只用于「这行根本不该进日历」（准入问题）；凡是判过的族一律进表，否则那行会显示
+  // 「还没定档」，而我们已经判过——那是假话。
+  { country: 'US', family: 'INFLATION_EXPECTATIONS', tier: 'medium', basis: 'PRD §10.2 单列：通胀预期：调查/合成类指标，走的是利率路径预期，与密歇根同类；不是一阶价格数据' },
+  { country: 'US', family: 'ISM_SERVICES_BUSINESS_ACTIVITY', tier: 'medium', basis: 'PRD §10.2 R1 子族跟父族：ISM 服务业分项（父族：ISM 服务，中）' },
+  { country: 'US', family: 'CHICAGO_PMI', tier: 'medium', basis: 'PRD §10.2 单列：区域 PMI：与 ISM / 地区联储制造业同一判据（景气、传导要两步）；月份内发布，不是次月数据' },
+  { country: 'US', family: 'RETAIL_SALES_CONTROL_GROUP', tier: 'medium', basis: 'PRD §10.2 R1 子族跟父族：零售销售的控制组，与零售销售同一份发布（父族：零售销售，中）' },
+  // 这两族与 PRD 已列的周度房贷族**不是同一份发布**，各占一行、不并进 `MBA_RATE_30Y`。
+  { country: 'US', family: 'MORTGAGE_RATE_15Y', tier: 'low', basis: 'PRD §10.2 R2 同类：周度房贷利率报价（不是数据发布、周度噪声，与加密无一阶传导）；与 MBA_RATE_30Y 不是同一族，不合并' },
+  { country: 'US', family: 'MORTGAGE_RATE_30Y', tier: 'low', basis: 'PRD §10.2 R2 同类：周度房贷利率报价（不是数据发布、周度噪声）；这是独立一份发布，不并进 MBA_RATE_30Y' },
+  { country: 'US', family: 'FACTORY_ORDERS_EX_TRANSPORT', tier: 'low', basis: 'PRD §10.2 R1 子族跟父族：与工厂订单同一份发布（父族：工厂订单，低）' },
+  { country: 'US', family: 'LOGISTICS_MANAGERS_INDEX', tier: 'low', basis: 'PRD §10.2 单列：物流经理指数：月度行业景气、传导链长，与加密无直接传导' },
+  { country: 'US', family: 'BUSINESS_INVENTORIES', tier: 'low', basis: 'PRD §10.2 R3 跟已列族：与批发库存同一类（库存），月度、单月噪声大' },
+  { country: 'US', family: 'CHICAGO_FED_NATIONAL_ACTIVITY', tier: 'low', basis: 'PRD §10.2 单列：CFNAI：由已公布分项合成的活动指数，回头看、无新增信息' },
+  { country: 'US', family: 'CORPORATE_PROFITS', tier: 'low', basis: 'PRD §10.2 单列：企业利润：季度、滞后、与加密定价无直接传导' },
+  { country: 'US', family: 'EXPORT_PRICES', tier: 'low', basis: 'PRD §10.2 单列：进出口价格：二阶通胀数据，低于 PPI 一档' },
+  // 滚动估算、不是发布：每周多次更新、没有固定发布时刻与新增信息量 → 低。
+  // **不是「不补」**——它在日历上有真实行，不补会让那行显示「还没定档」。
+  { country: 'US', family: 'GDP_NOWCAST', tier: 'low', basis: 'PRD §10.2 估算不是发布：对当季 GDP 的滚动估算，每周多次更新、无固定发布时刻与新增信息量' },
+  { country: 'US', family: 'LEI', tier: 'low', basis: 'PRD §10.2 单列：领先指标：由已公布分项合成的指数，没有新信息，只是把别人说过的再汇总一次' },
+  { country: 'US', family: 'LEI_EMPLOYMENT_TRENDS', tier: 'low', basis: 'PRD §10.2 R1 子族跟父族：LEI 的分项（父族：LEI，低）' },
+  { country: 'US', family: 'NAHB_HOUSING_MARKET', tier: 'low', basis: 'PRD §10.2 R3 房产：房产景气调查：行业面、单月噪声，与加密无直接传导' },
+  { country: 'US', family: 'NEW_HOME_SALES', tier: 'low', basis: 'PRD §10.2 R3 房产：房产销量，与已列低档的房产销量同一类' },
+  { country: 'US', family: 'PENDING_HOME_SALES', tier: 'low', basis: 'PRD §10.2 R3 房产：房产销量，同上' },
 ])
 
 /**

@@ -337,3 +337,48 @@ describe('PRD §10：69 族逐族定档', () => {
     }
   })
 })
+
+describe('PRD §10.2：回填后仍缺档的 18 族逐族定档（中 4 / 低 14 / 无高）', () => {
+  it.each([
+    ['CHICAGO_PMI', 'medium'],
+    ['INFLATION_EXPECTATIONS', 'medium'],
+    ['ISM_SERVICES_BUSINESS_ACTIVITY', 'medium'],
+    ['RETAIL_SALES_CONTROL_GROUP', 'medium'],
+    ['FACTORY_ORDERS_EX_TRANSPORT', 'low'],
+    ['LEI_EMPLOYMENT_TRENDS', 'low'],
+    ['NEW_HOME_SALES', 'low'],
+    ['PENDING_HOME_SALES', 'low'],
+    ['NAHB_HOUSING_MARKET', 'low'],
+    ['MORTGAGE_RATE_15Y', 'low'],
+    ['MORTGAGE_RATE_30Y', 'low'],
+    ['CHICAGO_FED_NATIONAL_ACTIVITY', 'low'],
+    ['LEI', 'low'],
+    ['BUSINESS_INVENTORIES', 'low'],
+    ['CORPORATE_PROFITS', 'low'],
+    ['EXPORT_PRICES', 'low'],
+    ['LOGISTICS_MANAGERS_INDEX', 'low'],
+    ['GDP_NOWCAST', 'low'],
+  ] as const)('US.%s → %s', (family, tier) => {
+    expect(gradeCalendarEvent({ countryCode: 'US', metricKey: `US.${family}.SA.LEVEL` })?.tier).toBe(tier)
+  })
+
+  it('这一批没有一个是高：18 族逐族断言，避免「顺手给高」', () => {
+    for (const family of ['CHICAGO_PMI', 'INFLATION_EXPECTATIONS', 'ISM_SERVICES_BUSINESS_ACTIVITY',
+      'RETAIL_SALES_CONTROL_GROUP', 'FACTORY_ORDERS_EX_TRANSPORT', 'LEI_EMPLOYMENT_TRENDS', 'NEW_HOME_SALES',
+      'PENDING_HOME_SALES', 'NAHB_HOUSING_MARKET', 'MORTGAGE_RATE_15Y', 'MORTGAGE_RATE_30Y',
+      'CHICAGO_FED_NATIONAL_ACTIVITY', 'LEI', 'BUSINESS_INVENTORIES', 'CORPORATE_PROFITS', 'EXPORT_PRICES',
+      'LOGISTICS_MANAGERS_INDEX', 'GDP_NOWCAST']) {
+      expect(gradeCalendarEvent({ countryCode: 'US', metricKey: `US.${family}.SA.LEVEL` })?.tier).not.toBe('high')
+    }
+  })
+
+  it('两族与 PRD 已列族不合并：15Y/30Y 各自一行，NEW_HOME_SALES 不并进 NEW_HOME_SALES_ANNUALIZED', () => {
+    for (const family of ['MORTGAGE_RATE_15Y', 'MORTGAGE_RATE_30Y', 'NEW_HOME_SALES']) {
+      expect(gradeCalendarEvent({ countryCode: 'US', metricKey: `US.${family}.NONE.RATE` })?.family).toBe(family)
+    }
+  })
+
+  it('GDP_NOWCAST 是低而不是未分级：判过的族一律进表，不吃「不补」', () => {
+    expect(gradeCalendarEvent({ countryCode: 'US', metricKey: 'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ' })?.tier).toBe('low')
+  })
+})
