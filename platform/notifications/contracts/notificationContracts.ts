@@ -167,6 +167,13 @@ export const NOTIFICATION_ACTION_KINDS = [
   'open-external',
   'acknowledge',
   'dismiss',
+  /**
+   * **未接、别上界面**（2026-11-24 用户裁决：这一版不做）。主进程能力是完整的：
+   * IPC `platform:notifications-snooze`、运行时 `snooze(id, until)`、存储状态 `snoozed` +
+   * `snoozedUntil` 都在，`defaultSnoozeMinutes` 也有值；但**渲染层 0 调用、界面上 0 入口**。
+   * 将来要接，先要有读者能点的「稍后提醒」按钮与默认时长——那是一个新功能，不是补一个控件；
+   * 不许在没接按钮的情况下把 `snooze` 摆到通知中心的动作位上（会变成点了没反应的假控件）。
+   */
   'snooze',
   'custom'
 ] as const
@@ -385,6 +392,7 @@ export type NotificationRuntimeSettings = {
    * 必须同时给出真的清理任务，否则这个值永远只是数字。不许在没接清理的情况下把它摆到界面上。
    */
   retentionDays: number
+  /** 未接、别上界面：同 `snooze` 动作（见 `NOTIFICATION_ACTION_KINDS` 的注记）。 */
   defaultSnoozeMinutes: number
   quietHours?: {
     enabled: boolean
