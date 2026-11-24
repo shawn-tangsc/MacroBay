@@ -350,7 +350,7 @@ describe('crypto intelligence dashboard', () => {
     // 图高与列宽各只有一处定义：这里、以及 ChartFrame 的 init 高度，两处必须相等。
     expect(cardRule).toContain(`--mi-defensive-premium-chart-height: ${CHART_HEIGHT}px`)
     expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 240px')
-    expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
+    expect(cardRule).toContain('--mi-defensive-premium-column-gap: 8px')
     expect(cardRule).toContain('grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr)')
     // 一列三道（用户 2026-11-23 删掉卡头与格名行之后）：图 168 / 说明 auto / 列尾留白 1fr。
     // 格名那一行上到头栏了，所以列里第一行就是图。把间距写成子元素外边距会溢出固定行、
@@ -376,10 +376,10 @@ describe('crypto intelligence dashboard', () => {
     expect(bucketRule).toContain('font-weight: 650')
     expect(cssBlock(styles, '.mi-defensive-premium__topbar-mid {'))
       .toContain('justify-content: center')
-    // 卡的行间收成 0 之后，结论句与图之间那 12 落在它自己的外边距上。`.mi-crypto-dashboard p { margin: 0 }`
-    // 权重更高，选择器不带 `>` 会被清成 0（探针里量到结论句紧贴图底 192）。所以连选择器一起断。
+    // 卡的行间收成 0 之后，结论句与图之间那 8（界面 2026-11-24 从 12 收到 8）落在它自己的外边距上。
+    // `.mi-crypto-dashboard p { margin: 0 }` 权重更高，选择器不带 `>` 会被清成 0（探针里量到结论句紧贴图底 192）。
     expect(cssBlock(styles, '.mi-defensive-premium > .mi-defensive-premium__verdict {'))
-      .toContain('margin: 12px 0 0')
+      .toContain('margin: 8px 0 0')
   })
 
   it('fails closed instead of crashing when a legacy funding client has no history query', async () => {
@@ -643,8 +643,8 @@ describe('crypto intelligence dashboard', () => {
     // 整行卡自己三列并排：仪表盘 112 + 两个 1fr（定稿 §4.2），结论跨全宽。
     expect(cssBlock(styles, '.mi-defensive-premium {'))
       .toContain('grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr)')
-    // 列间距 12：(1040 − 112 − 2×12) / 2 = 452，两格正好是定稿的曲线宽。
-    expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('column-gap: 12px')
+    // 列间距 8（界面 2026-11-24 从 12 收到 8）：1040 下两格 392，1326 下 535。
+    expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('column-gap: var(--mi-defensive-premium-column-gap)')
     expect(sourceRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
     expect(sourceRowRule).toContain('display: flex')
     expect(sourceRowRule).not.toContain('grid-template-columns')
@@ -1534,7 +1534,7 @@ describe('the defensive premium band', () => {
     const cardRule = cssBlock(styles, '.mi-defensive-premium {')
     expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 240px')
     expect(cardRule).toContain('--mi-defensive-premium-chart-height: 168px')
-    expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
+    expect(cardRule).toContain('--mi-defensive-premium-column-gap: 8px')
     // 标题行的动作与文字按钮同档（24）：图标按钮用 md，换态时不跳 2px。
     expect(band.querySelector('.mi-defensive-premium__refresh')?.className).toContain('icon-button--md')
     // 两条曲线各是一个 ECharts 容器，高度走同一个变量；图是 SVG renderer 画出来的。
@@ -1549,12 +1549,12 @@ describe('the defensive premium band', () => {
   it('sizes every canvas from its own column, never by borrowing another column', async () => {
     // 真机事故（用户 2026-11-22）：真实布局还没量到时仪表按曲线的 416 出了一张图，弧横着压到中列。
     // 判据：没有布局（happy-dom 的 clientWidth = 0）时，每张图用**本列**名义宽兜底——
-    // 仪表 240（1040 下中列）、两侧走势各 388；416 不是任何一列的真实宽度，谁都不许再用。
+    // 仪表 240（1040 下中列）、两侧走势各 392（列间距 8 之后两格 392）；416 不是任何一列的真实宽度。
     const container = await renderBand(skewClient({ kind: 'steeper' }))
     const width = (selector: string) => container.querySelector(selector)?.getAttribute('width')
     expect(width('[data-sentiment-gauge] svg')).toBe('240')
-    expect(width('[data-half="fear-greed"] [data-chart="fear-greed"] svg')).toBe('388')
-    expect(width('[data-half="skew"] [data-chart="skew"] svg')).toBe('388')
+    expect(width('[data-half="fear-greed"] [data-chart="fear-greed"] svg')).toBe('392')
+    expect(width('[data-half="skew"] [data-chart="skew"] svg')).toBe('392')
     expect(container.querySelectorAll('svg[width="416"]')).toHaveLength(0)
   })
 
@@ -1854,14 +1854,18 @@ describe('the defensive premium band', () => {
     })
     // 上留白 34 → 12（2026-11-22 重排：量程挪进行名，图里不再有那行字）；
     // 下留白 26 → 24，与偏斜那张一致：两张图的日期行才在同一条线上（Chief 2026-11-23 量到差 4px）。
-    expect(option.grid).toMatchObject({ left: 32, top: 12, bottom: 24 })
-    // 判据是「两张图的绘图区左右下三边同一套」：任一边被单独改掉，两个日期行就错开。
+    // 右留白 28 → 16（界面 2026-11-24）：这张图右边没有刻度，只剩末位日期居中要约 15，28 那一截是白留的。
+    expect(option.grid).toMatchObject({ left: 32, right: 16, top: 12, bottom: 24 })
+    // 两张图的右留白**不再同一套**：偏斜那张左边要留 32 给 `10.4` 这种四字符标签、右边仍是 28。
+    // 同线判据只剩「左 + 下」——日期行对齐靠 bottom，左右两边的刻度需求本来就不同。
     const skewGrid = skewChartOption({ points: skewPoints(30), palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
       .grid as { left: number; right: number; bottom: number }
     expect(skewGrid).toMatchObject({ left: 32, right: 28, bottom: 24 })
     expect(skewGrid.bottom).toBe((option.grid as { bottom: number }).bottom)
     expect(skewGrid.left).toBe((option.grid as { left: number }).left)
-    expect(skewGrid.right).toBe((option.grid as { right: number }).right)
+    // 净绘图宽（1040 下每格 392）：左 392 − 32 − 16 = 344、右 392 − 32 − 28 = 332，与界面定稿同一组数。
+    expect(392 - 32 - (option.grid as { right: number }).right).toBe(344)
+    expect(392 - skewGrid.left - skewGrid.right).toBe(332)
     // 横轴跟着数据走（不是钉住 30 天的窗口）：5 个读数就只印 5 个刻度，首日就是数据最早那天。
     const axis = (option.xAxis as { data: string[]; axisLabel: { interval: (index: number) => boolean } }).data
     expect(axis).toHaveLength(5)

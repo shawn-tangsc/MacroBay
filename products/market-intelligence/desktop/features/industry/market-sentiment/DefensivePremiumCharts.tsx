@@ -43,7 +43,7 @@ export const GAUGE_CHART_HEIGHT = CHART_HEIGHT
  * 走势格的兜底宽：1040 内容宽下两格各 388。
  * **416 不是任何一列的真实宽度**——它就是那次「仪表按 416 画、弧压到中列」的来源（用户 2026-11-22）。
  */
-const CHART_FALLBACK_WIDTH = 388
+const CHART_FALLBACK_WIDTH = 392
 
 /**
  * 仪表的兜底宽：它是**中间一列 240 的格子**（940–995 那档退回 184），绝不能借曲线那 388/416。

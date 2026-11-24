@@ -55,7 +55,9 @@ const SKEW_GRID = { left: 32, right: 28, top: 12, bottom: 24, containLabel: true
  * `containLabel`（会警告并要求改用 outerBounds），所以只能显式留出刻度与日期的落脚处——
  * 三个字符的 `100` 加 8 的间距约 32。左列自己也限宽 176，两头一起保证不越界。
  */
-const FEAR_GREED_GRID = { left: 32, right: 28, top: 12, bottom: 24, containLabel: true } as const
+// 右留白 16（界面 2026-11-24）：这张图右边没有刻度、只剩末位日期居中要约 15，28 那一截是白留的。
+// 右图（偏斜）的 32 不动——`10.4` 这种四字符标签加 8 间距就是 32，再收会裁字。
+const FEAR_GREED_GRID = { left: 32, right: 16, top: 12, bottom: 24, containLabel: true } as const
 
 function axisLabelFormatter(day: string): string {
   // 源日就是 `YYYY-MM-DD`：只印月-日，不换算时区、不带钟点。
