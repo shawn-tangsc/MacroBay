@@ -35,6 +35,9 @@ export const calendarStartupNormalizationPolicy = Object.freeze({
   mergeAuditTable: 'mi_calendar_events__merge_audit_v1'
 })
 
+/** 报告里「被改名成 unknown 的原期次」最多列几条：多到看不出形状时就该去查代码，不是查日志。 */
+const renamedFromSampleLimit = 10
+
 export type CalendarNormalizationReport = Readonly<{
   scanned: number
   valueStateToPresent: number
@@ -46,6 +49,23 @@ export type CalendarNormalizationReport = Readonly<{
   unresolvedPeriods: number
   /** 因「跨源值冲突」而**故意不并**的组数（同源两行仍按老规则合并）。 */
   conflictGroupsKept: number
+  /**
+   * 被改名成 `unknown:<源内发布 id>` 的行数，以及它们**原来的 `period_key`**（distinct、前几条）。
+   *
+   * 为什么记原值：改名是对的（那不是期次），但**漏认一种期次形状**也表现成「解析 N 条」。
+   * 只记数量，日志里看不出是谁被改名了，下次还得翻库。
+   */
+  renamedToUnknown: number
+  renamedFromPeriods: readonly string[]
+  renamedFromDistinct: number
+  /**
+   * 改名撞上「目标行已存在」的次数：不再抛 UNIQUE，而是把值并进那一行、删本条。
+   *
+   * 撞车在今天的数据上还没出现，但旧写法是裸 `update`、主键含 `period_key`，一撞就抛——
+   * 而整段规范化在一个 `try/catch` 里只记一行「失败（已忽略）」，于是**这一轮清理整段不跑**，
+   * 日志还像「没事可做」。计数是为了它发生时能看见。
+   */
+  renameCollisions: number
 }>
 
 type Row = Record<string, unknown>
@@ -98,6 +118,10 @@ export function normalizeCalendarStandardRows(
     scanned: 0, valueStateToPresent: 0, valueStateToMissing: 0, statusPromoted: 0,
     periodsResolved: 0, mergedRows: 0, droppedRows: 0, unresolvedPeriods: 0, conflictGroupsKept: 0
   }
+  let renamedToUnknown = 0
+  let renameCollisions = 0
+  // distinct：同一个假期次（例如一批 `SECOND`）只记一条，日志才读得懂。
+  const renamedFrom = new Set<string>()
   const byCode = new Map<string, Array<{ id: string; entry: Record<string, unknown> }>>()
   for (const [id, entry] of Object.entries(zeroXRouterIndicatorIdentities)) {
     const list = byCode.get(entry.metricKey) ?? []
@@ -235,9 +259,34 @@ export function normalizeCalendarStandardRows(
         const current = String(row.period_key)
         const currentKey = keyOf(row)
         if (!current.startsWith('unknown:')) {
-          rename.run(`unknown:${String(row.source_event_id)}`, Number(row.rowId))
-          index.delete(currentKey)
-          index.set(keyOf({ ...row, period_key: `unknown:${String(row.source_event_id)}` }), Number(row.rowId))
+          const target = { ...row, period_key: `unknown:${String(row.source_event_id)}` }
+          const occupiedUnknown = index.get(keyOf(target))
+          if (occupiedUnknown === undefined) {
+            rename.run(String(target.period_key), Number(row.rowId))
+            index.delete(currentKey)
+            index.set(keyOf(target), Number(row.rowId))
+            renamedToUnknown += 1
+          } else {
+            /**
+             * **目标行已存在 → 并进去，不抛**（架构师 2026-11-24 复核）：裸 `update` 撞主键会抛
+             * UNIQUE，而整段规范化在一个 `try/catch` 里，抛了就是这一轮清理整段停摆。
+             * 与正常期次撞车（下面那段）同一个动作：补缺字段 → 归档 → 删本条。不许删保留方、
+             * 不许改来源（这里是同一发布的两条重复观测，来源留谁的都行）。
+             */
+            const keptUnknown = readRow.get(occupiedUnknown) as Row
+            const mergedUnknown = mergeMissingFields(keptUnknown.values_json, row.values_json)
+            if (mergedUnknown.changed) {
+              database.prepare(`update ${table} set values_json = ?, value_state = ? where rowid = ?`)
+                .run(mergedUnknown.valuesJson, hasActualValue(mergedUnknown.valuesJson) ? 'present' : 'missing',
+                  occupiedUnknown)
+              report.mergedRows += 1
+            }
+            archiveAndDelete(Number(row.rowId), target, keyOf(keptUnknown), 'unknown-rename-collision')
+            index.delete(currentKey)
+            renameCollisions += 1
+          }
+          // 原值进报告：将来漏认一种形状时，能看出**是谁被改名了**（distinct，前几条就够）。
+          renamedFrom.add(current)
         }
         report.unresolvedPeriods += 1
         continue
@@ -326,7 +375,8 @@ export function normalizeCalendarStandardRows(
     }
 
     database.exec('commit')
-    return report
+    return { ...report, renamedToUnknown, renamedFromDistinct: renamedFrom.size,
+      renamedFromPeriods: [...renamedFrom].slice(0, renamedFromSampleLimit), renameCollisions }
   } catch (error) {
     database.exec('rollback')
     throw error

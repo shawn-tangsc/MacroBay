@@ -74,6 +74,8 @@ export function dualWriteMeasureRows(
       seriesId?: string
       /** 源给的重要性；没有就不写（读侧显示「未分级」）。 */
       importance?: 'high' | 'medium' | 'low'
+      /** 行已存在时保留来源两列（回放补值专用，见 `CalendarStandardRow.preserveProvenance`）。 */
+      preserveProvenance?: boolean
       /** 源内发布 id：判别「同一发布改排期」与「同期第二次真实发布」（架构师 2026-11-21 批 (b)）。 */
       sourceReleaseId?: string
       status?: CalendarReleaseStatus
@@ -194,6 +196,7 @@ export function dualWriteMeasureRows(
         ...(row.seriesId === undefined ? {} : { seriesId: row.seriesId }),
         ...(row.numericJson === undefined ? {} : { numericJson: row.numericJson }),
         ...(row.importance === undefined ? {} : { importance: row.importance }),
+        ...(row.preserveProvenance === undefined ? {} : { preserveProvenance: row.preserveProvenance }),
         /**
          * **只有拿到这一期的实际值才算「有值」**（用户 2026-11-19 定，Chief 复核）：
          * 只有 `previous` 或 `consensus` 一律 `missing`。

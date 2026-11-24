@@ -31,6 +31,7 @@ type Seed = Readonly<{
   eventType?: string
   identityKind?: 'code' | 'source'
   providerId?: string
+  sourceEventId?: string
 }>
 
 let seq = 0
@@ -43,8 +44,8 @@ function seed(database: DatabaseSync, over: Seed): void {
     values (?, ?, ?, ?, ?, 'date', ?, ?, ?, ?, ?, ?, 'v1', ?, ?, ?, 1)`)
     .run(over.countryCode ?? 'US', over.metricKey, over.periodKey, over.firstScheduledDate,
       over.firstScheduledDate, over.status ?? 'published', over.identityKind ?? 'code',
-      over.valueState ?? 'missing', over.valuesJson ?? '{}', over.providerId ?? 'test', `x-${seq}`, now, now,
-      over.eventType ?? null)
+      over.valueState ?? 'missing', over.valuesJson ?? '{}', over.providerId ?? 'test',
+      over.sourceEventId ?? `x-${seq}`, now, now, over.eventType ?? null)
 }
 
 const run = (database: DatabaseSync) => normalizeCalendarStandardRows(database, { nowIso })
@@ -232,5 +233,77 @@ describe('#53 解析之后当场再跑一遍桶一（不动原顺序）', () => 
     const kept = rows(database)
     expect(kept).toHaveLength(1)
     expect(kept[0]!.period_key).toBe('2026-10-28')
+  })
+})
+
+/**
+ * **改名撞车不许让整段规范化停摆**（架构师 2026-11-24 复核）。
+ *
+ * 第 2 步把「本来不是期次」的 `period_key` 改成 `unknown:<源内发布 id>` 是**裸 update**，而主键
+ * 含 `period_key`。同桶里若已有一行正好叫这个 key，就会抛 UNIQUE——而整段规范化在一个
+ * `try/catch` 里，catch 只留一行「启动规范化失败（已忽略）」，于是**这一轮清理整段不跑**，
+ * 日志看起来还像「没事可做」。今天库里的数据没撞上，但这是静默停摆的口子。
+ *
+ * 修法：撞上就是「目标行已存在」——把值并进那一行、删本条（与正常期次撞车同一个动作），
+ * 计数上报告。**不新造合并逻辑、不动来源、不删保留方**。
+ */
+describe('改名 unknown 撞上已有同名行：并进去，不抛', () => {
+  it('两行 `SECOND` + `unknown:<同一个 id>`：桶一先接手合掉，最终 1 行', () => {
+    const database = setup()
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: 'SECOND',
+      firstScheduledDate: '2026-11-25', sourceEventId: 'US.GDP.2026-Q3.SECOND',
+      providerId: 'macro-calendar-bea' })
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: 'unknown:US.GDP.2026-Q3.SECOND',
+      firstScheduledDate: '2026-11-25', sourceEventId: 'US.GDP.2026-Q3.SECOND',
+      providerId: 'macro-calendar-official-replay', valuesJson: '{"actual":"3.2%"}' })
+    const report = run(database)
+    const kept = rows(database)
+    expect(kept).toHaveLength(1)
+    expect(kept[0]!.period_key).toBe('unknown:US.GDP.2026-Q3.SECOND')
+    // 被删那条的值并进保留行；保留行自己没有值，不存在覆盖。
+    expect(JSON.parse(String(kept[0]!.values_json))).toEqual({ actual: '3.2%' })
+    expect(kept[0]!.value_state).toBe('present')
+    // 这一形态在桶一就被合掉，走不到改名那一步。
+    expect(report.renameCollisions).toBe(0)
+  })
+
+  it('真会撞的形态：正常期次 + `SECOND` + 同名 `unknown:` 三行 → 不抛、最终 1 行、撞车计数 1', () => {
+    const database = setup()
+    // 桶一不接手（同桶有两条「不像 unknown」的行，`normals.length !== 1`），于是改名那一步才撞上。
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: '2026-Q3',
+      firstScheduledDate: '2026-11-25', sourceEventId: 'US.GDP.2026-Q3.SECOND',
+      providerId: 'macro-calendar-bea' })
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: 'SECOND',
+      firstScheduledDate: '2026-11-25', sourceEventId: 'US.GDP.2026-Q3.SECOND',
+      providerId: 'macro-calendar-official-replay' })
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: 'unknown:US.GDP.2026-Q3.SECOND',
+      firstScheduledDate: '2026-11-25', sourceEventId: 'US.GDP.2026-Q3.SECOND',
+      providerId: 'macro-calendar-official-replay', valuesJson: '{"actual":"3.2%"}' })
+    // 改前这里抛 `UNIQUE constraint failed`，整段回滚（`SECOND` 那行还在）。
+    const report = run(database)
+    const kept = rows(database)
+    expect(kept).toHaveLength(1)
+    expect(kept[0]!.period_key).toBe('2026-Q3')
+    expect(JSON.parse(String(kept[0]!.values_json))).toEqual({ actual: '3.2%' })
+    expect(kept[0]!.value_state).toBe('present')
+    expect(report.renameCollisions).toBe(1)
+    // 幂等：第二遍不再撞、也不再删。
+    expect(run(database)).toMatchObject({ renameCollisions: 0, droppedRows: 0, periodsResolved: 0 })
+    expect(rows(database)).toHaveLength(1)
+  })
+
+  it('改名成功时把原 period_key 记进报告（distinct，前几条）', () => {
+    const database = setup()
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: 'SECOND',
+      firstScheduledDate: '2026-11-25', sourceEventId: 'US.GDP.2026-Q3.SECOND' })
+    seed(database, { metricKey: 'US.OTHER.NONE.LEVEL', periodKey: 'ADVANCE',
+      firstScheduledDate: '2026-11-20', sourceEventId: 'US.OTHER.2026-Q3.ADVANCE' })
+    const report = run(database)
+    expect(report.renamedToUnknown).toBe(2)
+    // 将来漏认一种形状时，日志里能看出**是谁被改名了**，而不是只显示「解析 N 条」。
+    expect([...report.renamedFromPeriods].sort()).toEqual(['ADVANCE', 'SECOND'])
+    expect(rows(database).map((row) => row.period_key).sort()).toEqual([
+      'unknown:US.GDP.2026-Q3.SECOND', 'unknown:US.OTHER.2026-Q3.ADVANCE'
+    ])
   })
 })

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ensureCalendarStandardTables } from './marketCalendarStandardTable'
 import { measureMonthlyDiff, replayOfficialHistoryIntoStandardTable } from './marketCalendarOfficialHistoryReplay'
+import { normalizeCalendarStandardRows } from './marketCalendarStartupNormalization'
 
 /** 一张最小的修订表副本：两族指标 + 一场 FOMC，日期跨 2021 与 2026。 */
 function revisionsDatabase(): DatabaseSync {
@@ -210,5 +211,78 @@ describe('回放把源自报的数值带进数值列（N2）', () => {
       .get() as { numeric_json: string }
     expect(JSON.parse(row.numeric_json)).toMatchObject({ state: 'unparsed' })
     expect(JSON.parse(row.numeric_json).values).toBeUndefined()
+  })
+})
+
+/**
+ * **「只补缺口」的判据是「写对了没有」，不是「写过没有」**（架构师 2026-11-24 复核）。
+ *
+ * 旧判据只看 `source_event_id` 在不在表里，于是两种行永远补不上：
+ * - 行在、期次对、**没有值**，修订后来带了 actual → 跳过，读者永远看到「未提供」；
+ * - 行在、**期次是 `SECOND`**（回放写坏的），修订的期次是 `2026-Q3` → 跳过，两行并存。
+ *
+ * 不满足判据也不能裸写：upsert 的 `do update` 会把 BEA/BLS 那行的 `source_provider_id` 换成
+ * 回放自己（等于把「这条是谁说的」改掉）。所以写入口加 `preserveProvenance`，只在「行已存在」
+ * 时保留来源两列，**只有回放传**。
+ */
+describe('#52 回放按「期次对 + 该有值」判缺口，且不顶掉来源', () => {
+  /** 真库形状的 BEA 行：GDP 初值那条（官方同步写的，`source_event_id` 是回放同一条发布）。 */
+  function insertGdpRow(database: DatabaseSync, over: Readonly<{
+    periodKey: string; valuesJson: string; providerId: string }>): void {
+    database.prepare(`insert into mi_calendar_events
+      (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, time_precision, status,
+       identity_kind, value_state, values_json, source_provider_id, source_event_id, parser_version,
+       observed_at, first_seen_at, release_count)
+      values ('US','US.GDP.SA.ANNUALIZED_QOQ',?,'2026-11-25','2026-11-25','minute','scheduled',
+        'code',? ,? ,? ,'US.GDP.2026-Q3.SECOND','v1',
+        '2026-11-24T00:00:00.000Z','2026-11-24T00:00:00.000Z',1)`)
+      .run(over.periodKey, over.valuesJson === '{}' ? 'missing' : 'present', over.valuesJson, over.providerId)
+  }
+
+  /** 修订表里那条同一发布：`event_key` 末段是二读序号，期次靠前面的 `2026-Q3`。 */
+  function insertGdpRevision(database: DatabaseSync): void {
+    database.prepare(`insert into mi_macro_calendar_revisions
+      (revision_id, event_key, release_group_key, event_family, event_name_key, country_code, importance, period_key,
+       lifecycle_state, revision_kind, scheduled_date, scheduled_at, published_at, detected_at, detected_at_ms,
+       recorded_at, actual_json, previous_json, consensus_json, provider_id, descriptor_id, source_url, raw_record_id,
+       evidence_hash, evidence_refs_json, snapshot_hash, replaces_revision_id, parser_version, caveats_json, schema_version)
+      values ('r9','US.GDP.2026-Q3.SECOND','US.BEA.GDP.2026-Q3.SECOND','gdp','gdp','US','high','2026-Q3',
+        'released','official-release','2026-11-25','2026-11-25T13:30:00.000Z',null,'2026-11-25T13:31:00.000Z',
+        1764077460000,'2026-11-25T13:31:00.000Z',?,null,null,'macro-calendar-bea','d','https://x',null,
+        'h9','[]','s9',null,'v1','[]',1)`).run(JSON.stringify({ displayValue: '3.2' }))
+  }
+
+  it('① 行在、期次对、无值：修订带 actual → 补值，来源仍是 BEA', () => {
+    const database = revisionsDatabase()
+    ensureCalendarStandardTables(database)
+    insertGdpRow(database, { periodKey: '2026-Q3', valuesJson: '{}', providerId: 'macro-calendar-bea' })
+    insertGdpRevision(database)
+    replayOfficialHistoryIntoStandardTable(database)
+    // 改前：`id 在就跳过`，这条永远写不进去。
+    const row = database.prepare(`select values_json, source_provider_id from mi_calendar_events
+      where metric_key = 'US.GDP.SA.ANNUALIZED_QOQ'`).get() as { values_json: string; source_provider_id: string }
+    expect(JSON.parse(row.values_json)).toEqual({ actual: '3.2' })
+    // 来源没被顶掉：回放写的是同一条 BEA 发布。
+    expect(row.source_provider_id).toBe('macro-calendar-bea')
+  })
+
+  it('② 行在、期次是 SECOND：修订期次 2026-Q3 → 规范化后 1 行、期次对、来源仍是 BEA', () => {
+    const database = revisionsDatabase()
+    ensureCalendarStandardTables(database)
+    // 真库那两行：BEA 的 `2026-Q3`（没有值）+ 旧回放写坏的 `SECOND`（同一 source_event_id）。
+    insertGdpRow(database, { periodKey: '2026-Q3', valuesJson: '{}', providerId: 'macro-calendar-bea' })
+    insertGdpRow(database, { periodKey: 'SECOND', valuesJson: '{}', providerId: 'macro-calendar-official-replay' })
+    insertGdpRevision(database)
+    replayOfficialHistoryIntoStandardTable(database)
+    // 期次不等 → 不跳过；写到 `2026-Q3` 那一行上（同一主键），保留来源。
+    // **顺序钉住：回放先、规范化后**——这套修法成立的前提。写坏的那行由规范化收尾。
+    normalizeCalendarStandardRows(database, { nowIso: '2026-11-24T00:00:00.000Z' })
+    const rows = database.prepare(`select period_key, values_json, source_provider_id from mi_calendar_events
+      where metric_key = 'US.GDP.SA.ANNUALIZED_QOQ'`).all() as
+      { period_key: string; values_json: string; source_provider_id: string }[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.period_key).toBe('2026-Q3')
+    expect(rows[0]!.source_provider_id).toBe('macro-calendar-bea')
+    expect(JSON.parse(rows[0]!.values_json)).toEqual({ actual: '3.2' })
   })
 })

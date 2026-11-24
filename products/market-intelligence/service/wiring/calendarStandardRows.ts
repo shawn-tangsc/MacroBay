@@ -123,6 +123,13 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
         report(`[macro-calendar] 过期发布状态对账：扫描 ${reconciled.scanned} 行、改写 ${reconciled.updated} 行`
           + `、方向 ${JSON.stringify(delta)}、现状 ${JSON.stringify(reconciled.after)}`)
       }
+      /**
+       * **顺序钉住：官方历史回放必须早于启动规范化**（架构师 2026-11-24 复核）。
+       *
+       * 回放现在会补两类缺口（值缺、期次写坏），补的时候带 `preserveProvenance` 只更新值、不改来源；
+       * 被旧回放写坏的期次（`SECOND` 这类）留给本函数末尾那次启动规范化收尾。两者颠倒就对不上：
+       * 规范化先跑会把那行收掉、回放再去补也补不出正确期次。**别调换这两处的位置。**
+       */
       ensureOfficialHistoryReplayed(database)
       // 「这一行是什么」与重要性回填（迁移 16）：以前没存，读侧只能靠前缀猜（423 行被猜成经济指标）。
       // 跨源同名合并（迁移 17）：同一次发布两家各报一份不该是两行；值冲突的那组两条都留。
@@ -272,7 +279,16 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       + `（转 present ${normalized.valueStateToPresent} / 转 missing ${normalized.valueStateToMissing}）、`
       + `并值 ${normalized.mergedRows} 行、解析期次 ${normalized.periodsResolved} 条、删重复 `
       + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、`
-      + `跨源冲突保留 ${normalized.conflictGroupsKept} 组、耗时 ${elapsedMs}ms`)
+      + `跨源冲突保留 ${normalized.conflictGroupsKept} 组、耗时 ${elapsedMs}ms`
+      // **改名的原值必须上日志**：只写「解析 N 条」看不出是哪种形状没被认出来，也看不出谁被改了名。
+      + (normalized.renamedToUnknown > 0
+        ? `；改名 unknown ${normalized.renamedToUnknown} 行（原期次 ${
+          normalized.renamedFromPeriods.map((period) => JSON.stringify(period)).join('、') || '—'}`
+          + `${normalized.renamedFromDistinct > normalized.renamedFromPeriods.length
+            ? ` 等 ${normalized.renamedFromDistinct} 种` : ''}）`
+        : '')
+      // 撞车不再抛，但要看得见：它说明同一发布已经有了一条同名 unknown 行。
+      + (normalized.renameCollisions > 0 ? `；改名撞车并入 ${normalized.renameCollisions} 行` : ''))
   } catch (error) {
     report(`[macro-calendar] 启动规范化失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
   }

@@ -133,6 +133,14 @@ export type CalendarStandardRow = Readonly<{
   /** 第一次看到这一期时来源给的 actual / previous；之后修订**不覆盖**，没有就不写。 */
   firstPublishedActual?: string
   firstPublishedPrevious?: string
+  /**
+   * **行已存在时保留来源两列**（`source_provider_id` / `source_event_id`），只有历史回放传。
+   *
+   * 回放写的是别的来源已经写下的同一行（BEA/BLS 的官方行）：upsert 的 `do update` 默认把来源换成
+   * 调用方自己，等于把「这条是谁说的」改掉。补值是对的，改来源不是——所以补值走这一行时保留来源。
+   * **只在 update 分支生效**：行不存在时它就是本行自己的来源，没有「保留」可言。
+   */
+  preserveProvenance?: boolean
 }>
 
 
@@ -334,8 +342,10 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
               coalesce(json_extract(excluded.numeric_json, '$.decimals'), '{}')),
             '$.parserVersion', json_extract(numeric_json, '$.parserVersion'))
         else numeric_json end,
-      source_provider_id = excluded.source_provider_id,
-      source_event_id = excluded.source_event_id,
+      -- **回放补值不改来源**（preserveProvenance）：行已存在时保留原来的两列；没有这个开关的调用方
+      -- 行为不变（source_provider_id 仍是 upsert 的 last-write-wins）。这两个 ? 是开关，不是值。
+      source_provider_id = case when ? = 1 then source_provider_id else excluded.source_provider_id end,
+      source_event_id = case when ? = 1 then source_event_id else excluded.source_event_id end,
       parser_version = excluded.parser_version,
       observed_at = excluded.observed_at`)
     .run(countryCode, metricKey, periodKey, row.scheduledDate,
@@ -359,7 +369,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       // 补写：旧行该列为 NULL 时填上（同一发布按原日期重发的那一次），已有一律不覆盖。
       row.sourceReleaseId ?? null,
       numericJson,
-      importanceGrade)
+      importanceGrade,
+      row.preserveProvenance === true ? 1 : 0,
+      row.preserveProvenance === true ? 1 : 0)
   // 真正写进去的身份（可能是认回的那一行，不是这一笔带来的 id）：调用方记台账要用它，
   // 否则台账会指向一行不存在的身份，`孤儿` 判据当场变红。
   return { countryCode, metricKey, periodKey, firstScheduledDate,
