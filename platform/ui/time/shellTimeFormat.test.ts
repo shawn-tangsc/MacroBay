@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { fallbackTimeZone, systemTimeZoneSetting } from '../../settings/schema/appSettings'
 import {
+  formatShellClock,
   formatShellCompactInstant,
   formatShellInstant,
   formatShellTimeOfDay,
@@ -120,5 +121,22 @@ describe('formatShellTimeOfDay', () => {
   it('returns null for an instant it cannot read, and never throws on an unknown zone', () => {
     expect(formatShellTimeOfDay('not-an-instant', { timeZone: 'UTC' })).toBeNull()
     expect(formatShellTimeOfDay('2026-11-09T20:45:00.000Z', { timeZone: 'Mars/Olympus' })).toBeNull()
+  })
+})
+
+describe('formatShellClock', () => {
+  it('drops the date on the reader\'s own day and keeps MM-DD across days, with no time zone', () => {
+    // 轴刻度用这一档：五个刻度各印一遍 `GMT+8` 会互相压字。`now` 传死，白天夜里跑都同一个答案。
+    const now = new Date('2026-11-24T15:30:00.000Z')
+    expect(formatShellClock('2026-11-24T06:00:00.000Z', { timeZone: 'Asia/Shanghai', now })).toBe('14:00')
+    expect(formatShellClock('2026-11-23T15:00:00.000Z', { timeZone: 'Asia/Shanghai', now })).toBe('11-23 23:00')
+    // 同一个显示日才算「今天」：`now` 是 UTC 15:30（东八区 23:30），前一天同一时刻要带日期。
+    expect(formatShellClock('2026-11-24T08:00:00.000Z', { timeZone: 'UTC', now })).toBe('08:00')
+    expect(formatShellClock('2026-11-23T08:00:00.000Z', { timeZone: 'UTC', now })).toBe('11-23 08:00')
+  })
+
+  it('never invents an instant, and never throws on an unknown zone', () => {
+    expect(formatShellClock('not-an-instant', { timeZone: 'UTC' })).toBeNull()
+    expect(formatShellClock('2026-11-24T06:00:00.000Z', { timeZone: 'Mars/Olympus' })).toBeNull()
   })
 })

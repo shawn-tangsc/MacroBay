@@ -966,17 +966,19 @@ describe('time axis', () => {
     expect(ticks[0]).not.toBe(ticks.at(-1))
   })
 
-  it('prints ticks as compact clock faces — HH:mm today, MM-DD HH:mm across days, never a time zone', () => {
+  it('prints ticks as compact clock faces, never a time zone', () => {
     // 用户 2026-11-24：五个刻度各印一遍 `2026-11-24 06:00 GMT+8`，标签互相压住、最后一行顶到下一个日期。
     // 轴只回答「几点」；时区是整张卡的事，不该每个刻度说一次。
+    // 这条用例**不赌跑在几点**：最早的点固定在 48 小时前（跨日必成立），只断言「不带时区、最新那格是 HH:mm」；
+    // 「跨日带 MM-DD」由 `formatShellClock` 自己的单测传死 `now` 钉住。
     const nowMs = Date.now()
     const ago = (ms: number): string => new Date(nowMs - ms).toISOString()
     const markup = render({
       positioning: {
         ...availablePositioning,
         window: '24h',
-        btc: [ago(23 * 3_600_000), ago(12 * 3_600_000), ago(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
-        eth: [ago(23 * 3_600_000), ago(12 * 3_600_000), ago(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
+        btc: [ago(48 * 3_600_000), ago(12 * 3_600_000), ago(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
+        eth: [ago(48 * 3_600_000), ago(12 * 3_600_000), ago(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
         hints: []
       }
     })
@@ -984,9 +986,8 @@ describe('time axis', () => {
     expect(ticks).toHaveLength(5)
     // 一个刻度都不许带时区：五个 `GMT+8` 就是互相压字的来源。
     for (const tick of ticks) expect(tick).not.toMatch(/GMT|UTC/)
-    // 最新那个刻度是「今天」→ 只有 HH:mm；最早那个是前一天 → 带 MM-DD。
+    // 最新那个刻度就是「现在」，同一天 → 只有 HH:mm（跨日分支的形状归 `formatShellClock` 的单测）。
     expect(ticks.at(-1)).toMatch(/^\d{2}:\d{2}$/)
-    expect(ticks[0]).toMatch(/^\d{2}-\d{2} \d{2}:\d{2}$/)
   })
 })
 
