@@ -225,6 +225,27 @@ describe('the ring carries four category arrows', () => {
     }
   })
 
+  /**
+   * 箭头不许碰中央那块椭圆面板（界面设计 2026-11 实测半轴 60×43.9）。
+   * 80° 那支离得最近：三个顶点逐点验，落在椭圆里就红。
+   */
+  it('keeps every arrow triangle clear of the centre ellipse', () => {
+    const model = build({ today: '2026-11-24', metrics: real })
+    const inside = (x: number, y: number): boolean => {
+      const dx = (x - clockCardCenter.cardX) / 60
+      const dy = (y - clockCardCenter.cardY) / 43.9
+      return dx * dx + dy * dy < 1
+    }
+    for (const arrow of model.arrows) {
+      const points = [...arrow.path.matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/gu)]
+        .map(([, x, y]) => ({ x: Number(x) + clockCardGeometry.pad, y: Number(y) + clockCardGeometry.pad }))
+      expect(points.length).toBe(3)
+      for (const point of points) {
+        expect(inside(point.x, point.y), `${arrow.category} 的箭头顶点不许压中央面板`).toBe(false)
+      }
+    }
+  })
+
   /** ④ 利率与 CPI 那对（差 8°）必须被推开；删掉顺时针推开就会靠太近。 */
   it('pushes the rate and CPI names apart', () => {
     const model = build({ today: '2026-11-24', metrics: real })
