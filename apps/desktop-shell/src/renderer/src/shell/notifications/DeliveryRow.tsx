@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { helpTrigger } from '@platform/ui/components/popover'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
-import type { PosterRowTexts } from './posterRowModel'
+import type { PlatformText } from '../../i18n/platformText'
 
 import './deliveryRow.css'
 
@@ -23,9 +23,11 @@ export function DeliveryRow(props: Readonly<{
   counts?: string
   reason?: string
   hints: readonly string[]
-  text: PosterRowTexts
+  /** 「送达」组那一层文案：三个共用状态词在 `state`，`noImage` 与分隔点在 `poster` 下。 */
+  detail: PlatformText['notifications']['detail']
 }>): ReactElement {
   const labelKey = STATE_KEY[props.state]
+  const label = props.state === 'noImage' ? props.detail.poster.state.noImage : props.detail.state[props.state]
   return (
     <div className="notification-delivery-row" data-delivery-state={props.state}>
       <dt>{props.label}</dt>
@@ -34,14 +36,14 @@ export function DeliveryRow(props: Readonly<{
           tone={STATE_TONE[props.state]}
           labelKey={labelKey}
           // 状态词来自壳的文案表；组件之间也只传键，解析器把这一条映射成句子。
-          resolveText={(key) => (key === labelKey ? props.text.state[props.state] : key)}
+          resolveText={(key) => (key === labelKey ? label : key)}
         />
         {props.counts === undefined ? null : (
           <span className="notification-delivery-row__counts">{props.counts}</span>
         )}
         {props.reason === undefined ? null : (
           <>
-            <span className="notification-delivery-row__separator">{props.text.value.separator}</span>
+            <span className="notification-delivery-row__separator">{props.detail.poster.value.separator}</span>
             <span className="notification-delivery-row__reason">{props.reason}</span>
           </>
         )}
@@ -63,10 +65,14 @@ const STATE_TONE: Record<DeliveryRowState, StatusPillTone> = {
   noImage: 'muted'
 }
 
-/** 状态词的键（写全路径，文案表里就是这三段）。 */
+/**
+ * 状态词的键。三个共用词在 `notifications.detail.state.*`（「文字」「海报」两行同一个词），
+ * `noImage` 只属于海报那一行，留在 `poster.state` 下——挂在海报名下的共用词会让改海报措辞时
+ * 悄悄改掉文字行。
+ */
 const STATE_KEY: Record<DeliveryRowState, string> = {
-  sent: 'notifications.detail.poster.state.sent',
-  unconfirmed: 'notifications.detail.poster.state.unconfirmed',
-  failed: 'notifications.detail.poster.state.failed',
+  sent: 'notifications.detail.state.sent',
+  unconfirmed: 'notifications.detail.state.unconfirmed',
+  failed: 'notifications.detail.state.failed',
   noImage: 'notifications.detail.poster.state.noImage'
 }

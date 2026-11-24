@@ -2,8 +2,9 @@ import type { ReactElement } from 'react'
 
 import type { NotificationPosterEvidence } from '@platform/notifications/contracts/notificationPosterContracts'
 
+import type { PlatformText } from '../../i18n/platformText'
+
 import { DeliveryRow } from './DeliveryRow'
-import type { PosterRowTexts } from './posterRowModel'
 import { posterRowModel } from './posterRowModel'
 
 /**
@@ -17,18 +18,18 @@ import { posterRowModel } from './posterRowModel'
  */
 export function PosterDeliveryRow(props: Readonly<{
   poster?: NotificationPosterEvidence
-  text: PosterRowTexts
+  labels: PlatformText['notifications']
 }>): ReactElement | null {
-  const model = posterRowModel(props.poster, props.text)
+  const model = posterRowModel(props.poster, props.labels.detail.poster)
   if (model === null) return null
   return (
     <DeliveryRow
-      label={props.text.label}
+      label={props.labels.detail.poster.label}
       state={model.state}
       {...(model.counts === undefined ? {} : { counts: model.counts })}
       {...(model.reason === undefined ? {} : { reason: model.reason })}
       hints={model.hints}
-      text={props.text}
+      detail={props.labels.detail}
     />
   )
 }

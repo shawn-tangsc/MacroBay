@@ -14,7 +14,8 @@ import { platformText } from '../../i18n/platformText'
 import { PosterDeliveryRow } from './PosterDeliveryRow'
 import { posterRowModel } from './posterRowModel'
 
-const text = platformText['zh-CN'].notifications.detail.poster
+const labels = platformText['zh-CN'].notifications
+const text = labels.detail.poster
 const css = readFileSync(join(__dirname, 'deliveryRow.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 
 const channel = (
@@ -215,7 +216,7 @@ describe('海报行：渲染', () => {
       root!.render(
         <ShellLanguageProvider language="zh-CN">
           <dl>
-            <PosterDeliveryRow poster={evidence} text={text} />
+            <PosterDeliveryRow poster={evidence} labels={labels} />
           </dl>
         </ShellLanguageProvider>
       )

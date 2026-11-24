@@ -78,10 +78,10 @@ export function NotificationDetailView(props: Readonly<{
                 state={text.state}
                 {...(text.counts === undefined ? {} : { counts: text.counts })}
                 hints={[]}
-                text={props.labels.detail.poster}
+                detail={props.labels.detail}
               />
             )}
-            <PosterDeliveryRow poster={props.item.poster} text={props.labels.detail.poster} />
+            <PosterDeliveryRow poster={props.item.poster} labels={props.labels} />
           </dl>
         </section>
       ) : null}
