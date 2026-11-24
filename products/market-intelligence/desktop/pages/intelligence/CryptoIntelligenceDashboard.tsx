@@ -12,6 +12,7 @@ import { Info } from 'lucide-react'
 import type { MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
 import { DivergencePanel } from '../../features/industry/divergence/DivergencePanel'
 import { PositioningPanel } from '../../features/industry/positioning/PositioningPanel'
+import { positioningDefaultWindow } from '../../features/industry/positioning/positioningWindow'
 import { useDashboardDivergence } from './useDashboardDivergence'
 import { useDashboardOpenInterest } from './useDashboardOpenInterest'
 import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
@@ -220,10 +221,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     disabled: decisionsUsable && positioningDecisions.funding.kind !== 'read',
     now, reloadKey: fundingReloadKey, revision: dataRevision
   })
-  // Positioning is read per window rather than reshaped in the browser: the fold and
-  // the liquidation lookback belong to the query, so switching windows is one more read.
-  // 默认 **24 小时**（用户 2026-11-24）：这张卡日常读的是最近一天的爆仓与持仓变化，7 天只是偶尔翻。
-  const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('24h')
+  // 默认窗口见 `positioningDefaultWindow`：查询按窗口读，换窗口就是再读一次。
+  const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>(positioningDefaultWindow)
   // TODO(0.4.3-settings-drawer): 数据接入后删除——静态版配置抽屉的临时开关。
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
   // 页面层的入口（日报页 / 日历 / 门户）通过计数请求打开某��屏：计数一变就打开一次。
