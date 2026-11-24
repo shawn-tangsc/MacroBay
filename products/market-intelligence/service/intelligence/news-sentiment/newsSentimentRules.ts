@@ -11,18 +11,30 @@ type RuleHit = {
 
 /**
  * 规则只用标题与摘要，不依赖正文：它是模型不可用时的兜底，不是主引擎。
- * 顺序有意义——下架必须先于上架（"Will Delist" 里含 "list"），事故必须先于一般公告。
+ * 顺序有意义——下架必须先于上架（"Will Delist" 里含 "list"），事故必须先于一般公告，
+ * **重大执法的匹配也必须先于一般执法**（后者含 charges，不然永远轮不到 5）。
  *
- * **分档与模型是同一把尺**（`NEWS_SENTIMENT_STRENGTH_SCALE`，1–5 五档，用户 2026-11-18 批准）：
- * 事故/入侵 = 5（可能改变趋势的冲击）；停机、下架、ETF 批准、执法 = 4（直接影响 BTC/ETH 的
- * 资金流或供需）；上架 = 3（影响一类资产的预期）；没有命中 = 1 + 中性（与加密市场无关或没有方向）。
- * 兜底时模型不在，所以这把尺子只能靠这里的分值表达——**改档位等于改语义**，别顺手调数。
+ * **分档与模型是同一把尺**（`NEWS_SENTIMENT_STRENGTH_SCALE`，1–5 五档，用户 2026-11-18 批准、
+ * 2026-11-24 对齐）。依据是尺子自己的五条定义：
+ * - **5** = 可能改变趋势的冲击（监管禁令/**重大执法**、头部交易所暴雷、脱锚、国家级采用）；
+ * - **4** = 直接影响 BTC/ETH 资金流或供需（ETF 大额申赎、稳定币供给剧变、交易所/托管风险、
+ *   **主流链安全事件**、头部政策落地）；
+ * - **3** = 影响整体风险偏好或一类资产，所以上架与下架都在这一档（下架影响的是那一类资产）；
+ * - **1** = 与加密市场无关——**没有命中就不写判定**，不是写一条 1。
+ *
+ * 落在这里的对应：入侵/被盗 = 4（主流链安全事件）、停机 = 4、ETF 批准 = 4、一般执法
+ * （诉讼/调查/罚款/禁止令）= 4；只有「禁令/禁止/吊销牌照/停业/刑事起诉」这类重大执法 = 5；
+ * 上架 = 3、下架 = 3。
+ *
+ * 兜底时模型不在，这把尺子只能靠这里的分值表达——**改档位等于改语义**，别顺手调数；
+ * 改档位必须同时改本段注释与 `newsSentimentRules.test.ts` 的「同一把尺」那条。
  */
 const RULES: readonly RuleHit[] = [
   {
     reasonCode: 'news.exploit.v1',
     polarity: 'bearish',
-    strength: 5,
+    // 4 = 主流链安全事件（影响 BTC/ETH 资金流与交易所/托管风险），不是趋势级冲击。
+    strength: 4,
     confidence: 80,
     pattern: /\b(hack(?:ed|ing)?|exploit(?:ed|ing)?|drained|stolen|breach(?:ed)?|rug\s?pull)\b/i
   },
@@ -36,7 +48,8 @@ const RULES: readonly RuleHit[] = [
   {
     reasonCode: 'news.delisting.v1',
     polarity: 'bearish',
-    strength: 4,
+    // 3 = 影响一类资产；下架单币不动 BTC/ETH 的资金流或供需。
+    strength: 3,
     confidence: 75,
     pattern: /\b(delist(?:ed|ing)?|monitoring tag|cease trading|will cease)\b/i
   },
@@ -55,6 +68,16 @@ const RULES: readonly RuleHit[] = [
     pattern: /\betf\b[\s\S]{0,80}\bapprov(?:e|es|ed|al|ing)\b|\bapprov(?:e|es|ed|al|ing)\b[\s\S]{0,80}\betf\b/i
   },
   {
+    // 重大执法 = 5：尺子第 5 档明写「重大执法」——禁令/禁止、吊销牌照、停业、刑事起诉。
+    // 必须在一般执法之前：后者含 charges，否则「criminal charges」永远轮不到这一档。
+    reasonCode: 'news.enforcement.major.v1',
+    polarity: 'bearish',
+    strength: 5,
+    confidence: 80,
+    pattern: /\b(?:ban(?:s|ned|ning)?|prohibit(?:s|ed|ing)?|revok(?:e|es|ed|ing)|indict(?:s|ed|ment)?|criminal\s+(?:charges?|complaint|indictment)|shut\s+down|cease\s+operations|order(?:s|ed)?\s+to\s+(?:cease|stop)\s+operations)\b/i
+  },
+  {
+    // 一般执法 = 4：诉讼、调查、指控、罚款、禁止令——影响风险偏好，不是趋势级冲击。
     reasonCode: 'news.enforcement.v1',
     polarity: 'bearish',
     strength: 4,
@@ -74,7 +97,7 @@ const ETH_RE = /\b(ethereum|ether|eth)\b/i
  * 按条解读的准入——把「没判」写成了「判为低」。现在返回 `undefined`：调用方据此**不写判定行**，
  * 这条保持「未判定」，等模型下一轮判（评分候选的判据是「不是当前判定」，没有行就会被重新捡起）。
  *
- * 只有真正命中的六条规则才产出判定，且分档与模型用同一把尺（见文件头）。
+ * 只有真正命中的规则才产出判定，且分档与模型用同一把尺（见文件头；重大执法与一般执法是两条规则）。
  */
 export function scoreNewsWithRules(input: { title: string; summary?: string }): NewsSentimentJudgment | undefined {
   const text = `${input.title} ${input.summary ?? ''}`.trim()
