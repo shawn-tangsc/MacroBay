@@ -114,32 +114,41 @@ export function createMacroMarketSnapshotQuery(deps: Readonly<{
   }
 
   /**
-   * The dollar row: the licensed index whenever it has a point, the synthesis only while the synthesis
-   * is *newer* than it.
+   * The dollar row: the series the reader chose while it can answer, the other one when it cannot.
    *
    * 「超过 freshness 就换一条」是错的（读者 2026-10-17 的实况）：周末 FX 收盘，真实那条的最后一根是
-   * 周五 20:55，而篮子那条两天前就停了（`twelve-data-market` 已被关掉），于是旧规则把**两天前**的
-   * 合成值显示出来、还挂着「合成」标签——换掉的不是一条旧值，而是另一件东西。
+   * 周五 20:55，而篮子那条两天前就停了，于是旧规则把**两天前**的合成值显示出来、还挂着「合成」标签——
+   * 换掉的不是一条旧值，而是另一件东西。所以停更、休市、偏旧都**不算**读不到：那由新鲜度与来源状态
+   * 说明，不靠换仪器表达。
    *
-   * 所以只有一条规矩：**兜底不能比被替换的那条更旧**。真实那条旧了就叫旧了——`macroMarketReturn`
-   * 已经按"最新一根"算窗口，新鲜度由行的最近更新时间与来源状态分别说明，不需要靠换仪器表达。
-   * 合成值仍然带 `synthetic` 标记，所以标签永远跟着它描述的那个数走。
+   * 读者 2026-11-24 又补了另一半：「没有美元的数据源，就用兜底的合成美元指数；有数据源的时候再替换。」
+   * 于是分三种：
+   * - 选中的那条有可用读数 → 就用它（没选过时：真实那条有用，只有合成确实更新才回退，即上面那条老规矩）；
+   * - 选中的那条**没有读数，或被供应商永久拒绝**（`sourceFailure`）→ 换另一条，标签跟着被展示的那条走
+   *   （合成的数永远带 `synthetic`，界面写「美元为合成指数」）；
+   * - 两条都拿不到 → 把选中的那条原样交出去：无点就是没有，被拒就带着 `sourceFailure` 让界面写「来源未提供」。
    */
   function dollarReading(dollarSourceId?: string): MacroMarketReading | undefined {
-    // 读者在设置里给美元格选了源：只读那一个源的序列，另一个源一列都不读——
-    // 「同一格不许同时读主备两个源」，也不拿另一个源偷偷兜底（那会变成读者选 A 却看到 B）。
+    const series = macroMarketSnapshotPublicPolicy.series
     const chosen = dollarSourceId === undefined
       ? undefined
       : (macroMarketSnapshotPublicPolicy.dollarIndexSeriesBySource as Readonly<Record<string, string>>)[dollarSourceId]
-    if (chosen === macroMarketSnapshotPublicPolicy.series.dollarIndexReal) return readReading(macroMarketSnapshotPublicPolicy.series.dollarIndexReal)
-    if (chosen === macroMarketSnapshotPublicPolicy.series.dollarIndex) return readReading(macroMarketSnapshotPublicPolicy.series.dollarIndex, true)
-    // 没选过（或缺键）：今天的规则原样保留。
-    const real = deps.store.latest(macroMarketSnapshotPublicPolicy.series.dollarIndexReal)
-    if (real) {
-      const synthetic = deps.store.latest(macroMarketSnapshotPublicPolicy.series.dollarIndex)
-      if (!synthetic || synthetic.atMs <= real.atMs) return readReading(macroMarketSnapshotPublicPolicy.series.dollarIndexReal)
+    const real = readReading(series.dollarIndexReal)
+    const synthetic = readReading(series.dollarIndex, true)
+    /** 可用的唯一判据是「不是永久拒绝」；没有读数时读数是 `undefined`，同样不可用。 */
+    const usable = (reading: MacroMarketReading | undefined): reading is MacroMarketReading =>
+      reading !== undefined && reading.sourceFailure === undefined
+    // 读者钉的是合成那条：它有用就用它（哪怕真实那条更新——选 A 却看到 B 是撒谎）。
+    if (chosen === series.dollarIndex) {
+      if (usable(synthetic)) return synthetic
+      return usable(real) ? real : synthetic
     }
-    return readReading(macroMarketSnapshotPublicPolicy.series.dollarIndex, true)
+    // 钉了真实那条，或没选过：真实优先，合成只在「读不到」或「确实更新」时顶上。
+    if (usable(real)) {
+      if (usable(synthetic) && synthetic.atMs > real.atMs) return synthetic
+      return real
+    }
+    return usable(synthetic) ? synthetic : real
   }
 
   function snapshot(input?: { dollarSourceId?: string }): MacroMarketSnapshot {
