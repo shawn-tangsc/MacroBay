@@ -5,10 +5,6 @@
       "count": 14,
       "why": "「指标码 → 概念」的唯一数据表：14 个码各一行（概念串只有三段，不计入本守卫）。这张表的字面量就是身份事实本身，不放在这里就没有任何一处能派生出它；加变体也只加这一行"
     },
-    "desktop/settings/intelligence-sources/CoreIndicatorsSourcesView.tsx": {
-      "count": 12,
-      "why": "设置页的「指标码 → 文案键」名称映射：名字是产品文案，不塞进数据层，所以这是**改名后允许改的唯一一处消费者**（其余消费者：盘口、政策路径、回填、卡片渲染，均为 0 字面量）。键集合必须等于卡片 12 行码的集合，有守卫（改名时漏一条会渲染成没名字的卡）。"
-    },
     "service/intelligence/macro-calendar/coreIndicatorValueSources.ts": {
       "count": 6,
       "why": "产品定的四项核心指标 + 例外清单两条（其余全靠派生）"
@@ -20,10 +16,6 @@
     "service/intelligence/macro-calendar/macroCalendarReleaseValueMappingPolicy.ts": {
       "count": 8,
       "why": "官方发布 → 指标码：一次发布把值写成哪个身份"
-    },
-    "service/intelligence/macro-calendar/macroIndicatorCardFacts.ts": {
-      "count": 12,
-      "why": "旧源指标 id 的兼容位：历史行还要认它"
     },
     "service/intelligence/macro-calendar/macroIndicatorCardGroups.ts": {
       "count": 16,
