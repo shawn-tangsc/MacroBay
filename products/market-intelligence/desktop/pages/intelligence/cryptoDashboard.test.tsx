@@ -288,16 +288,17 @@ describe('crypto intelligence dashboard', () => {
     expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    // 定版是 ECharts 仪表（用户 2026-11-22 看过手绘版后改口）：分数在盘里；档位词在**头栏中轨**（用户 2026-11-24），
-    // 图里没有任何字，画布本身不进可访问树，读屏念的是头栏那一句带分数的名字。
+    // 定版是 ECharts 仪表（用户 2026-11-22 看过手绘版后改口）：分数在盘里；档位词在**图下那一行**
+    // （用户 2026-11-24：三个名字一起下移到各自图下），图里没有任何字，画布本身不进可访问树，
+    // 读屏念的是那一句带分数的名字。
     const bucketWord = container.querySelector('[data-gauge-reading]')!
-    expect(bucketWord.closest('.mi-defensive-premium__topbar-mid')).not.toBeNull()
+    expect(bucketWord.closest('.mi-defensive-premium__col-foot--gauge')).not.toBeNull()
     expect(bucketWord.textContent).toBe(text.dashboard.fearGreed.buckets['extreme-fear'])
     expect(bucketWord.getAttribute('aria-label')).toBe(`22 ${text.dashboard.fearGreed.buckets['extreme-fear']}`)
     expect(bucketWord.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
-    // 仪表那一列自己不再有任何字：词挪走后图里一个文字节点都没有。
-    expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
-    expect(gauge.querySelector('[data-gauge-bucket-text]')).toBeNull()
+    // 词在图下那一行、不在图位里：图位（`__chart-slot`）里一个文字节点都没有。
+    expect(gauge.querySelector('.mi-defensive-premium__chart-slot [data-gauge-reading]')).toBeNull()
+    expect(gauge.querySelector('.mi-defensive-premium__chart-slot [data-gauge-bucket-text]')).toBeNull()
     expect(gauge.querySelector('[data-chart="gauge"]')?.getAttribute('aria-hidden')).toBe('true')
     // 仪表只回答「落在哪一档」：日期在恐惧贪婪格的读数行上。
     expect(gauge.textContent).not.toContain('2026')
@@ -340,7 +341,7 @@ describe('crypto intelligence dashboard', () => {
       [12, 'extreme-fear'], [37, 'fear'], [50, 'neutral'], [60, 'greed'], [88, 'extreme-greed']
     ] as const) {
       const { band, dispose } = await renderSentimentGauge(score, bucket)
-      const reading = band.querySelector('.mi-defensive-premium__topbar-mid [data-gauge-reading]')!
+      const reading = band.querySelector('.mi-defensive-premium__col-foot--gauge [data-gauge-reading]')!
       expect(reading.getAttribute('data-gauge-bucket-text')).toBe(bucket)
       expect(reading.textContent).toBe(text.dashboard.fearGreed.buckets[bucket])
       expect(reading.getAttribute('aria-label')).toBe(`${score} ${text.dashboard.fearGreed.buckets[bucket]}`)
@@ -356,7 +357,7 @@ describe('crypto intelligence dashboard', () => {
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 8px')
     expect(cardRule).toContain('grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr)')
     // 一列三道（用户 2026-11-23 删掉卡头与格名行之后）：图 168 / 说明 auto / 列尾留白 1fr。
-    // 格名那一行上到头栏了，所以列里第一行就是图。把间距写成子元素外边距会溢出固定行、
+    // 列里第一行就是图，图下才是名字行。把间距写成子元素外边距会溢出固定行、
     // 从行间隙里偷走高度——实测图底到分隔线只剩 2px，就是这个形状。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
       .toContain('grid-template-rows: var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
@@ -366,19 +367,23 @@ describe('crypto intelligence dashboard', () => {
     // 而列尾那条 1fr 会跑到图上面，把「图紧贴头栏」改成一大片留白。
     expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__state-box {'))
       .toContain('grid-row: 1')
-    // 说明句装在一个容器里落第 2 行（auto）、在图下面：容器里堆叠，这一行才有几行高。
-    expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
-      .toContain('grid-row: 2')
-    // 档位词在**头栏中轨**、11/650、居中（用户 2026-11-24）：它不再绝对定位在仪表图位底部——
-    // 那样逼得仪表只能画在上面 127 里。词回到文档流后由中轨那一格居中，图里一个文字节点都没有。
+    // 图下名字行落第 2 行（auto）、与图间距 6、行高 22（用户 2026-11-24）：0/1/2/3–29/满窗都只有
+    // 这一行，各点数形态才等高。旧的那条「说明行」规则必须消失，否则 3–29 态又比满窗高一行。
+    const footRule = cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__col-foot {')
+    expect(footRule).toContain('grid-row: 2')
+    expect(footRule).toContain('margin-top: 6px')
+    expect(footRule).toContain('min-height: 22px')
+    expect(styles).not.toContain('.mi-defensive-premium__notes {')
+    // 档位词在图下那一行、11/650、居中（用户 2026-11-24）：它不再绝对定位、也不再占卡头中轨。
     const bucketRule = cssBlock(styles, '.mi-defensive-premium__gauge-bucket {')
     expect(bucketRule).not.toContain('position: absolute')
     expect(bucketRule).not.toContain('bottom:')
     expect(bucketRule).toContain('text-align: center')
     expect(bucketRule).toContain('font-size: var(--font-meta)')
     expect(bucketRule).toContain('font-weight: 650')
-    expect(cssBlock(styles, '.mi-defensive-premium__topbar-mid {'))
+    expect(cssBlock(styles, '.mi-defensive-premium__col-foot--gauge {'))
       .toContain('justify-content: center')
+    expect(styles).not.toContain('.mi-defensive-premium__topbar-mid {')
     // 卡的行间收成 0 之后，结论句与图之间那 8（界面 2026-11-24 从 12 收到 8）落在它自己的外边距上。
     // `.mi-crypto-dashboard p { margin: 0 }` 权重更高，选择器不带 `>` 会被清成 0（探针里量到结论句紧贴图底 192）。
     expect(cssBlock(styles, '.mi-defensive-premium > .mi-defensive-premium__verdict {'))
@@ -1319,11 +1324,10 @@ describe('host wiring: cells switched off and sources judged', () => {
     await settle(container, '[data-half="fear-greed"] [data-sentiment-state]')
     const gauge = container.querySelector('[data-sentiment-gauge]')!
     const cell = container.querySelector('.mi-defensive-premium [data-half="fear-greed"]')!
-    // 格名只有格名（用户 2026-11-22：量程就在刻度上，不再后缀）；它上在头栏那一轨，列里已经不挂 h3。
-    // 仪表那一列从来画自己的标题。
-    expect(container.querySelector('.mi-defensive-premium__half-head[data-half-head="fear-greed"] h3')?.textContent)
+    // 格名只有格名（用户 2026-11-22：量程就在刻度上，不再后缀）；它现在挂在**图下那一行**（用户 2026-11-24）。
+    expect(container.querySelector('.mi-defensive-premium__col-foot[data-half-foot="fear-greed"] h3')?.textContent)
       .toBe(dashboardText.defensivePremium.fearGreed.name)
-    expect(cell.querySelector('h3')).toBeNull()
+    expect(cell.querySelector('h3')).not.toBeNull()
     // 仪表还在（弧照画），但没有档位词——指针与分数都不指向一个关掉的格子。
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
     expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
@@ -1384,10 +1388,10 @@ describe('host wiring: cells switched off and sources judged', () => {
     const gauge = container.querySelector('[data-sentiment-gauge]')!
     // 有数据时没有那一行：状态句只在没读数时出现。
     expect(gauge.querySelector('[data-sentiment-state]')).toBeNull()
-    // 档位词在头栏中轨（用户 2026-11-24），仪表列自己不再有任何字。
-    expect(container.querySelector('.mi-defensive-premium__topbar-mid [data-gauge-reading]')?.textContent)
+    // 档位词在仪表列图下那一行（用户 2026-11-24），图位里没有字。
+    expect(container.querySelector('.mi-defensive-premium__col-foot--gauge [data-gauge-reading]')?.textContent)
       .toBe(dashboardText.fearGreed.buckets['extreme-fear'])
-    expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
+    expect(gauge.querySelector('.mi-defensive-premium__chart-slot [data-gauge-reading]')).toBeNull()
     expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
   })
 })
@@ -1484,8 +1488,9 @@ describe('the defensive premium band', () => {
     // 仪表盘是独立的第一列，不在恐惧贪婪格里。
     expect(band.querySelector('.mi-defensive-premium__col[data-half="fear-greed"] [data-sentiment-gauge]')).toBeNull()
     expect(band.querySelector('[data-sentiment-gauge]')).not.toBeNull()
-    // 「查看来源」是卡级动作、在头栏；那一格自己的动作在格内不出现，半条 ⓘ 跟着格名上到同一轨。
-    expect(skew.querySelectorAll('button')).toHaveLength(0)
+    // 「查看来源」是卡级动作、在头栏；那一格里唯一的按钮是图下名字行那颗半条 ⓘ，没有格内动作。
+    expect([...skew.querySelectorAll('button')].map(button => button.getAttribute('aria-label')))
+      .toEqual([dashboardText.defensivePremium.skew.infoLabel])
     expect([...band.querySelectorAll('.mi-defensive-premium__topbar-actions > button')].map(button => button.textContent))
       .toContain(dashboardText.defensivePremium.action.viewSource)
 
@@ -1506,7 +1511,7 @@ describe('the defensive premium band', () => {
     expect(band.querySelectorAll('[data-chart="fear-greed"]')).toHaveLength(1)
 
     // 三颗 ⓘ 各说各的：卡头、左半、右半的读屏名互不相同（AC-44）。
-    const halfInfoLabels = [...band.querySelectorAll('.mi-defensive-premium__half-head button[aria-label]')]
+    const halfInfoLabels = [...band.querySelectorAll('.mi-defensive-premium__col-foot button[aria-label]')]
       .map(button => button.getAttribute('aria-label'))
     expect(halfInfoLabels).toEqual([
       dashboardText.defensivePremium.fearGreed.infoLabel,
@@ -1576,19 +1581,17 @@ describe('the defensive premium band', () => {
     const verdict = card.querySelector('[data-verdict]')!
     expect(skew.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(cssBlock(styles, '.mi-defensive-premium > .mi-defensive-premium__topbar,')).toContain('grid-column: 1 / -1')
-    // 读数并入头栏（用户 2026-11-23 删卡头后）：整卡没有读数行；右格的值就在头栏右轨，单位跟着值。
+    // 整卡没有读数行；右格的值与格名一起在图下那一行（用户 2026-11-24），名字在左、值在右端。
     expect(card.querySelectorAll('.mi-defensive-premium__reading')).toHaveLength(0)
-    const skewHead = container.querySelector('.mi-defensive-premium__half-head[data-half-head="skew"]')!
-    expect(skewHead.querySelector('[data-skew-value]')).toBeNull()
-    const skewTail = container.querySelector('.mi-defensive-premium__topbar-actions')!
-    expect(skewTail.querySelector('[data-skew-value]')?.textContent).toBe('1.8')
-    expect(skewTail.textContent).toContain(dashboardText.defensivePremium.skew.unit)
-    // 格名上到头栏、不在列里：两列都没有 h3，卡名与两个格名都在同一条头栏上。
-    for (const col of [fearGreed, skew]) expect(col.querySelector('h3')).toBeNull()
+    const skewHead = container.querySelector('.mi-defensive-premium__col-foot[data-half-foot="skew"]')!
+    expect(skewHead.querySelector('[data-skew-value]')?.textContent).toBe('1.8')
+    expect(skewHead.textContent).toContain(dashboardText.defensivePremium.skew.unit)
+    expect(skewHead.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.skew.name)
+    // 头栏只剩四样（用户 2026-11-24）：卡名 + ⓘ + 窗口 + 一颗动作；两个格名不在头栏上。
     const topbar = card.querySelector('.mi-defensive-premium__topbar')!
     expect(topbar.querySelector('h2')?.textContent).toBe(dashboardText.defensivePremium.title)
-    expect([...topbar.querySelectorAll('.mi-defensive-premium__half-head h3')].map(node => node.textContent))
-      .toEqual([dashboardText.defensivePremium.fearGreed.name, dashboardText.defensivePremium.skew.name])
+    expect(topbar.querySelectorAll('h3')).toHaveLength(0)
+    expect(topbar.textContent).toContain(dashboardText.defensivePremium.window)
     // 头栏三轨与三列同宽（1fr / 仪表 / 1fr），行高 24 由动作兜住——它不再单独占一行。
     const topbarRule = cssBlock(styles, '.mi-defensive-premium__topbar {')
     expect(topbarRule).toContain('grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr)')
@@ -1598,8 +1601,8 @@ describe('the defensive premium band', () => {
     // 间距（6 与 10）算在行高里，不让外边距溢出到行外。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
       .toContain('grid-template-rows: var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
-    // 说明句落在图下面（第 2 行）：这一行有无内容都不影响图的位置，三列的图底才齐平。
-    expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
+    // 图下名字行落在第 2 行：三列各一行、都不影响图的位置，所以三列的图底才齐平。
+    expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__col-foot {'))
       .toContain('grid-row: 2')
   })
 
@@ -1670,8 +1673,11 @@ describe('the defensive premium band', () => {
     // 确实没有 ≠ 读不到：这一态不是整卡状态面，结论只说保费方向并指出缺恐惧贪婪，不写为什么缺。
     expect(band.querySelector('.state-view')).toBeNull()
     expect(band.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fgMissing.steeper)
-    // 读数尾巴（值 · 方向 · 窗口）在头栏右轨，不在偏斜那一列里。
-    expect(band.querySelector('.mi-defensive-premium__topbar-actions')?.textContent).toContain(dashboardText.defensivePremium.skew.direction.steeper)
+    // 读数尾巴（值 · 方向 · 窗口）在偏斜那一格图下名字行的右端（用户 2026-11-24），不在卡头里。
+    expect(band.querySelector('.mi-defensive-premium__col-foot[data-half-foot="skew"]')?.textContent)
+      .toContain(dashboardText.defensivePremium.skew.direction.steeper)
+    expect(band.querySelector('.mi-defensive-premium__topbar')?.textContent)
+      .not.toContain(dashboardText.defensivePremium.skew.direction.steeper)
   })
 
   it.each([
@@ -1696,7 +1702,7 @@ describe('the defensive premium band', () => {
       fonts: CHART_FONTS_FALLBACK
     })
     expect((option.yAxis as { name?: string }).name).toBeUndefined()
-    expect(band.querySelector('.mi-defensive-premium__topbar-actions .mi-defensive-premium__headline-tail')?.textContent)
+    expect(band.querySelector('.mi-defensive-premium__col-foot[data-half-foot="skew"] .mi-defensive-premium__headline-tail')?.textContent)
       .toContain(dashboardText.defensivePremium.skew.unit)
 
     // 「为什么没方向」只在结论行说一次（用户 2026-11-24）：图下不再有那句，说明行只报数量。
@@ -1712,19 +1718,20 @@ describe('the defensive premium band', () => {
     expect(repeated[0]![1]).toBe(1)
   })
 
-  it('keeps only the count under the chart when the direction is unknown, so nothing is said twice', async () => {
-    // 用户 2026-11-24 的截图就是这一态（3 个读数、不足 5 天）：图下写「偏斜还不够 5 天，不判方向」，
-    // 结论又说「偏斜这半没有可用的方向」——同一件事两遍。现在图下只报数量，原因只在结论里说一次。
-    const container = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 6))
-    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    const notes = band.querySelector('.mi-defensive-premium__notes')!
-    expect(notes.querySelector('[data-skew-history]')?.textContent).toContain('2026-07-06')
-    expect(notes.querySelector('[data-skew-direction]')).toBeNull()
-    expect(notes.textContent).not.toContain('不判方向')
-    // 整张卡里那句「还不够 5 天」只出现一次，且出现在结论行。
-    expect(band.textContent!.split('还不够 5 天').length - 1).toBe(1)
-    expect(band.querySelector('[data-verdict]')?.textContent)
-      .toBe(dashboardText.defensivePremium.verdict.fear.skewUnknown.insufficient)
+  it('says the count nowhere, and the reason once in the verdict', async () => {
+    // 用户 2026-11-24：「从 2026-11-22 开始记录 · 还差 27 个读数」是废话，删掉；1–2 个读数那句
+    // 「还在攒：已有 N 个读数，还差 M 个」是同一形状，一起删。原因只在结论里说一次。
+    for (const count of [1, 2, 6, 30]) {
+      const container = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, count))
+      const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+      expect(band.querySelector('[data-skew-history]')).toBeNull()
+      expect(band.querySelector('[data-skew-accumulating]')).toBeNull()
+      expect(band.textContent).not.toContain('还差')
+      expect(band.textContent).not.toContain('开始记录')
+      expect(band.textContent!.split('还不够 5 天').length - 1).toBe(1)
+      expect(band.querySelector('[data-verdict]')?.textContent)
+        .toBe(dashboardText.defensivePremium.verdict.fear.skewUnknown.insufficient)
+    }
   })
 
   it('says the skew half is empty in its own words, not the fear-greed sentence', async () => {
@@ -2012,7 +2019,7 @@ describe('the defensive premium band', () => {
     // 方向未知时反过来也一样：结论说没方向，读数行里不许出现方向词（图上那句「不够 5 天」不算读数）。
     const unknown = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 5))
     const unknownBand = unknown.querySelector('.mi-defensive-premium')!
-    expect(unknownBand.querySelector('.mi-defensive-premium__topbar-actions .mi-defensive-premium__headline-tail [data-skew-direction]')).toBeNull()
+    expect(unknownBand.querySelector('.mi-defensive-premium__col-foot .mi-defensive-premium__headline-tail [data-skew-direction]')).toBeNull()
     expect(unknownBand.querySelector('[data-verdict]')?.textContent)
       .toBe(dashboardText.defensivePremium.verdict.fear.skewUnknown.insufficient)
   })
@@ -2026,63 +2033,34 @@ describe('the defensive premium band', () => {
     expect(band.querySelector('[data-skew-direction="insufficient"]')).toBeNull()
     expect(direction.classList.contains('mi-defensive-premium__direction--unknown')).toBe(false)
 
-    // 1–29 个读数才出「从哪天开始记录、还差几个」；满窗不出。
-    const six = await renderBand(skewClient({ kind: 'steeper' }, 6))
-    const history = six.querySelector('[data-skew-history]')!
-    expect(history.textContent).toContain('2026-07-06')
-    expect(history.textContent).toContain('24')
-    const full = await renderBand(skewClient({ kind: 'steeper' }, 30))
-    expect(full.querySelector('[data-skew-history]')).toBeNull()
+    // 说明行整行删掉（用户 2026-11-24）：6 个读数与满窗都只有图下那一行名字，没有第二行。
+    for (const count of [6, 30]) {
+      const band = (await renderBand(skewClient({ kind: 'steeper' }, count))).querySelector('.mi-defensive-premium')!
+      expect(band.querySelector('[data-skew-history]')).toBeNull()
+      expect(band.querySelectorAll('.mi-defensive-premium__col-foot')).toHaveLength(3)
+    }
 
     const notConnected = await renderBand()
     const actions = [...notConnected.querySelectorAll('.mi-defensive-premium__topbar-actions > button')]
     expect(actions.map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
   })
 
-  it('keeps the one note below the skew chart, and draws nothing at all for 1–2 points', async () => {
-    // 3 个点起才有图；没满 30 天时**只有一行**说明，且必须在图的后面（用户 2026-11-22 重排：
-    // 说明是读完图的补充，不是图的标题；DOM 顺序也照这个来，列模板第 4 行）。
-    const container = await renderBand(skewClient({ kind: 'steeper' }, 6))
-    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    const chart = band.querySelector('[data-chart="skew"]')!
-    const notes = band.querySelector('.mi-defensive-premium__notes')!
-    const history = band.querySelector('[data-skew-history]')!
-    expect(chart).not.toBeNull()
-    expect(history.parentElement).toBe(notes)
-    // 方向已知时只说攒到哪天，说明行里不再另起一句方向原因（读数行里的「走阔 · 近 5 天」是另一处）。
-    expect(notes.querySelector('[data-skew-direction]')).toBeNull()
-    expect(chart.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-
-    // 1–2 个读数：图位里画点、不连线，说明行走「还在攒」。
-    // 整句按键值比对——只查「文本里出现过数字」的话，`20`、`30` 这种巧合都能过，
-    // 阈值改回 5 或这段分支被删掉，图位空着用例也照样绿。
-    const accumulating = (collected: number) => fillLabelParams(
-      dashboardText.defensivePremium.skew.accumulating,
-      { collected: String(collected), remaining: String(30 - collected) }
-    )
-    for (const count of [1, 2]) {
-      const early = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, count))
-      const column = early.querySelector('[data-half="skew"]')!
-      // 用户 2026-11-22：1 个读数也要把点画出来，画成空框会让人以为没采到。
+  it('draws the skew chart at every count, with the name under it as the only row below', async () => {
+    // 用户 2026-11-24：图下不再有「已有几个、还差几个」那种计数说明；图下只有一行名字。
+    // 用户 2026-11-22：1 个读数也要把点画出来，画成空框会让人以为没采到——所以各点数都画图、都不空框。
+    for (const count of [1, 2, 3, 6, 30]) {
+      const container = await renderBand(skewClient({ kind: count < 5 ? 'unknown' : 'steeper', ...(count < 5 ? { reason: 'insufficient' as const } : {}) }, count))
+      const column = container.querySelector('[data-half="skew"]')!
       expect(column.querySelector('[data-chart="skew"]')).not.toBeNull()
       expect(column.querySelector('figure')).not.toBeNull()
       expect(column.querySelector('.mi-defensive-premium__state-box')).toBeNull()
-      const note = column.querySelector('[data-skew-accumulating]')!
-      expect(note.textContent).toBe(accumulating(count))
-      expect(column.querySelector('[data-skew-direction]')).toBeNull()
+      expect(column.querySelector('[data-skew-history]')).toBeNull()
+      expect(column.querySelector('[data-skew-accumulating]')).toBeNull()
+      // 图在前、名字行在后（DOM 顺序也照读者看到的样子：名字读的是它上面那张图）。
+      const foot = column.querySelector('.mi-defensive-premium__col-foot')!
+      expect(foot.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.skew.name)
+      expect(column.querySelector('figure')!.compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
-
-    // 第 3 个读数起换成图，状态块退场：阈值一动（3→4、3→5）这条就红。
-    const third = (await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 3)))
-      .querySelector('[data-half="skew"]')!
-    expect(third.querySelector('.mi-defensive-premium__state-box')).toBeNull()
-    expect(third.querySelector('figure')).not.toBeNull()
-    expect(third.querySelector('[data-chart="skew"]')).not.toBeNull()
-
-    // 满窗那版没有说明句：图仍是同一列的最后一行。
-    const full = await renderBand(skewClient({ kind: 'steeper' }, 30))
-    expect(full.querySelector('[data-skew-history]')).toBeNull()
-    expect(full.querySelector('[data-chart="skew"]')).not.toBeNull()
   })
 
   it.each([
@@ -2114,9 +2092,11 @@ describe('the defensive premium band', () => {
     const stale = container.querySelector('[data-stale="fear-greed"]')!
     expect(stale.textContent).toContain(dashboardText.defensivePremium.stale.pill)
     expect(stale.textContent).toContain('2026-08-01')
-    // 旧了只标「偏旧」，不自己变新：截至仍是源日那一天。格名与这颗牌都在头栏那一轨，列里不再有它。
-    expect(container.querySelector('[data-half="fear-greed"]')?.textContent).not.toContain('2026-08-01')
-    expect(container.querySelector('.mi-defensive-premium__half-head[data-half-head="fear-greed"]')?.textContent).toContain('2026-08-01')
+    // 旧了只标「偏旧」，不自己变新：截至仍是源日那一天。这颗牌在左格图下那一行（用户 2026-11-24 起的
+    // 位置），不在图位里。
+    expect(container.querySelector('[data-half="fear-greed"] [data-chart="fear-greed"]')?.textContent ?? '')
+      .not.toContain('2026-08-01')
+    expect(container.querySelector('.mi-defensive-premium__col-foot[data-half-foot="fear-greed"]')?.textContent).toContain('2026-08-01')
   })
 
   it('keeps the three columns and both chart frames while loading, so the card does not collapse', async () => {

@@ -15,9 +15,8 @@ import { CHART_HEIGHT, GAUGE_CHART_HEIGHT } from './DefensivePremiumCharts'
 /**
  * 仪表那一列：只回答「落在哪一档」。
  *
- * 读数里的分数在盘里（画布内容）；档位词**不再在这一列**——用户 2026-11-24 把它抬到头栏中轨
- * （卡片 `__topbar-mid`，用例在 cryptoDashboard.test 那边），这一列只剩图，所以画布能占满 168、
- * 与两侧走势图等高居中。图本身是装饰（aria-hidden）。
+ * 读数里的分数在盘里（画布内容）；档位词在**图下那一行**（用户 2026-11-24：三个名字一起下移，
+ * 与两侧格名同一行、行高 22），所以画布仍占满 168、与两侧走势图等高居中。图本身是装饰（aria-hidden）。
  * 日期、状态词、三个区间标签都不在这里——日期归恐惧贪婪格。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard
@@ -38,7 +37,7 @@ async function render(state: DashboardFearGreedState, cellOff?: typeof openSourc
   document.body.append(container)
   root = createRoot(container)
   await act(async () => root?.render(createElement(SentimentGauge, {
-    state, titleId: 'mi-defensive-premium-fear-greed-heading',
+    state, titleId: 'mi-defensive-premium-fear-greed-heading', bucketLabels: buckets,
     ...(cellOff ? { cellOff } : {})
   })))
   await act(async () => { await Promise.resolve() })
@@ -46,14 +45,17 @@ async function render(state: DashboardFearGreedState, cellOff?: typeof openSourc
 }
 
 describe('the gauge column', () => {
-  it('carries no words at all: the bucket word moved to the card’s topbar (user 2026-11-24)', async () => {
+  it('keeps the bucket word under the chart, never inside it (user 2026-11-24)', async () => {
     const gauge = await render(available)
-    // 档位词抬到头栏中轨之后，这一列里一个文字节点都不该剩——剩了就是又占了图位、把仪表挤小。
-    expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
-    expect(gauge.querySelector('[data-gauge-bucket-text]')).toBeNull()
-    expect(gauge.querySelector('.mi-defensive-premium__gauge-bucket')).toBeNull()
+    // 档位词在图下那一行（三个名字同一行），不在图位里——进去了就是又占图、把仪表挤小。
+    const word = gauge.querySelector('[data-gauge-reading]')!
+    expect(word.closest('.mi-defensive-premium__col-foot--gauge')).not.toBeNull()
+    expect(word.closest('.mi-defensive-premium__chart-slot')).toBeNull()
+    expect(word.textContent).toBe(buckets['extreme-fear'])
+    expect(word.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
+    expect(word.getAttribute('aria-label')).toBe(`22 ${buckets['extreme-fear']}`)
     // 画布里只许有分数（用 `graphic` 的 text 画，某些环境渲染成空文本），不许有一句界面文案。
-    expect(['', '22']).toContain(gauge.textContent)
+    expect(gauge.querySelector('[data-chart="gauge"]')?.textContent ?? '').toMatch(/^22$|^$/)
     // 这一列也没有读数行（用户 2026-11-22 删掉整条读数行）：DOM 里不留空节点。
     expect(gauge.querySelector('.mi-defensive-premium__reading')).toBeNull()
     // 图是装饰：读屏念的是头栏那一句，不是画布。
@@ -151,7 +153,7 @@ describe('the gauge column', () => {
   it('is the card’s middle column: no width of its own, rows come from the shared template', () => {
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
     // 列宽由卡的三列网格给（一个变量），这一列不自己定宽；行模板三列共用。
-    // 三行一列（2026-11-23 删掉卡头、格名上到头栏）：图 168 / 说明 / 列尾留白。仪表列也用这一套，图底与另两列齐平。
+    // 三行一列（用户 2026-11-24：图 168 / 图下名字行 22 / 列尾留白）。仪表列也用这一套，图底与另两列齐平。
     expect(styles).toContain('grid-template-rows: var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
     // 默认 240（用户 2026-11-22 把仪表放到中间后加的宽）；940–995 那档才退回 184。
     // 两处分开断言：只写一个 `toContain(184px)` 会被窄档那条规则满足，主档写错也不红。

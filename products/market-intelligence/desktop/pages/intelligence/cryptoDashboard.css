@@ -142,8 +142,8 @@
 /* 恐惧与防跌溢价：整行一条带。宽度跟着看板容器走（1080 视口下是 1040），两半各自 minmax(0,1fr)，
    所以窄到哪里都不会把曲线挤成负宽。 */
 .mi-crypto-dashboard__defensive-premium-row { min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-/* 三列并排（用户 2026-11-22）：恐惧贪婪走势 | 仪表 | 偏斜走势——仪表居中、两侧均分；间距 12。
-   三列共用同一套行（标题 17 / 读数 18 / 图 132），所以标题、读数、图各自对齐。
+/* 三列并排（用户 2026-11-22）：恐惧贪婪走势 | 仪表 | 偏斜走势——仪表居中、两侧均分。
+   三列共用同一套行（图 168 / 名字行 22），所以三张图底边与三个名字各自对齐。
    尺寸收在两个变量里：`--mi-defensive-premium-gauge-width`（中间那列）与 `--mi-defensive-premium-chart-height`，
    用例按这两个名字对账，不在三处各写一遍。 */
 .mi-defensive-premium {
@@ -164,8 +164,9 @@
 .mi-defensive-premium > .mi-defensive-premium__topbar,
 .mi-defensive-premium > .mi-defensive-premium__verdict,
 .mi-defensive-premium > .state-view { grid-column: 1 / -1; }
-/* 头栏与内容第一行合并（用户 2026-11-23）：卡名、卡级 ⓘ、窗口、两个格名与卡级动作都在这一条 24 高的
-   行上，**三轨与下面三列同宽**（1fr / 仪表 / 1fr，间距用同一个变量），格名正压在各自那列上，中轨空着。
+/* 头栏四样（用户 2026-11-24）：卡名、卡级 ⓘ、窗口、一颗卡级动作，都在这一条 24 高的行上。
+   **三轨与下面三列同宽**（1fr / 仪表 / 1fr，间距用同一个变量）；两个格名与档位词都下移到图下那一行，
+   所以中轨空着，模板留着不拆（拆了要牵动三列对齐）。
    这一行挂在卡级（`grid-column: 1 / -1`），整卡读失败/空时它留着。
    24 = 动作的 md 档高度（IconButton 24 / Button small 24）；首帧不出刷新时最高只有 22 高的 ⓘ，
    靠 `min-height` 兜住整行，换态不跳 2px。窄处整轨折行、不截字。 */
@@ -179,32 +180,37 @@
   min-height: 24px;
   min-width: 0;
 }
-/* 左轨：卡名 ⓘ 窗口 | 恐惧与贪婪 ⓘ；右轨：BTC 期权偏斜 ⓘ | 读数尾巴 + 卡级动作（推开到最右）。 */
+/* 左轨：卡名 ⓘ 窗口（用户 2026-11-24：两个格名都下移到图下，头栏只剩这四样）；右轨：卡级动作。 */
 .mi-defensive-premium__topbar-lead { grid-column: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-.mi-defensive-premium__topbar-tail { grid-column: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.mi-defensive-premium__topbar-tail { grid-column: 3; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
 .mi-defensive-premium__topbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
 .mi-defensive-premium__topbar h2 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-card-title); line-height: var(--line-card-title); font-weight: 650; }
 /* 窗口左右各 12（8 的轨间距 + 4）：它左边是卡级 ⓘ、右边是格名，8 太紧。 */
 .mi-defensive-premium__window { margin-inline: 4px; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
-/* 一列 = 三行（用户 2026-11-23 删卡头后）：图 168 / 说明 auto / 列尾富余 1fr。
-   格名那一行上到头栏了，列里第一行就是图。说明句仍在**图下面**（读完图的补充，不是图的标题）；
-   第三行是弹性行：三列内容不齐时多出来的高度落在列尾，不再把图往下推。 */
+/* 一列 = 三行（用户 2026-11-24）：图 168 / 名字行 auto / 列尾富余 1fr。
+   名字行在**图下面**（格名读的是它上面那张图）；第三行是弹性行：三列内容不齐时多出来的高度落在列尾，
+   不再把图往下推。 */
 .mi-defensive-premium__col {
   display: grid;
   grid-template-rows: var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr);
   align-content: start;
   min-width: 0;
 }
-/* 说明句装在一个容器里落第 2 行（`auto`）、在**图下面**：容器里正常堆叠，所以有几句这一行就有几行高。
-   两段 `<p>` 各自钉同一行会重叠成一行高。 */
-.mi-defensive-premium__col > .mi-defensive-premium__notes { grid-row: 2; display: flex; flex-direction: column; min-width: 0; }
+/* 图下那一行（用户 2026-11-24：三个名字 恐惧与贪婪 ｜ 极度恐惧 ｜ BTC 期权偏斜 同处一行）：
+   与图间距 6、行高 22、11/500 的格名 + ⓘ，右半右端再接读数。0/1/2/3–29/满窗都只有这一行，
+   所以各点数形态等高（卡高 257）。名字不折行不截断，挤的时候折的是右端那串读数。 */
+.mi-defensive-premium__col > .mi-defensive-premium__col-foot {
+  grid-row: 2; display: flex; align-items: center; gap: 6px; min-width: 0;
+  min-height: 22px; margin-top: 6px;
+  font-size: var(--font-meta); line-height: var(--line-meta);
+}
+.mi-defensive-premium__col-foot h3 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 500; white-space: nowrap; }
+/* 中列那一行只有档位词，居中对齐两侧的格名。 */
+.mi-defensive-premium__col-foot--gauge { justify-content: center; }
 /* 图与同类状态块钉在**第 1 行**（固定 168）：上面直接就是头栏，读者一眼就是图。 */
 .mi-defensive-premium__col > .mi-defensive-premium__chart,
 .mi-defensive-premium__col > .mi-defensive-premium__chart-slot,
 .mi-defensive-premium__col > .mi-defensive-premium__state-box { grid-column: 1; grid-row: 1; }
-/* 格名与半条 ⓘ 在头栏里自己那一轨（用户 2026-11-23）：格名不折行、不截断，挤的话折的是右端的读数尾巴。 */
-.mi-defensive-premium__half-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.mi-defensive-premium__half-head h3 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 500; white-space: nowrap; }
 /* 行名行右端的读数（用户 2026-11-22）：值 12/650 tabular、单位与方向词 11/muted，整块右对齐。
    名称与值都不折行、不截断；方向词与窗口挤的时候折到名称下面一行（`flex-wrap` 只让尾巴折）。 */
 .mi-defensive-premium__headline-tail { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 6px; margin-left: auto; min-width: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
@@ -215,10 +221,8 @@
 .mi-defensive-premium [data-gauge-bucket-text='neutral'] { color: var(--mi-dashboard-sentiment-neutral); }
 .mi-defensive-premium [data-gauge-bucket-text='greed'] { color: var(--mi-dashboard-sentiment-greed); }
 .mi-defensive-premium [data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); }
-/* 头栏中轨（用户 2026-11-24）：档位词原来压在仪表图位底部，逼得仪表只能画在上面 127 里，
-   于是仪表又小又不居中。现在它就在这一格：居中、11/650，与卡名、两侧格名同一行；图里再没有任何字，
-   仪表画布回满 168，与两侧走势图等高（判据：两张图的日期文字互差 ≤2，弧弦与轴底差 ≤4）。 */
-.mi-defensive-premium__topbar-mid { grid-column: 2; display: flex; align-items: center; justify-content: center; min-width: 0; }
+/* 档位词（用户 2026-11-24 从卡头中轨挪到图下那一行）：11/650、五档语义色，与两侧格名同一行。
+   图里再没有任何字，仪表画布回满 168，与两侧走势图等高。 */
 .mi-defensive-premium__gauge-bucket {
   margin: 0; text-align: center; white-space: nowrap;
   font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 650;
@@ -229,9 +233,6 @@
 .mi-defensive-premium > .mi-defensive-premium__verdict { margin: 8px 0 0; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-defensive-premium__source-action { justify-self: start; }
 .mi-defensive-premium__direction { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); }
-/* 只有「不知道方向」那三句才是警示色：正常的走阔/收窄不该被读成警告。 */
-.mi-defensive-premium__direction--unknown { color: var(--mi-dashboard-caution); }
-.mi-defensive-premium__history { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* 图：ECharts 画在 canvas 容器里，外层 figure 定高定宽；读数行与图之间的 10 是列的第三行上距。 */
 .mi-defensive-premium__chart { position: relative; display: block; align-self: end; min-width: 0; margin: 0; height: var(--mi-defensive-premium-chart-height); }
 .mi-defensive-premium__chart-canvas { width: 100%; height: 100%; }
@@ -476,12 +477,11 @@
 @container (max-width: 939px) {
   /* 窄处三列上下排：仪表一列、两格各占满一行；每列 minmax(0,1fr)，图表不会因为剩 40px 被压成负宽。 */
   .mi-defensive-premium { grid-template-columns: minmax(0, 1fr); }
-  /* 头栏跟着塌成两行、不是三行（判据：竖排头栏 ≤46）：第一行卡名那串 + 右端档位词，第二行偏斜那串。
-     档位词仍是 11/650 那一句，只是从「中轨」挪到第一行右端——它不会自己占出第三行。 */
+  /* 头栏塌成一行：卡名那串在左、卡级动作在右（用户 2026-11-24 起头栏只剩这四样，
+     所以窄处也只占一行）。 */
   .mi-defensive-premium__topbar { grid-template-columns: minmax(0, 1fr) auto; row-gap: 0; }
   .mi-defensive-premium__topbar-lead { grid-column: 1; grid-row: 1; }
-  .mi-defensive-premium__topbar-mid { grid-column: 2; grid-row: 1; justify-self: end; }
-  .mi-defensive-premium__topbar-tail { grid-column: 1 / -1; grid-row: 2; }
+  .mi-defensive-premium__topbar-tail { grid-column: 2; grid-row: 1; justify-self: end; }
   /* 堆叠后仪表独占一行：不限宽会被拉成「800×168」的扁半圆，限到 240 并居中。 */
   .mi-defensive-premium__col--gauge { width: min(184px, 100%); justify-self: center; }
 }

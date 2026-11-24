@@ -12,7 +12,6 @@ import type { DashboardSentimentOptionsState } from '../../../pages/intelligence
 import type { DashboardFearGreedState } from '../../../pages/intelligence/dashboardFearGreedModel'
 import { SentimentGauge } from './SentimentGauge'
 import { ChartPlaceholder, FearGreedChart, SkewChart } from './DefensivePremiumCharts'
-import { CHART_MIN_POINTS } from './defensivePremiumChartOptions'
 import type { SourceCellOff } from '../shared/sourceCellOff'
 import type { DefensivePremiumCardText } from './defensivePremiumCardText'
 import '../../../shared/styles/sourceAvailability.css'
@@ -59,17 +58,12 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   const verdict = result && wholeCardState === undefined ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
   const loading = state.state === 'loading'
-  // 档位词在头栏中轨（用户 2026-11-24）：条件与仪表画指针那一处一致——真有读数、这一格没被关掉。
-  // 旧了就照旧显示档位词（读数还是那个读数，陈旧由左半的「偏旧」标），读不到或没有就整块不渲染。
-  const gaugeReading = cellOff === undefined && fearGreed?.state === 'available'
-    ? { score: fearGreed.score, bucket: fearGreed.bucket }
-    : undefined
 
   return <section className="mi-defensive-premium" aria-labelledby={TITLE_ID} data-testid="defensive-premium-card">
-    {/* 头栏与内容第一行合并（用户 2026-11-23）：不再单独占一行——卡名、卡级 ⓘ、窗口、两个格名与卡级动作
-        都在这一条 24 高的行上，三轨与下面三列同宽（`1fr 240 1fr`），格名与图之间 0 间距。
-        这一行挂在**卡级**（`grid-column: 1 / -1`）：整卡读失败/空时它留着——那时 ⓘ 最需要；
-        但两个格名跟着三列一起收起来，下面已经被一张状态面替掉，留着格名等于给空格子立两个标题。 */}
+    {/* 头栏四样（用户 2026-11-24）：卡名、卡级 ⓘ、窗口、一颗卡级动作，24 高一整条。
+        两个格名与档位词都下移到各自图下那一行（行高 22、与图间距 6），三轨与下面三列同宽，
+        中轨空着。这一行挂在**卡级**（`grid-column: 1 / -1`）：整卡读失败/空时它留着——那时 ⓘ 最需要；
+        三个名字跟着三列一起收起来，下面已经被一张状态面替掉，留着名字等于给空格子立标题。 */}
     <div className="mi-defensive-premium__topbar">
       <div className="mi-defensive-premium__topbar-lead">
         <h2 id={TITLE_ID}>{text.title}</h2>
@@ -79,66 +73,11 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           )} />
         {/* 窗口是整卡的事（用户 2026-11-23 定的排布）：贴卡名读，不放到最右那一轨。 */}
         <span className="mi-defensive-premium__window">{dataText(`${TEXT_PREFIX}.window`)}</span>
-        {wholeCardState === undefined ? <>
-          <div className="mi-defensive-premium__half-head" data-half-head="fear-greed">
-            {/* 行名只有格名（用户 2026-11-22）：量程就在刻度上（0/50/100），不再后缀一遍。 */}
-            <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
-            <Popover resolveText={dataText} lines={[
-              { labelKey: `${TEXT_PREFIX}.fearGreed.info.volatility` },
-              percentile
-                ? { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentile`, params: { percentile: String(percentile.value) } }
-                : { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentileInsufficient` },
-            ]} trigger={triggerProps => (
-              <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.fearGreed.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
-            )} />
-            {/* 格名行右端：这一格的值在仪表盘那一列，这里只放「偏旧」这类陈旧状态（AC-20 照旧要标）。 */}
-            {fearGreed?.state === 'available' && fearGreed.stale
-              ? <span className="mi-defensive-premium__headline-tail" data-stale="fear-greed">
-                <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
-                <span>{fillLabelParams(text.stale.stopsAt, { date: fearGreed.latestDay })}</span>
-              </span>
-              : null}
-          </div>
-        </> : null}
-      </div>
-      {/* 中轨：档位词居中，11/650，五档语义色（界面 2026-11-24）。盘里那个分数是画布内容，
-          读屏只能靠这一句带分数的名字。没有读数、这一格被关掉时整块不渲染。 */}
-      <div className="mi-defensive-premium__topbar-mid">
-        {gaugeReading === undefined ? null
-          : <p className="mi-defensive-premium__gauge-bucket" data-gauge-reading
-            data-gauge-bucket-text={gaugeReading.bucket}
-            aria-label={`${gaugeReading.score} ${text.fearGreed.buckets[gaugeReading.bucket]}`}>{text.fearGreed.buckets[gaugeReading.bucket]}</p>}
       </div>
       <div className="mi-defensive-premium__topbar-tail">
-        {wholeCardState === undefined ? <div className="mi-defensive-premium__half-head" data-half-head="skew">
-          <h3 id={SKEW_HEADING_ID}>{text.skew.name}</h3>
-          <Popover resolveText={dataText} lines={[
-            { labelKey: `${TEXT_PREFIX}.skew.info.definition` },
-            { labelKey: `${TEXT_PREFIX}.skew.info.relative` },
-            { labelKey: `${TEXT_PREFIX}.skew.info.since` },
-          ]} trigger={triggerProps => (
-            <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
-          )} />
-        </div> : null}
+        {/* 头栏只剩四样（用户 2026-11-24）：卡名、卡级 ⓘ、窗口、一颗卡级动作。两个格名与档位词
+            都下移到各自图下那一行；中轨因此空着，三轨模板留着不拆。 */}
         <div className="mi-defensive-premium__topbar-actions">
-          {/* 行名行右端就是这一格的读数（用户 2026-11-22）：值 12/650 + 单位 11/muted，右对齐；
-              方向词与窗口跟着值走，挤的时候折到名称下面一行，名称不许被挤断。 */}
-          {skew?.state === 'available'
-            ? <span className="mi-defensive-premium__headline-tail">
-              <strong className="mi-defensive-premium__headline-value" data-skew-value>{skew.latest.riskReversal.toFixed(1)}</strong>
-              <span>{text.skew.unit}</span>
-              {skew.direction.kind === 'unknown' ? null : <>
-                <span aria-hidden="true">·</span>
-                <span data-skew-direction={skew.direction.kind}>{text.skew.direction[skew.direction.kind]} · {text.skew.direction.window}</span>
-              </>}
-              {skew.stale
-                ? <span className="mi-defensive-premium__stale" data-stale="skew">
-                  <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
-                  <span>{fillLabelParams(text.stale.stopsAt, { date: skew.latestDay })}</span>
-                </span>
-                : null}
-            </span>
-            : null}
           {/* 整卡只留一颗动作：未接入时是「查看来源」，其余可读状态下是刷新；整块状态面自己带动作，
               这一轨不再给第二颗（AC-14）。 */}
           {/* 动作一律 24 高（`md`）：文字按钮是 24，图标按钮若用 22，换态时会跳 2px。 */}
@@ -161,7 +100,6 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
         : <>
           {/* 三格顺序（用户 2026-11-22）：恐惧贪婪走势 | 仪表 | 偏斜走势——仪表居中，两张走势各一边。 */}
           <div className="mi-defensive-premium__col" data-half="fear-greed">
-            {/* 格名与半条 ⓘ 已经上到头栏那一轨（用户 2026-11-23），列里第一行就是图。 */}
             {/* 图位：曲线、加载空图框、或一块「这一格怎么没数」的状态块——三种都占同一个高度，
                 所以未接入/读不到时那一列不会塌成一行、留一大片空白。 */}
             {cellOff !== undefined
@@ -183,10 +121,31 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                           last: String(fearGreed.points[0]!.score)
                         })} />
                       : null}
+            {/* 格名下移到图下（用户 2026-11-24）：与两侧的名字同一行，行高 22、与图间距 6。 */}
+            <div className="mi-defensive-premium__col-foot" data-half-foot="fear-greed">
+              {/* 行名只有格名（用户 2026-11-22）：量程就在刻度上（0/50/100），不再后缀一遍。 */}
+              <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
+              <Popover resolveText={dataText} lines={[
+                { labelKey: `${TEXT_PREFIX}.fearGreed.info.volatility` },
+                percentile
+                  ? { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentile`, params: { percentile: String(percentile.value) } }
+                  : { labelKey: `${TEXT_PREFIX}.fearGreed.info.percentileInsufficient` },
+              ]} trigger={triggerProps => (
+                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.fearGreed.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
+              )} />
+              {/* 名字行右端：这一格的值在仪表盘那一列，这里只放「偏旧」这类陈旧状态（AC-20 照旧要标）。 */}
+              {fearGreed?.state === 'available' && fearGreed.stale
+                ? <span className="mi-defensive-premium__headline-tail" data-stale="fear-greed">
+                  <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
+                  <span>{fillLabelParams(text.stale.stopsAt, { date: fearGreed.latestDay })}</span>
+                </span>
+                : null}
+            </div>
           </div>
 
           {/* 中间那一列：仪表只回答「落在哪一档」，日期与状态词在各自那一格的读数行上（定稿 §4.4 / §4.5）。 */}
           <SentimentGauge state={toGaugeState(fearGreed)} titleId={FEAR_GREED_HEADING_ID}
+            bucketLabels={text.fearGreed.buckets}
             {...(cellOff === undefined ? {} : { cellOff })} />
 
           <div className="mi-defensive-premium__col" data-half="skew">
@@ -199,43 +158,15 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
               </>
                 : skew?.state === 'available' ? <>
                 {/* 1–2 个读数**也画点**（不连线）：画成空框读者会以为没采到（用户 2026-11-22）。
-                    「还在攒」那句改走说明行，图位留给点；第 3 个读数起才连线（CHART_MIN_POINTS）。 */}
-                {skew.points.length < CHART_MIN_POINTS
-                  ? <>
-                    <SkewChart points={skew.points}
-                      ariaLabel={chartAria({
-                        ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
-                        days: skew.points.map(point => point.day),
-                        first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
-                        last: skew.points[0]!.riskReversal.toFixed(1)
-                      })} />
-                    <div className="mi-defensive-premium__notes">
-                      <p className="mi-defensive-premium__history" data-skew-accumulating>
-                        {fillLabelParams(text.skew.accumulating, {
-                          collected: String(skew.points.length), remaining: String(30 - skew.points.length)
-                        })}
-                      </p>
-                    </div>
-                  </>
-                  : <>
-                    <SkewChart points={skew.points}
-                      ariaLabel={chartAria({
-                        ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
-                        days: skew.points.map(point => point.day),
-                        first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
-                        last: skew.points[0]!.riskReversal.toFixed(1)
-                      })} />
-                    {/* 图下只留**一行**说明，装在一个容器里落进列模板的第 2 行（`auto`）：只报数量
-                        （从哪天开始记、还差几个）。「为什么没方向」**只在结论行说一次**（用户 2026-11-24：
-                        图下说「偏斜还不够 5 天，不判方向」，结论又说「偏斜这半没有可用的方向」，同一件事两遍）。 */}
-                    {skew.points.length < 30
-                      ? <div className="mi-defensive-premium__notes">
-                        <p className="mi-defensive-premium__history" data-skew-history>
-                          {fillLabelParams(text.skew.history.remaining, { date: skew.seriesStart, n: String(30 - skew.points.length) })}
-                        </p>
-                      </div>
-                      : null}
-                  </>}
+                    第 3 个读数起才连线（CHART_MIN_POINTS，画在 chartOptions 里），卡片这一层不再分支：
+                    图下那句「已有 N 个、还差 M 个」按用户 2026-11-24 的「废话」删掉了。 */}
+                <SkewChart points={skew.points}
+                  ariaLabel={chartAria({
+                    ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
+                    days: skew.points.map(point => point.day),
+                    first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
+                    last: skew.points[0]!.riskReversal.toFixed(1)
+                  })} />
               </> : skew?.state === 'empty' ? <>
                 {/* 偏斜用自己的空态句：借用 `text.empty` 会让这半显示「暂无已采集的恐惧与贪婪指数」。 */}
                 <StateSlot tone="empty" stateAttribute="empty" sentence={text.skew.empty} />
@@ -243,6 +174,34 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                 : skew === undefined ? null : <>
                     <StateSlot tone="unreadable" sentence={skewUnavailableText(skew, text)} />
                 </>}
+            {/* 右半的格名、半条 ⓘ 与读数一起下移到图下（用户 2026-11-24）：名字在左、值在右端，
+                名字不折行不截断，挤的时候折的是右端那串（英文在 1040 下会折，判据只看名字）。 */}
+            <div className="mi-defensive-premium__col-foot" data-half-foot="skew">
+              <h3 id={SKEW_HEADING_ID}>{text.skew.name}</h3>
+              <Popover resolveText={dataText} lines={[
+                { labelKey: `${TEXT_PREFIX}.skew.info.definition` },
+                { labelKey: `${TEXT_PREFIX}.skew.info.relative` },
+                { labelKey: `${TEXT_PREFIX}.skew.info.since` },
+              ]} trigger={triggerProps => (
+                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.skew.infoLabel" icon={Info} resolveText={dataText} size="sm" variant="plain" />
+              )} />
+              {skew?.state === 'available'
+                ? <span className="mi-defensive-premium__headline-tail">
+                  <strong className="mi-defensive-premium__headline-value" data-skew-value>{skew.latest.riskReversal.toFixed(1)}</strong>
+                  <span>{text.skew.unit}</span>
+                  {skew.direction.kind === 'unknown' ? null : <>
+                    <span aria-hidden="true">·</span>
+                    <span data-skew-direction={skew.direction.kind}>{text.skew.direction[skew.direction.kind]} · {text.skew.direction.window}</span>
+                  </>}
+                  {skew.stale
+                    ? <span className="mi-defensive-premium__stale" data-stale="skew">
+                      <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
+                      <span>{fillLabelParams(text.stale.stopsAt, { date: skew.latestDay })}</span>
+                    </span>
+                    : null}
+                </span>
+                : null}
+            </div>
           </div>
         </>}
 

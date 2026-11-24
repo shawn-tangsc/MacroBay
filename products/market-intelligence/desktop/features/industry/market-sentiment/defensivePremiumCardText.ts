@@ -22,8 +22,6 @@ export type DefensivePremiumCardText = {
     notConnected: string
     /** 偏斜自己的空态句：复用恐惧贪婪那句会变成「暂无已采集的恐惧与贪婪指数」。 */
     empty: string
-    /** 1–2 个点不画图，图位里写这句；参数 `collected` / `remaining`（窗口 30 天）。 */
-    accumulating: string
     infoLabel: string
     info: { definition: string; relative: string; since: string }
     asOf: string
@@ -33,7 +31,6 @@ export type DefensivePremiumCardText = {
     /** 只有**读数行**用的四个词（「走阔 · 近 5 天」那一处）。方向未知的三句原因不在这里：
         用户 2026-11-24 把它并进结论键、界面不再渲染；留着类型就是「配了、看不见」。 */
     direction: { window: string; steeper: string; flatter: string; flat: string }
-    history: { remaining: string }
     unavailable: { connection: string; source: string; read: string }
   }
   chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
@@ -58,7 +55,6 @@ type Source = {
       name: string
       notConnected: string
       empty: string
-      accumulating: string
       infoLabel: string
       asOf: string
       unit: string
@@ -67,7 +63,6 @@ type Source = {
       direction: { window: string; steeper: string; flatter: string; flat: string }
       unavailable: { connection: string; source: string; read: string }
     }
-    history: { remaining: string }
     stale: { pill: string; stopsAt: string }
     chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
     action: { refresh: string; enable: string; viewSource: string }
@@ -88,7 +83,7 @@ export function defensivePremiumCardText(text: Source): DefensivePremiumCardText
       infoLabel: text.defensivePremium.fearGreed.infoLabel,
       info: text.defensivePremium.fearGreed.info
     },
-    skew: { ...text.defensivePremium.skew, history: text.defensivePremium.history },
+    skew: text.defensivePremium.skew,
     chart: text.defensivePremium.chart,
     stale: text.defensivePremium.stale,
     action: text.defensivePremium.action,
