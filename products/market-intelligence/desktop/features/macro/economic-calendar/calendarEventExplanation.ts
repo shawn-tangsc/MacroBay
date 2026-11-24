@@ -87,6 +87,40 @@ export function calendarEventExplanationKeyFor(eventNameKey: string | undefined)
 }
 
 /**
+ * 官方日历那条路的标题键（`cpi` / `nonfarm-payrolls`…）→ 概念键。
+ *
+ * 官方四个源（Fed / BLS / BEA）的标题键是**另一套身份**，不是指标码；产品 2026-11-25 定了接，
+ * 文案不新增——同一份发布读同一段。`unknown` 与未列标题键不映射：讲话、会议这类行没有说明。
+ */
+const officialTitleKeys: Readonly<Record<string, CalendarEventExplanationKey>> = Object.freeze({
+  cpi: 'cpi',
+  'core-cpi': 'core-cpi',
+  'nonfarm-payrolls': 'nonfarm',
+  unemployment: 'unemployment',
+  'average-hourly-earnings': 'average-hourly-earnings',
+  pce: 'pce-price',
+  'core-pce': 'core-pce-price',
+  gdp: 'gdp-real-growth',
+  fomc: 'fomc'
+})
+
+/**
+ * 官方标题键 → 概念键；**只对 `(titleKey, US)` 生效**。
+ *
+ * 标题键本身不分国家：将来出现带 `cpi` 键的英国 CPI 行，那段第一句写着「美国劳工统计局」，
+ * 拿它顶上就是把错的机构写给读者。所以辖区不是可选项——非美国一律 `undefined`（整段不出现）。
+ * `unknown`、空串、未列标题键同理，不做「名字里含 CPI 就给」这类模糊匹配。
+ */
+export function calendarEventOfficialExplanationKeyFor(
+  titleKey: string | undefined,
+  countryCode: string | undefined
+): CalendarEventExplanationKey | undefined {
+  if (countryCode !== 'US') return undefined
+  if (titleKey === undefined || titleKey.length === 0) return undefined
+  return officialTitleKeys[titleKey]
+}
+
+/**
  * 这条事件的三段说明，顺序是「是什么 → 为什么值得看 → 看哪里」；没有登记就是 `undefined`。
  *
  * 文案从调用方传进来的那一份语言表读（`EconomicCalendarText['explanations']`），这里不持有
@@ -97,6 +131,19 @@ export function calendarEventExplanation(
   explanations: EconomicCalendarText['explanations']
 ): readonly [string, string, string] | undefined {
   const key = calendarEventExplanationKeyFor(eventNameKey)
+  if (key === undefined) return undefined
+  const paragraphs = explanations[key]
+  if (paragraphs === undefined) return undefined
+  return [paragraphs.what, paragraphs.why, paragraphs.watch]
+}
+
+/** 官方标题键那条路的三段说明；官方与市场读同一份文案，缺一段就当没有这一段。 */
+export function calendarEventOfficialExplanation(
+  titleKey: string | undefined,
+  countryCode: string | undefined,
+  explanations: EconomicCalendarText['explanations']
+): readonly [string, string, string] | undefined {
+  const key = calendarEventOfficialExplanationKeyFor(titleKey, countryCode)
   if (key === undefined) return undefined
   const paragraphs = explanations[key]
   if (paragraphs === undefined) return undefined

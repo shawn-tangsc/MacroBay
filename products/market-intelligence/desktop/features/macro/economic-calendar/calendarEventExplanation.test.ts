@@ -5,7 +5,9 @@ import { productText } from '../../../shared/i18n/productText'
 import {
   calendarEventExplanation,
   calendarEventExplanationKeyFor,
-  calendarEventExplanationKeys
+  calendarEventExplanationKeys,
+  calendarEventOfficialExplanation,
+  calendarEventOfficialExplanationKeyFor
 } from './calendarEventExplanation'
 
 /**
@@ -114,5 +116,63 @@ describe('calendarEventExplanation: 25 个概念键覆盖 29 个高档族', () =
     ])
     expect(calendarEventExplanation('US.PPI.NONE.YOY', zhExplanations)).toBeUndefined()
     expect(calendarEventExplanation(undefined, zhExplanations)).toBeUndefined()
+  })
+})
+
+/**
+ * 官方日历那一条路（Fed / BLS / BEA）的标题键是另一套身份（`cpi`、`nonfarm-payrolls`…），
+ * 不是指标码。产品 2026-11-25 定了接：**只对 `(titleKey, US)` 生效**，不新增文案。
+ *
+ * 辖区这一层是必须的：标题键本身不分国家，将来冒出带 `cpi` 键的英国 CPI，那段第一句写着
+ * 「美国劳工统计局」——拿美国那段顶上就是把错的机构写给读者。`unknown` 与未列标题键一律不映射。
+ */
+const officialTitleKeys = {
+  cpi: 'cpi',
+  'core-cpi': 'core-cpi',
+  'nonfarm-payrolls': 'nonfarm',
+  unemployment: 'unemployment',
+  'average-hourly-earnings': 'average-hourly-earnings',
+  pce: 'pce-price',
+  'core-pce': 'core-pce-price',
+  gdp: 'gdp-real-growth',
+  fomc: 'fomc'
+} as const
+
+describe('calendarEventExplanation: 官方标题键 → 概念键（只对 (titleKey, US)）', () => {
+  it('九个标题键逐个解到自己那一段（删一条就红并点名键名）', () => {
+    expect(Object.keys(officialTitleKeys)).toHaveLength(9)
+    for (const [titleKey, expected] of Object.entries(officialTitleKeys)) {
+      const key = calendarEventOfficialExplanationKeyFor(titleKey, 'US')
+      if (key === undefined) {
+        expect(key, `${titleKey} 没有说明文案`).toBeDefined()
+        continue
+      }
+      expect(key, `${titleKey} 解到的键不对`).toBe(expected)
+    }
+  })
+
+  it('同一标题键在别辖区不给键：不拿写明「美国劳工统计局」的那段顶上', () => {
+    for (const titleKey of Object.keys(officialTitleKeys)) {
+      expect(calendarEventOfficialExplanationKeyFor(titleKey, 'GB')).toBeUndefined()
+      expect(calendarEventOfficialExplanationKeyFor(titleKey, 'JP')).toBeUndefined()
+      expect(calendarEventOfficialExplanationKeyFor(titleKey, 'EMU')).toBeUndefined()
+    }
+  })
+
+  it('未列标题键与 unknown 一律不映射，也不做「名字里含 CPI」这类模糊匹配', () => {
+    expect(calendarEventOfficialExplanationKeyFor('retail-sales', 'US')).toBeUndefined()
+    expect(calendarEventOfficialExplanationKeyFor('unknown', 'US')).toBeUndefined()
+    expect(calendarEventOfficialExplanationKeyFor('cpi-extra', 'US')).toBeUndefined()
+    expect(calendarEventOfficialExplanationKeyFor('CPI', 'US')).toBeUndefined()
+    expect(calendarEventOfficialExplanationKeyFor(undefined, 'US')).toBeUndefined()
+    expect(calendarEventOfficialExplanationKeyFor('', 'US')).toBeUndefined()
+  })
+
+  it('取到键才给三段，官方与市场两条路读同一段文案', () => {
+    expect(calendarEventOfficialExplanation('pce', 'US', zhExplanations)).toEqual([
+      zhExplanations['pce-price'].what, zhExplanations['pce-price'].why, zhExplanations['pce-price'].watch
+    ])
+    expect(calendarEventOfficialExplanation('cpi', 'GB', zhExplanations)).toBeUndefined()
+    expect(calendarEventOfficialExplanation('retail-sales', 'US', zhExplanations)).toBeUndefined()
   })
 })

@@ -32,6 +32,9 @@ it('已登记的高档族：三段说明逐字出现，顺序是 是什么 → �
     expect(paragraphs).toEqual([text.explanations.cpi.what, text.explanations.cpi.why, text.explanations.cpi.watch])
     // 同一段文字只由文案表提供：抽屉里不再抄一遍句子。
     expect(host.querySelector('[data-calendar-explanation]')?.textContent).toBe(paragraphs.join(''))
+    // **不随选择播报**：宿主 `<aside>` 是 aria-live="polite"，这 ≈500 字是静态参考，
+    // 不关子层的话读者每选一条事件就被整段朗读一遍。断言留着，别在清理属性时顺手删掉。
+    expect(host.querySelector('[data-calendar-explanation]')?.getAttribute('aria-live')).toBe('off')
   } finally { await act(async () => root.unmount()) }
 })
 

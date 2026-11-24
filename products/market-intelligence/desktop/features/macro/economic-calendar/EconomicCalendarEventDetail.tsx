@@ -16,6 +16,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { calendarEventOfficialExplanation } from './calendarEventExplanation'
 import type { EconomicCalendarText } from './economicCalendarText'
 import type { EconomicCalendarEventView } from './economicCalendarModel'
 
@@ -152,6 +153,11 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
   const period = economicCalendarCaveats(event).includes('official-period-not-published-in-ics')
     ? text.periods.officialNotPublished
     : event.periodKey
+  /**
+   * 事件说明（R36 #34）：官方标题键 → 概念键，**只对 (titleKey, US) 生效**。
+   * 未列标题键、`unknown`、非美国辖区都拿到 `undefined` → 整段不渲染（不留空行、不写兜底句）。
+   */
+  const explanation = calendarEventOfficialExplanation(event.titleKey, event.countryCode, text.explanations)
 
   return <aside className="mi-economic-calendar__inspector" aria-live="polite">
     {/* The drawer's own header already names the surface; the body starts with the event. */}
@@ -174,6 +180,12 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
         : text.market.importance[event.importance]} />
       <Meta label={text.details.state} value={text.states[event.lifecycleState]} />
     </dl>
+    {/* 静态参考，不进播报：宿主 `<aside>` 是 aria-live="polite"，不关这一层的话，
+        读者每选一条事件就会被整段说明朗读一遍（≈500 字）。子层 off，宿主那行不动。 */}
+    {explanation === undefined ? null : <section className="mi-calendar-explanation" data-calendar-explanation
+      aria-live="off">
+      {explanation.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+    </section>}
     <div className="mi-economic-calendar__values">
       {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? missingValueSentence}</strong></div>)}
       {/* 官方三源（Fed/BLS/BEA）不提供预期；能用的只有挂着的那条市场观测，所以标出来源。

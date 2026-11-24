@@ -137,7 +137,10 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
     {/* 事件说明（R36 #34）：固定文案，按指标码的族取概念键；同一指标每次打开逐字相同。
         **取不到键整段不渲染**——不留空标题、不写「暂无说明」、不拿别的族的文案顶上。
         它和后面的 AI 解读是两段东西：这里永远是我们写的，那边带生成时刻与依据范围。 */}
-    {explanation === undefined ? null : <section className="mi-calendar-explanation" data-calendar-explanation>
+    {explanation === undefined ? null : <section className="mi-calendar-explanation" data-calendar-explanation
+      /* 静态参考，不进播报：宿主 `<aside>` 是 aria-live="polite"，不关这一层的话，
+         读者每选一条事件就会被整段说明朗读一遍（≈500 字）。子层 off，宿主那行不动。 */
+      aria-live="off">
       {explanation.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
     </section>}
     {/* 各来源记录（#47）：一个来源一块，narwhal 与 0xrouter 各写什么并排看，不拼成一条。 */}

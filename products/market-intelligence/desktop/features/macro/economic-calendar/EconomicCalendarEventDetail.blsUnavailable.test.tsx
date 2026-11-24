@@ -21,6 +21,7 @@ function event(overrides: Partial<EconomicCalendarEventView> = {}): EconomicCale
     eventKey: 'US.CPI.RELEASE.2026-M11',
     eventFamily: 'consumer-price-index',
     titleKey: 'cpi',
+    countryCode: 'US',
     periodKey: '2026-M11',
     lifecycleState: 'scheduled',
     coverage: 'available',
