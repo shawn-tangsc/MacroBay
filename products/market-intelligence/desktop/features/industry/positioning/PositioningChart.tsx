@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Tooltip } from '@platform/ui/components/tooltip'
+import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
@@ -99,6 +101,10 @@ export function PositioningChart({ positioning, funding, text, geometry, marks, 
   const ref = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<Readonly<{ index: number; left: number; top: number; width: number; height: number }> | undefined>(undefined)
   const formatTime = useShellTimeFormat()
+  const timeZone = useShellTimeZone()
+  /** 轴刻度用紧凑口径：同日 `HH:mm`、跨日 `MM-DD HH:mm`，不带时区——五个刻度各印一遍 `GMT+8` 会互相压字。
+      浮层里那一刻仍用完整口径（带时区），轴只回答「几点」。 */
+  const formatTick = (instant: string): string => formatShellClock(instant, { timeZone }) ?? formatTime(instant)
   const resolveProductKey = useProductTextKey()
 
   const rows = positioning.btc.length >= positioning.eth.length ? positioning.btc : positioning.eth
@@ -259,7 +265,7 @@ export function PositioningChart({ positioning, funding, text, geometry, marks, 
         {axisTicks(startMs, span, count).map(tick => (
           <text key={tick.at} x={x(tick.at)} y={geometry.height - 6}
             textAnchor={tick.first ? 'start' : tick.last ? 'end' : 'middle'}
-            className="mi-positioning-panel__tick">{formatTime(new Date(tick.at).toISOString())}</text>
+            className="mi-positioning-panel__tick">{formatTick(new Date(tick.at).toISOString())}</text>
         ))}
       </svg>
       {hovered && hover ? (
