@@ -166,9 +166,11 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
           拿到非空现值那刻的**来源观测时刻**。缺就不画，不拿别的时刻顶上。 */}
       {event.createdAt ? <Meta label={text.recordTimes.createdAt} value={formatTime(event.createdAt, 'second')} /> : null}
       {event.actualDetectedAt ? <Meta label={text.recordTimes.actualDetectedAt} value={formatTime(event.actualDetectedAt, 'second')} /> : null}
-      {/* 重要性只照记录自己带的值渲染；记录里没有就写「未提供」——不假定「高」，也不假定任何一档。 */}
+      {/* 重要性只照记录自己带的值渲染；记录里没有就写「未分级（这类事件我们还没有分级）」——
+          不假定「高」，也不假定任何一档；更不写「暂无」：那是「没有」，这里是「我们还没定」。
+          这句留正文、不进 ⓘ：它是「这一格为什么是空的」的答案。 */}
       <Meta label={text.details.importance} value={event.importance === undefined
-        ? text.market.missingValue
+        ? text.market.importanceUnratedDetail
         : text.market.importance[event.importance]} />
       <Meta label={text.details.state} value={text.states[event.lifecycleState]} />
     </dl>
