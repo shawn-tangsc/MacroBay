@@ -180,6 +180,42 @@ it('③b 读失败：不说成「模型没回答」，只出「重试」，点�
   expect(request).not.toHaveBeenCalled()
 })
 
+it('③c 读失败点「重试」的成本：重读命中已有解读 → 生成 0 次；重读 absent → 生成恰好 1 次', async () => {
+  const clickRetry = async (host: HTMLElement): Promise<void> => {
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  }
+
+  // 路径一：重读回来已经有那一份解读 → 一次模型调用都不该有（重试＝重读，不花钱）。
+  const readHit = vi.fn()
+    .mockRejectedValueOnce(new Error('ipc read failed'))
+    .mockResolvedValueOnce(readyView)
+  const requestHit = vi.fn(async () => readyView)
+  const hitHost = await render({ readEventInterpretation: readHit, requestEventInterpretation: requestHit } as CalendarInterpretationClient)
+  expect(hitHost.querySelector('[data-calendar-interpretation-failed]')).not.toBeNull()
+  await clickRetry(hitHost)
+  expect(readHit).toHaveBeenCalledTimes(2)
+  expect(requestHit).not.toHaveBeenCalled()
+  expect(hitHost.querySelector('[data-calendar-interpretation]')).not.toBeNull()
+
+  document.body.replaceChildren()
+  await act(async () => root?.unmount())
+  root = null
+
+  // 路径二：重读成功但确实还没有解读 → 走「重新打开这条事件」同一条生成路径，**恰好一次**。
+  const readAbsent = vi.fn()
+    .mockRejectedValueOnce(new Error('ipc read failed'))
+    .mockResolvedValueOnce({ state: 'absent' } as View)
+  const requestAbsent = vi.fn(async () => readyView)
+  const absentHost = await render({ readEventInterpretation: readAbsent, requestEventInterpretation: requestAbsent } as CalendarInterpretationClient)
+  await clickRetry(absentHost)
+  expect(readAbsent).toHaveBeenCalledTimes(2)
+  expect(requestAbsent).toHaveBeenCalledTimes(1)
+  expect(absentHost.querySelector('[data-calendar-interpretation]')).not.toBeNull()
+})
+
 it('④ not-applicable 与 absent（请求也没结果）：整块不渲染', async () => {
   const host = await render(client({ read: () => ({ state: 'not-applicable' }) }).client)
   expect(host.querySelector('[data-calendar-interpretation]')).toBeNull()
