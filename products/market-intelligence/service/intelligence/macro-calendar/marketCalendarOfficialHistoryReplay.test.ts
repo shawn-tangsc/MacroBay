@@ -64,6 +64,41 @@ describe('官方历史回放（S1）', () => {
     expect(report.written).toBe(2)
   })
 
+  /**
+   * #52：**回放不能把修订序号当期次**。`US.GDP.2026-Q3.SECOND` 的末段是二读的序号，
+   * 期次是它前面那段 `2026-Q3`（BEA 自己写的就是这个）。改前这里会写成 `SECOND`，
+   * 与 BEA 那行主键相差一期，同一次发布在日历上出现两行。
+   */
+  it('期次取合法令牌那一段：`US.GDP.2026-Q3.SECOND` → 2026-Q3，不是 SECOND', () => {
+    const database = revisionsDatabase()
+    ensureCalendarStandardTables(database)
+    // BEA 那条已经按正确期次落过一行（模拟真库：回放晚于 BEA 同步）。
+    database.prepare(`insert into mi_calendar_events
+      (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, time_precision, status,
+       identity_kind, value_state, values_json, source_provider_id, source_event_id, parser_version,
+       observed_at, first_seen_at, release_count)
+      values ('US','US.GDP.SA.ANNUALIZED_QOQ','2026-Q3','2026-11-25','2026-11-25','minute','scheduled',
+        'code','missing','{}','macro-calendar-bea','US.GDP.2026-Q3.SECOND','v1',
+        '2026-11-24T00:00:00.000Z','2026-11-24T00:00:00.000Z',1)`).run()
+    // 回放这条：同一 event_key，走官方历史回放。
+    database.prepare(`insert into mi_macro_calendar_revisions
+      (revision_id, event_key, release_group_key, event_family, event_name_key, country_code, importance, period_key,
+       lifecycle_state, revision_kind, scheduled_date, scheduled_at, published_at, detected_at, detected_at_ms,
+       recorded_at, actual_json, previous_json, consensus_json, provider_id, descriptor_id, source_url, raw_record_id,
+       evidence_hash, evidence_refs_json, snapshot_hash, replaces_revision_id, parser_version, caveats_json, schema_version)
+      values ('r9','US.GDP.2026-Q3.SECOND','US.BEA.GDP.2026-Q3.SECOND','gdp','gdp','US','high','2026-Q3',
+        'scheduled','schedule','2026-11-25','2026-11-25T13:30:00.000Z',null,'2026-11-01T00:00:00.000Z',
+        1761955200000,'2026-11-01T00:00:00.000Z',null,null,null,'macro-calendar-bea','d','https://x',null,
+        'h9','[]','s9',null,'v1','[]',1)`).run()
+    replayOfficialHistoryIntoStandardTable(database)
+    const rows = database.prepare(`select period_key, source_provider_id from mi_calendar_events
+      where metric_key = 'US.GDP.SA.ANNUALIZED_QOQ'`).all() as { period_key: string; source_provider_id: string }[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.period_key).toBe('2026-Q3')
+    // 来源没被顶掉：回放写的是同一条 BEA 发布，来源仍是 BEA。
+    expect(rows[0]!.source_provider_id).toBe('macro-calendar-bea')
+  })
+
   it('跑两遍幂等：第二遍不新增，逐月差集为空', () => {
     const database = revisionsDatabase()
     ensureCalendarStandardTables(database)

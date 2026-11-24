@@ -175,3 +175,62 @@ describe('期次解析带发布窗口（PRD R38 §3.1 v4）', () => {
     expect(row!.period_key).toBe('2026-11')
   })
 })
+
+/**
+ * #52：**非令牌期次当未解析处理**。回放曾把 `US.GDP.2026-Q3.SECOND` 的末段（二读序号）当
+ * 期次写成 `SECOND`，与 BEA 的 `2026-Q3` 主键相差一期 → 同一次发布两行。
+ *
+ * 放宽第 2 步的捞取条件（unknown **或** 不是合法令牌）后：那行被解析成 `2026-Q3`，
+ * 撞上已有那行 → 走**已存在**的 `period-resolve-collision`（补缺字段→归档→删重复），
+ * 不新增任何合并逻辑，也**不碰来源**。
+ */
+describe('#52 非令牌期次（SECOND）→ 解析成真期次并合到已有那行', () => {
+  it('`SECOND` + `2026-Q3` 两行 → 跑完只剩 `2026-Q3` 一行，来源仍是 BEA', () => {
+    const database = setup()
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: '2026-Q3',
+      firstScheduledDate: '2026-11-25', providerId: 'macro-calendar-bea' })
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: 'SECOND',
+      firstScheduledDate: '2026-11-25', providerId: 'macro-calendar-official-replay' })
+    run(database)
+    const kept = rows(database)
+    expect(kept).toHaveLength(1)
+    expect(kept[0]!.period_key).toBe('2026-Q3')
+    // 合并留的是已有那行：来源不被回放顶掉。
+    expect(kept[0]!.source_provider_id).toBe('macro-calendar-bea')
+  })
+
+  it('第二遍 0 变更（放宽条件不破坏幂等）', () => {
+    const database = setup()
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: '2026-Q3',
+      firstScheduledDate: '2026-11-25', providerId: 'macro-calendar-bea' })
+    seed(database, { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', periodKey: 'SECOND',
+      firstScheduledDate: '2026-11-25', providerId: 'macro-calendar-official-replay' })
+    run(database)
+    const second = run(database)
+    expect(second.periodsResolved).toBe(0)
+    expect(second.droppedRows).toBe(0)
+    expect(rows(database)).toHaveLength(1)
+  })
+})
+
+/**
+ * #53：**同一身份的「已解析」与「unknown」重复，要在本次启动内合掉**，不等下一次重启。
+ *
+ * 真库那对：`["44994",78258]` 一条 2026-10-28（带 `event_type`，第 2 步按事件日期解析）、
+ * 一条 `unknown:["44994",78258]`（没有 `event_type`，解不出）。桶一原来只在期次解析**之前**跑，
+ * 那时两条都还是 unknown，合不到；解析之后新出现的正常行没有第二遍桶一去收拾——于是读者在
+ * 下一次重启之前一直看到两行。
+ */
+describe('#53 解析之后当场再跑一遍桶一（不动原顺序）', () => {
+  it('一条能解析成事件日、一条解不出 → 本次启动后只剩解析出来的那一行', () => {
+    const database = setup()
+    seed(database, { metricKey: '["44994",78258]', periodKey: 'unknown:["44994",78258]',
+      firstScheduledDate: '2026-10-28', identityKind: 'source', eventType: 'central-bank-activity' })
+    seed(database, { metricKey: '["44994",78258]', periodKey: 'unknown:["44994",78258]-dup',
+      firstScheduledDate: '2026-10-28', identityKind: 'source' })
+    run(database)
+    const kept = rows(database)
+    expect(kept).toHaveLength(1)
+    expect(kept[0]!.period_key).toBe('2026-10-28')
+  })
+})

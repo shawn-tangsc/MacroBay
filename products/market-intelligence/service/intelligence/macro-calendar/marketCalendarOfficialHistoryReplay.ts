@@ -4,9 +4,9 @@ import { getMacroCalendarReleaseValueMapping } from './macroCalendarReleaseValue
 import { displayValueFromJson, valueObjectFromJson } from './marketCalendarValueEncoding'
 import { calendarNumericJsonFromSourceValues } from './marketCalendarNumericParse'
 import { calendarNumericUnitHintForMetricKey } from './marketCalendarNumericUnits'
-import { normalizeCalendarPeriodKey, normalizeCalendarSourceEventId } from './marketCalendarPeriodKey'
+import { isCalendarPeriodToken, normalizeCalendarPeriodKey, normalizeCalendarSourceEventId } from './marketCalendarPeriodKey'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
-import { recordCalendarUnmapped } from './marketCalendarStandardTable'
+import { calendarStandardTablePolicy, recordCalendarUnmapped } from './marketCalendarStandardTable'
 
 /**
  * **把官方修订表的历史回放进标准表**（S1，契约 §8）。
@@ -104,7 +104,15 @@ function rowsFor(revision: RevisionRow): Readonly<{ row: Record<string, unknown>
   if (mapping !== undefined) {
     // 指标行：期间取源给的期次，**但按 `YYYY-MM` 归一**（来源原样是 `2026-M10`）。
     // 不归一，同一期会在标准表里落成两行，补值那行永远问不到 FRED 的值。
-    const rawPeriod = revision.event_key.split('.').at(-1) ?? ''
+    /**
+     * **期次取身份里第一个合法的令牌段，不是「最后一段」**（0.4.5 #52）：
+     * 官方 GDP 的事件键是 `US.GDP.2026-Q3.SECOND`，末段 `SECOND` 是二读序号，不是期次；
+     * 照末段写会得到 `period_key='SECOND'`，与 BEA 那行（`2026-Q3`）主键相差一期 → 同一发布两行。
+     * 从后往前找「像期次」的那一段；一个都没有就按未映射计，**不写空壳**。
+     */
+    // 先按既有规则归一每段（来源内部写法 `2026-M10` 要认），再判它像不像期次。
+    const rawPeriod = revision.event_key.split('.').map(normalizeCalendarPeriodKey)
+      .filter((segment) => isCalendarPeriodToken(segment)).at(-1) ?? ''
     if (rawPeriod === '') return undefined
     const periodKey = normalizeCalendarPeriodKey(rawPeriod)
     return { row: { ...shared, metricKey: mapping.metricKey, periodKey }, ...scored }
@@ -138,8 +146,22 @@ export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, i
   const rows: Record<string, unknown>[] = []
   let unmapped = 0
   let numericUnparsed = 0
+  /**
+   * **回放只补缺口，不改已经存在的行**（0.4.5 #52 的连带面）：这条源内发布已经在标准表里
+   * （不管它落在哪个期次），回放就不再写——写就会 upsert 到同一主键上，把 BEA/BLS 那行的
+   * `source_provider_id` 换成回放自己，等于把「这条是谁说的」改掉。
+   *
+   * 启动入口那道 `pendingOfficialHistoryRevisions` 已经按同样口径跳过，这里再挡一次是因为
+   * 函数本身也允许被直接调用（脚本、迁移），不能只靠调用方的闸。
+   */
+  const known = new Set<string>()
+  for (const row of database.prepare(`select source_event_id from ${calendarStandardTablePolicy.eventsTable}`)
+    .all() as Array<{ source_event_id: string }>) {
+    known.add(normalizeCalendarSourceEventId(String(row.source_event_id)))
+  }
   for (const revision of latest.values()) {
     const mapped = rowsFor(revision)
+    if (mapped !== undefined && known.has(normalizeCalendarSourceEventId(String(mapped.row.sourceEventId)))) continue
     if (mapped === undefined) {
       unmapped += 1
       if (write) {

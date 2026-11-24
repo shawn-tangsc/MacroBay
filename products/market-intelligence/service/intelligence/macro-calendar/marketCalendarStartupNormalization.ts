@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { zeroXRouterCanonicalIdentity, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { derivePublishWindows } from './marketCalendarPublishWindow'
 import { calendarStandardTablePolicy, hasActualValue } from './marketCalendarStandardTable'
+import { isCalendarPeriodToken } from './marketCalendarPeriodKey'
 import { releaseStatusesPromotedByValue } from '../../../contracts/macro/marketCalendarQueryContracts'
 
 /**
@@ -22,6 +23,14 @@ import { releaseStatusesPromotedByValue } from '../../../contracts/macro/marketC
  *
  * 幂等：第二遍 0 变更。不碰国家码、不碰主键、不碰数值本身（桶一/桶二只为补空缺字段并值）。
  */
+/**
+ * 这一行的期次是不是「待解析」：`unknown:`（明确缺失），或者**不是任何一种期次令牌**
+ * （`SECOND` / `ADVANCE` 这种修订序号被误当期次）。两者都不是缺陷行，而是还没解出真期次。
+ */
+function isUnresolvedPeriodKey(periodKey: string): boolean {
+  return periodKey.startsWith('unknown:') || !isCalendarPeriodToken(periodKey)
+}
+
 export const calendarStartupNormalizationPolicy = Object.freeze({
   mergeAuditTable: 'mi_calendar_events__merge_audit_v1'
 })
@@ -137,6 +146,10 @@ export function normalizeCalendarStandardRows(
     }
 
     // ── 1b. 桶一：同（国家+码+首发布日）已有正常期次行时，`unknown:` 重复先并值后删 ──
+    //     抽成函数是因为它在「期次解析之后」还要再跑一遍（见步骤 2 末，#53）：解析可能刚好让
+    //     一条 unknown 变成正常期次，于是同一身份出现「正常 + unknown」——那时该当场合掉，
+    //     而不是等下一次启动。**原顺序不动**：它第一次仍然在解析之前跑。
+    const mergeUnknownDuplicates = (): void => {
     const bucketOne = database.prepare(`select country_code, metric_key, first_scheduled_date
       from ${table} group by 1,2,3
       having sum(period_key not like 'unknown:%') > 0 and sum(period_key like 'unknown:%') > 0`).all() as Row[]
@@ -168,15 +181,22 @@ export function normalizeCalendarStandardRows(
           anyMerged ? 'merged-value-then-delete' : 'values-equal-direct-delete')
       }
     }
+    }
+    mergeUnknownDuplicates()
 
     // ── 2. 期次解析（只用已有 periodRule） ──────────────────────────────────
     // 发布窗口与回填共用同一套算法（从该源历史发布日现算）：期次反推必须两边一致，
     // 否则回填写下 2026-10、这里又把它「解」成 2026-11，同一行每轮翻一次。
     const publishWindows = derivePublishWindows(database)
-    const unresolved = database.prepare(`select rowid as rowId, country_code, metric_key, period_key,
+    /**
+     * **候选＝`unknown:` 的，加上「根本不是期次令牌」的**（0.4.5 #52）。
+     * 后者以前漏在闸外：回放曾把 `US.GDP.2026-Q3.SECOND` 的末段当期次写成 `SECOND`，
+     * 它不是 unknown、也不是期次，于是永远不被解析，与 BEA 的 `2026-Q3` 并存成两行。
+     */
+    const unresolved = (database.prepare(`select rowid as rowId, country_code, metric_key, period_key,
         scheduled_date, first_scheduled_date, coalesce(event_type, '') as event_type,
-        source_label, source_label_en
-      from ${table} where period_key like 'unknown:%'`).all() as Row[]
+        source_event_id, source_label, source_label_en
+      from ${table}`).all() as Row[]).filter((row) => isUnresolvedPeriodKey(String(row.period_key)))
     const rename = database.prepare(`update ${table} set period_key = ? where rowid = ?`)
     const index = new Map<string, number>()
     for (const row of database.prepare(`select rowid as rowId, country_code, metric_key, period_key, first_scheduled_date
@@ -205,7 +225,23 @@ export function normalizeCalendarStandardRows(
         })
         period = canonical?.periodKey ?? null
       }
-      if (period === null) { report.unresolvedPeriods += 1; continue }
+      if (period === null) {
+        /**
+         * 解不出来，而它的期次**本来就不是期次**（`SECOND` 这类修订序号）：把它落成
+         * 「明确缺失」`unknown:<源内发布 id>`，与同身份的另一行同一写法——否则它顶着一个
+         * 假期次永远是「另一期」，后面的桶一/桶二都认不出它们是同一次发布（0.4.5 #52）。
+         * 已经是 `unknown:` 的不动：那本来就是「明确缺失」。
+         */
+        const current = String(row.period_key)
+        const currentKey = keyOf(row)
+        if (!current.startsWith('unknown:')) {
+          rename.run(`unknown:${String(row.source_event_id)}`, Number(row.rowId))
+          index.delete(currentKey)
+          index.set(keyOf({ ...row, period_key: `unknown:${String(row.source_event_id)}` }), Number(row.rowId))
+        }
+        report.unresolvedPeriods += 1
+        continue
+      }
       const currentKey = keyOf(row)
       const target = { ...row, period_key: period }
       const occupied = index.get(keyOf(target))
@@ -226,6 +262,9 @@ export function normalizeCalendarStandardRows(
       index.delete(currentKey)
       report.periodsResolved += 1
     }
+    // 解析之后当场再合一遍（#53）：本次刚解析出来的正常行，与同一身份仍挂着的 `unknown:` 重复。
+    // 幂等：没有这种重复时它一条都不动。
+    mergeUnknownDuplicates()
 
     /**
      * **跨源值冲突不并**（Chief 2026-11-21，0.4.5 #18）：两家对同一期给出不同的数时，
