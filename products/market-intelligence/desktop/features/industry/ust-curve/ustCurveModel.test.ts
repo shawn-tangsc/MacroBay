@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { macroRatesSnapshotPublicPolicy } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import type { MacroRatesReading, MacroRatesSnapshotView } from '../../../../contracts/macro/macroRatesSnapshotContracts'
+import { tooltipLeft } from '../../../shared/chart/tooltipPlacement'
 import {
-  buildUstCurve, buildUstRows, changeSet, UST_TOOLTIP_EDGE, UST_TOOLTIP_WIDTH, ustCurveRanges,
-  ustObservationDates, ustTablePeriod, ustTooltipLeft
+  buildUstCurve, buildUstRows, changeSet, UST_TOOLTIP_EDGE, UST_TOOLTIP_OFFSET, UST_TOOLTIP_WIDTH,
+  ustCurveRanges, ustObservationDates, ustTablePeriod, ustTooltipLeft
 } from './ustCurveModel'
 
 const series = macroRatesSnapshotPublicPolicy.series
@@ -256,66 +257,21 @@ describe('ust curve model: windows and footer dates', () => {
 })
 
 /**
- * 光字牌的横向位置（界面设计 2026-11-24 的尺子）：
- * `W − x ≥ 228` → 右侧 `x + 12`；否则 `x ≥ 228` → 左侧 `x − 222`；两边都放不下才兜底并夹进 `[6, W − 216]`。
- *
- * 用户截图：最右边那几天（11-20 那列）被 210 宽的浮层压着——旧写法「永远放右边、越界夹到右内边距」
- * 正好盖住读者要看的那一列。228 = 12（偏移）+ 210（牌宽）+ 6（边距），不是 222：222 会把
- * 剩余宽度 223–228 那段推到框外，右边缘超 6px，正是跨资产图那笔修掉的「最后几个像素被裁」。
+ * 这张卡只报三个数，翻转规则在 `shared/chart/tooltipPlacement`（那一整套用例跟着搬过去了）。
+ * 这里钉「传的是哪三个数」，免得有人把 offset 与 inset 传反、或哪天规则搬回来又长出一份。
  */
-describe('光字牌横向位置', () => {
-  const BOX = 800
-  // 图的右缘：与 UstCurveChart 的 GUTTER_RIGHT 一致（800 − 112 = 688），最右一列就落在这里。
-  const RIGHTMOST = BOX - 112
-
-  it('光标在左半边：留在右侧，与光标留 12 的间距', () => {
-    expect(ustTooltipLeft(300, BOX)).toBe(312)
-  })
-
-  it('最右一列：翻到光标左边，右缘不越界，也不压住被读的那一列', () => {
-    const left = ustTooltipLeft(700, BOX)
-    expect(left).toBe(478)
-    expect(left + UST_TOOLTIP_WIDTH + UST_TOOLTIP_EDGE).toBeLessThanOrEqual(BOX - UST_TOOLTIP_EDGE)
-    expect(left).toBeLessThanOrEqual(700 - 12)
-
-    // 图表里真正的最右一列（688）：同样翻到左边。
-    const chart = ustTooltipLeft(RIGHTMOST, BOX)
-    expect(chart).toBe(RIGHTMOST - 12 - UST_TOOLTIP_WIDTH)
-  })
-
-  it('阈值含等号：W − x = 228 仍放右侧，少 1 才翻到左侧', () => {
-    expect(ustTooltipLeft(BOX - 228, BOX)).toBe(BOX - 228 + 12)
-    expect(ustTooltipLeft(BOX - 227, BOX)).toBe(BOX - 227 - 222)
-  })
-
-  it('左侧那条边的边界：x = 228 时左边缘正好贴 6；右侧放得下时右侧优先', () => {
-    // W=400、x=228：右余 172 放不下，左侧候选正好 228 − 222 = 6，不再夹。
-    expect(ustTooltipLeft(228, 400)).toBe(6)
-    // 同一对坐标放进 800 宽的框里，右侧放得下（800 − 228 = 572 ≥ 228），所以仍是右侧：
-    // 「右侧优先」这件事也钉住，免得下一个人把两条条件写反。
-    expect(ustTooltipLeft(228, 800)).toBe(240)
-  })
-
-  it('两边都放不下时兜底：先取更宽的一侧，再夹进 [6, W − 216]', () => {
-    // W=400、光标在中部：两侧剩余各 200（并列取右侧），212 夹到 184。
-    expect(ustTooltipLeft(200, 400)).toBe(184)
-    // 光标略偏左：右侧更宽，187 夹到上限 184。
-    expect(ustTooltipLeft(175, 400)).toBe(184)
-    // 光标略偏右：左侧更宽，3 夹到下限 6。
-    expect(ustTooltipLeft(225, 400)).toBe(6)
-    // 紧贴左侧边界：x=227 两边都不够（右余 173、左 227），候选 227 − 222 = 5 夹到 6。
-    expect(ustTooltipLeft(227, 400)).toBe(6)
-  })
-
-  it('任何输入下 left ≥ 6，且 W ≥ 222 时右边缘不越界', () => {
-    for (const width of [222, 240, 300, 400, 456, 464, 600, 800, 1000]) {
-      for (let x = 0; x <= width; x += 7) {
-        const left = ustTooltipLeft(x, width)
-        expect(left, `W=${width} x=${x}`).toBeGreaterThanOrEqual(6)
-        if (width >= 222) {
-          expect(left + UST_TOOLTIP_WIDTH, `W=${width} x=${x}`).toBeLessThanOrEqual(width - 6)
-        }
-      }
+describe('光字牌定位的入参', () => {
+  it('传的是 210 宽、12 偏移、6 边距，并原样交给共用规则', () => {
+    expect(UST_TOOLTIP_WIDTH).toBe(210)
+    expect(UST_TOOLTIP_OFFSET).toBe(12)
+    expect(UST_TOOLTIP_EDGE).toBe(6)
+    const cases = [[300, 800], [572, 800], [573, 800], [688, 800], [200, 400], [228, 400], [227, 400]] as const
+    for (const [x, boxWidth] of cases) {
+      expect(ustTooltipLeft(x, boxWidth), `x=${x} W=${boxWidth}`).toBe(tooltipLeft({
+        x, boxWidth, width: UST_TOOLTIP_WIDTH, offset: UST_TOOLTIP_OFFSET, inset: UST_TOOLTIP_EDGE
+      }))
     }
+    // 图表真正的最右一列（800 宽、图右缘 688）：翻到左侧 466。
+    expect(ustTooltipLeft(688, 800)).toBe(466)
   })
 })
