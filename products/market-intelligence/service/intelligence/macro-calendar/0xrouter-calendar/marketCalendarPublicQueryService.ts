@@ -229,7 +229,7 @@ export function createMarketCalendarPublicQueryService(deps: {
           // 出现两行，条数也不会被重复计一次。
           const batchesByKind = policy.kinds.map((_, index) => [
             { providerId: marketCalendarProviderId, descriptorId: policy.feedByKind[index]! },
-            { providerId: marketCalendarLegacyProviderId, descriptorId: policy.descriptors[index]! }
+            { providerId: marketCalendarLegacyProviderId, descriptorId: policy.collectionFeeds[index]! }
           ].map((candidate) => {
             const result = deps.repository.listCollections({ ...candidate, month, locale, asOf,
               limit: marketCalendarPublicPagingPolicy.selectionScanLimit })

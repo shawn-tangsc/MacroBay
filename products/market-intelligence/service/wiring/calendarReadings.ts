@@ -105,7 +105,7 @@ export function wireCalendarReadings(input: Readonly<{
       const pick = input.database.prepare(`select descriptor_id, attempted_at, state
         from mi_macro_calendar_market_refresh_attempts where descriptor_id = ?
         order by attempted_at desc limit 1`)
-      return marketCalendarPublicPolicy.descriptors.map((descriptorId) => {
+      return marketCalendarPublicPolicy.collectionFeeds.map((descriptorId) => {
         const row = pick.get(descriptorId) as { attempted_at?: string; state?: string } | undefined
         return { descriptorId, ...(row?.attempted_at === undefined || row.state === undefined
           ? {} : { latestAttempt: { attemptedAt: row.attempted_at, state: row.state } }) }

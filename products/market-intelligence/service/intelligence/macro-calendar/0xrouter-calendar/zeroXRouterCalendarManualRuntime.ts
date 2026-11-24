@@ -185,13 +185,13 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
          * 会把一条停跑两天的旧源当成「启用的来源」，取最差就永远是 59 小时前——
          * 于是每版都判过期、每次都触发补采、每次都写「采集超时/失败」。
          */
-        const enabled = enabledSourceIds ?? marketCalendarPublicPolicy.descriptors
+        const enabled = enabledSourceIds ?? marketCalendarPublicPolicy.collectionFeeds
         const highWater = attempts.listCollectionHighWater()
         const allAttempts = attempts.listAttempts()
         const sources = marketCalendarPublicPolicy.kinds.map((_, index) => {
           // 一类事件只报一个来源：新来源有采集记录就报它，否则报切换前那个——
           // 与读取侧同一条规则，否则「数据来自谁」和「新鲜度说的是谁」会各说各话。
-          const descriptorId = sourceFor(index, highWater) ?? marketCalendarPublicPolicy.descriptors[index]!
+          const descriptorId = sourceFor(index, highWater) ?? marketCalendarPublicPolicy.collectionFeeds[index]!
           const lastCollectedAt = readWorstEnabledCollection(
             highWater.filter((row) => row.descriptorId === descriptorId), [descriptorId])
           const latestAttempt = latestAttemptFor(allAttempts, descriptorId)
@@ -209,7 +209,7 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
       const attemptsOfLocale = attempts.listAttempts().filter((row) => row.locale === scope.locale)
       // **只认当下在采的那个描述符**（2026-11-16）：旧源的 feed id 已经停跑，先问它等于把
       // 一条两天前的失败记录当成「这一类事件的最新尝试」。`feedByKind` 只管按类查映射。
-      const attempt = latestAttemptFor(attemptsOfLocale, marketCalendarPublicPolicy.descriptors[index]!, scope.month)
+      const attempt = latestAttemptFor(attemptsOfLocale, marketCalendarPublicPolicy.collectionFeeds[index]!, scope.month)
       return attempt ?? undefined
     },
     refreshManual(input: unknown): Promise<RefreshResult> {
@@ -262,7 +262,7 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
  */
 /** 这一类事件这一期真正有采集记录的那个来源；两个都没有时返回 undefined。 */
 function sourceFor(index: number, highWater: readonly { descriptorId: string }[]): string | undefined {
-  for (const descriptorId of [marketCalendarPublicPolicy.descriptors[index]!]) {
+  for (const descriptorId of [marketCalendarPublicPolicy.collectionFeeds[index]!]) {
     if (highWater.some((row) => row.descriptorId === descriptorId)) return descriptorId
   }
   return undefined

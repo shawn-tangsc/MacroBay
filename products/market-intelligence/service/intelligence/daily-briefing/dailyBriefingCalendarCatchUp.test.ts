@@ -376,7 +376,7 @@ describe('isFreshAt', () => {
 /**
  * 补跑清单不许是「另一份手抄的 id 表」。
  *
- * `refreshNow` 只认 `marketCalendarPublicPolicy.descriptors`，别的 id 一律 `input-invalid`；
+ * `refreshNow` 只认 `marketCalendarPublicPolicy.collectionFeeds`，别的 id 一律 `input-invalid`；
  * 所以清单与那份契约必须逐条相同，且每一条都要能在登记日历 descriptor 的注册表里查到——
  * 这条守卫会在 id 被删掉/改名的当天变红，而不是等到补跑空跑或报错才发现。
  */
@@ -385,7 +385,7 @@ describe('the catch-up list', () => {
     // 契约说的是「登记了哪条采集入口」，补跑要的是「此刻有作业在跑」——今天在采的是 0xRouter 三路。
     const ids = briefingCalendarCatchUpSourceIds(registered(...liveCalendarJobIds))
     expect([...ids]).toEqual([...liveFeedIds])
-    for (const feedId of ids) expect(marketCalendarPublicPolicy.descriptors).toContain(feedId)
+    for (const feedId of ids) expect(marketCalendarPublicPolicy.collectionFeeds).toContain(feedId)
     for (const feedId of ids) {
       // 「登记」看的是日历 feed 注册表（证据源注册表里没有市场侧 feed，那是另一张表）。
       expect(calendarFeedRegistry[feedId as keyof typeof calendarFeedRegistry]).toBeDefined()

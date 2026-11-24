@@ -134,7 +134,7 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
             : { lastSuccessAt: input.lastWriteFailure.lastSuccessAt }) } }),
     // 报的是**采集描述符**（当下在采的三条），不是 `feedByKind` 里旧源的 feed id——
     // 后者会让整份读数被契约校验判成不可用，或者把一条停跑的源算进「最差」。
-    sources: marketCalendarPublicPolicy.descriptors.map((descriptorId) => {
+    sources: marketCalendarPublicPolicy.collectionFeeds.map((descriptorId) => {
       const attempt = input.latestAttempts?.find((entry) => entry.descriptorId === descriptorId)?.latestAttempt
       return { descriptorId, lastCollectedAt, ...(attempt === undefined ? {} : { latestAttempt: attempt }) }
     })

@@ -49,18 +49,14 @@ export const marketCalendarPublicPolicy = Object.freeze({
   feedByKind: ['macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
     'macro-calendar-narwhal-central-bank-activities'],
   /**
-   * 真正被采集、被调用方清单列出的来源：**一条**。
+   * **当前真正在采的 feed：唯一一份采集清单**（2026-11-24 收成一份）。
    *
-   * 一次 `economics/calendar` 调用返回全部 releases，三类事件由我们按 series 自己分；
-   * 另两条 feed 带 `coveredBy` 指向它。调用方（简报补跑、按需刷新）只列这一条，列三条就是
-   * 同一个端点请求三次。
-   */
-  /**
-   * **当前真正在采的 feed**（补跑命令下发 `sources` 用它校验）。
+   * 这里原来还有一份内容完全相同、只换了名字的 `descriptors`——于是「补采排哪些源」和
+   * 「补采结果校验哪些源」读的是两张表，任何一边改了另一边不会红。现在只有这一份：
+   * 补采目标、结果校验、采集来源状态读数、尝试台账的已知 id 全部用它。
    *
-   * 2026-11-16：补采命令已从 narwhal 换到 0xrouter 三路，这份清单必须同笔对齐——否则
-   * `isMarketCalendarRefreshNowResult` 拿返回值去比对旧名单，每次真实补采都被判成 `unknown`，
-   * 界面写「补采结果未知」，比失败更难查。
+   * **判定不读它**：新鲜度只看标准表 `max(observed_at)`（用户 2026-11-16 定死）；
+   * 这份清单只回答「要采哪几个源」。
    */
   collectionFeeds: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
     'macro-calendar-0xrouter-central-bank-activities'],
@@ -84,13 +80,6 @@ export const marketCalendarPublicPolicy = Object.freeze({
    * 也不许把这条发布藏起来——「不知道来源」不等于「没有这次发布」。
    */
   unspecifiedSource: 'unspecified',
-  /**
-   * 0xRouter 的三个事件身份：**只描述旧来源自己能采什么**（它的采集器、它的尝试台账、
-   * 以及按需补跑时能点名的那三个端点）。它不是当前读取来源，也不是按事件类型的映射表
-   * ——映射表是 `feedByKind`，采集清单是 `collectionFeeds`。
-   */
-  descriptors: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
-    'macro-calendar-0xrouter-central-bank-activities'],
   /** Bounded catch-up for the daily briefing: one collection, one shared deadline. */
   refreshNow: { defaultTimeoutMs: 90_000, minimumTimeoutMs: 1_000, maximumTimeoutMs: 120_000 },
   methods: { refresh: 'intelligence.macro.marketCalendar.refreshManual', query: 'intelligence.macro.marketCalendar.queryMonth',
@@ -376,15 +365,15 @@ export function isMarketCalendarFreshness(value: unknown): value is MarketCalend
    * 读侧已改成报描述符，但**旧测试夹具与在途版本**仍可能给旧 id——校验的职责是「id 认识、
    * 数量对齐」，不是替读侧决定用哪套。两边都只允许「已知 id」，长度必须是三类事件那三条。
    */
-  const knownSourceIds = [...marketCalendarPublicPolicy.descriptors, ...marketCalendarPublicPolicy.feedByKind]
-  return value.sources.length === marketCalendarPublicPolicy.descriptors.length &&
+  const knownSourceIds = [...marketCalendarPublicPolicy.collectionFeeds, ...marketCalendarPublicPolicy.feedByKind]
+  return value.sources.length === marketCalendarPublicPolicy.collectionFeeds.length &&
     value.sources.every((item) => (knownSourceIds as readonly string[]).includes(item.descriptorId)) &&
     value.sources.every(item => item.lastCollectedAt === null || item.lastCollectedAt <= (value.asOf as string))
 }
 function sourceFreshness(value: unknown): value is MarketCalendarCollectionFreshness {
   return marketExact(value, ['descriptorId', 'lastCollectedAt'], ['latestAttempt']) &&
     typeof value.descriptorId === 'string' &&
-      ([...marketCalendarPublicPolicy.descriptors, ...marketCalendarPublicPolicy.feedByKind] as readonly string[]).includes(value.descriptorId) &&
+      ([...marketCalendarPublicPolicy.collectionFeeds, ...marketCalendarPublicPolicy.feedByKind] as readonly string[]).includes(value.descriptorId) &&
     (value.lastCollectedAt === null || marketInstant(value.lastCollectedAt)) &&
     (!Object.hasOwn(value, 'latestAttempt') || refreshAttempt(value.latestAttempt))
 }

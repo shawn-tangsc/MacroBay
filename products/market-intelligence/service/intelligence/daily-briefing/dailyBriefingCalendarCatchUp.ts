@@ -42,7 +42,7 @@ export const BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS = 20_000
  * The calendar feeds the brief may catch up: **exactly the descriptors the live calendar service
  * exposes**, read from the policy rather than copied.
  *
- * `refreshNow` accepts nothing outside `marketCalendarPublicPolicy.descriptors` (anything else fails
+ * `refreshNow` accepts nothing outside `marketCalendarPublicPolicy.collectionFeeds` (anything else fails
  * closed as `input-invalid`), so a second copy of the three ids can only drift. When the calendar
  * switches provider the policy is the one place that changes, and this list follows.
  * `fed`/`bea` keep their own official schedule and are never caught up here.
