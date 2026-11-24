@@ -2,27 +2,29 @@ import { formatDashboardChange, type DashboardPositioningViewState } from '../..
 import type { PositioningPanelText } from './positioningText'
 
 /**
- * 图的几何：一张表，牌带、车道、基线都从这里取。
+ * 图的几何：**像素坐标**，按容器实测的宽高算（用户 2026-11-24：字被整体缩小，换成国债卡那套）。
  *
- * 牌带留两排（`markerTop` 3 到 `markerRow` 29，每排 13 高）：一张牌只代表一次命中，
- * 横轴放不下同一排就把牌**错到第二排**，不横向挪位（界面设计 2026-11-24 的硬规则）。
+ * 原来是一块固定 1000×300 的坐标系、`width:100%; height:auto` 整幅等比缩放——图列 700 时缩放 0.7，
+ * 9px 的牌字与轴标签实际只有 6.3px。现在 svg 按容器像素画（`width/height` 就是实测值），
+ * 字 9px 就是 9px，高度也跟着卡片走，不再靠调 viewBox 去猜。
  *
- * 画布高度 **240**（用户 2026-11-24 拍板）：svg 是宽度驱动（`width:100%; height:auto`），
- * 图高 = 列宽 × 240/1000。按 199 时 1020 视口（图列约 698）只有 139px，两条车道各压到四十来像素；
- * 240 在同一列宽下是 168px。牌带、牌高与字号都没动——多出来的高度全给两条车道和刻度带。
- * 空态骨架用同一份 `VIEW`，卡高不跳。
+ * 牌带在顶部按像素钉死（`markerTop` 3 到 `markerRow` 29，两排各 13 高的牌）；下面两条车道与
+ * 刻度带按剩余高度分，OI : 费率 = 55 : 45。
  */
-export const POSITIONING_CHART_VIEW = Object.freeze({
-  width: 1000,
-  height: 240,
-  left: 32,
-  right: 992,
-  markerTop: 3,
-  markerRow: 29,
-  upperTop: 47,
-  upperBottom: 127,
-  zero: 187
-})
+export type PositioningChartGeometry = Readonly<{
+  width: number
+  height: number
+  left: number
+  right: number
+  markerTop: number
+  markerRow: number
+  upperTop: number
+  upperBottom: number
+  zero: number
+}>
+
+/** 还没量到容器时的坐标系（静态渲染与首帧）：与真图同一个比例，量到就换真像素。 */
+export const POSITIONING_CHART_FALLBACK = Object.freeze({ width: 1000, height: 300 })
 
 /** 一枚牌：13 高、圆角 4、同一排内间隔 6px；牌带两排，先出现的贴下半排，溢出的往上排。 */
 export const MARKER_CHIP = Object.freeze({
@@ -34,6 +36,20 @@ export const MARKER_CHIP = Object.freeze({
   /** 文字基线相对牌顶的偏移（字号走 `--mi-chart-label-size`）。 */
   baseline: 12
 })
+
+export function positioningChartGeometry(width: number, height: number): PositioningChartGeometry {
+  const safeWidth = Math.max(120, Math.round(width))
+  const safeHeight = Math.max(120, Math.round(height))
+  const left = 32
+  const right = Math.max(left + 40, safeWidth - 8)
+  const markerTop = 3
+  const markerRow = markerTop + MARKER_CHIP.height * 2
+  const upperTop = markerRow + 12
+  const tickBand = 26
+  const lanes = Math.max(48, safeHeight - upperTop - tickBand)
+  const upperBottom = upperTop + Math.round(lanes * 0.55)
+  return { width: safeWidth, height: safeHeight, left, right, markerTop, markerRow, upperTop, upperBottom, zero: upperTop + lanes }
+}
 
 export type LiquidationMark = Readonly<{
   key: string
@@ -84,7 +100,7 @@ export function chipWidthFor(label: string): number {
 }
 
 /** 横轴：窗口内全部命中都算一次（与通知不是同一个源，这里只画账本）。 */
-function axisOf(positioning: Extract<DashboardPositioningViewState, { state: 'available' }>): Readonly<{
+function axisOf(positioning: Extract<DashboardPositioningViewState, { state: 'available' }>, geometry: PositioningChartGeometry): Readonly<{
   startMs: number
   span: number
   xOf: (ms: number) => number
@@ -96,13 +112,13 @@ function axisOf(positioning: Extract<DashboardPositioningViewState, { state: 'av
   return {
     startMs,
     span,
-    xOf: (ms: number) => POSITIONING_CHART_VIEW.left + ((ms - startMs) / span) * (POSITIONING_CHART_VIEW.right - POSITIONING_CHART_VIEW.left)
+    xOf: (ms: number) => geometry.left + ((ms - startMs) / span) * (geometry.right - geometry.left)
   }
 }
 
 /** 窗口内的全部命中，按横坐标排序。 */
-export function liquidationMarks(positioning: Extract<DashboardPositioningViewState, { state: 'available' }>): readonly LiquidationMark[] {
-  const axis = axisOf(positioning)
+export function liquidationMarks(positioning: Extract<DashboardPositioningViewState, { state: 'available' }>, geometry: PositioningChartGeometry): readonly LiquidationMark[] {
+  const axis = axisOf(positioning, geometry)
   return positioning.hints
     .map(hint => {
       const markMs = Date.parse(hint.observedAt)
@@ -133,8 +149,8 @@ function chipTextOf(members: readonly LiquidationMark[], text: PositioningPanelT
 }
 
 /** 牌心贴边内收的唯一位移：最多半枚牌宽，用来把牌留在绘图区里。 */
-function clampLeft(centre: number, width: number): number {
-  const { left, right } = POSITIONING_CHART_VIEW
+function clampLeft(centre: number, width: number, geometry: PositioningChartGeometry): number {
+  const { left, right } = geometry
   return Math.max(left, Math.min(centre - width / 2, right - width))
 }
 
@@ -149,9 +165,10 @@ function clampLeft(centre: number, width: number): number {
  */
 export function layoutLiquidationMarks(
   positioning: Extract<DashboardPositioningViewState, { state: 'available' }>,
-  text: PositioningPanelText
+  text: PositioningPanelText,
+  geometry: PositioningChartGeometry
 ): LiquidationMarkLayout {
-  const marks = liquidationMarks(positioning)
+  const marks = liquidationMarks(positioning, geometry)
 
   // 一、按类成簇：同类里牌放不下的连续命中并成一张牌（×N），类与类之间永不合并。
   const drafts: { members: LiquidationMark[]; asset: 'btc' | 'eth'; direction: 'long' | 'short'; text: string; width: number; centre: number }[] = []
@@ -185,7 +202,7 @@ export function layoutLiquidationMarks(
   const chips: LiquidationChip[] = []
   let hidden = 0
   for (const draft of drafts) {
-    const left = clampLeft(draft.centre, draft.width)
+    const left = clampLeft(draft.centre, draft.width, geometry)
     const rows = overflowed ? ([1] as const) : ([0, 1] as const)
     const row = rows.find(candidate => rowEnds[candidate] === undefined || left >= rowEnds[candidate]! + MARKER_CHIP.gap)
     if (row === undefined) {

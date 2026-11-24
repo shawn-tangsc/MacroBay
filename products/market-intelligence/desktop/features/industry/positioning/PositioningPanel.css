@@ -46,7 +46,7 @@
 .mi-positioning-panel__row[data-layout='level'] .mi-positioning-panel__value { font-size: 13px; }
 
 .mi-positioning-panel__state { justify-self: end; cursor: help; }
-.mi-positioning-panel__chart-wrap { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
+.mi-positioning-panel__chart-wrap { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-width: 0; width: 100%; }
 /* 三态那一行：属于结构的一部分（落在图表上方），不是一整块居中提示。
    颜色与字号沿用状态词自己的（`.mi-source-state` 归共享样式表），这里只排位置。 */
 .mi-positioning-panel__source-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 6px; }
@@ -56,10 +56,11 @@
 .mi-positioning-panel__legend span[data-series='btc'] i { background: var(--mi-dashboard-etf-btc); }
 .mi-positioning-panel__legend span[data-series='eth'] i { background: var(--mi-dashboard-etf-eth); }
 .mi-positioning-panel__legend em { font-style: normal; opacity: .8; }
-.mi-positioning-panel__chart { position: relative; width: 100%; min-width: 0; }
-/* Width-driven: the viewBox keeps its aspect, so the drawing fills the card instead of being
-   letterboxed by a fixed height (that is what left the empty sides on a wide window). */
-.mi-positioning-panel__chart svg { display: block; width: 100%; height: auto; cursor: crosshair; }
+/* 图按容器像素画（用户 2026-11-24）：量到的框就是坐标系，svg 铺满它。
+   旧写法是固定 viewBox + `height:auto`，整幅（含字）按列宽等比缩小，牌字只剩 6 点几像素。 */
+.mi-positioning-panel__chart-body { position: relative; flex: 1 1 auto; min-height: 180px; min-width: 0; }
+.mi-positioning-panel__chart { position: absolute; inset: 0; min-width: 0; }
+.mi-positioning-panel__chart svg { display: block; width: 100%; height: 100%; cursor: crosshair; }
 .mi-positioning-panel__lane { fill: var(--mi-dashboard-muted); font-size: var(--mi-chart-label-size); letter-spacing: .05em; }
 .mi-positioning-panel__rule { stroke: var(--mi-dashboard-line); stroke-width: 1; }
 .mi-positioning-panel__zero { stroke: var(--mi-dashboard-text); stroke-width: 1; opacity: .5; }
