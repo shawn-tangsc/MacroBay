@@ -123,28 +123,44 @@ describe('chart palette in light theme', () => {
     return source.slice(start, source.indexOf('}', start))
   })()
 
+  /**
+   * 比的是**画在什么底上**：`--surface` 的浅色值住在平台壳的样式表里，不在这里抄一份 #ffffff。
+   * 抄一份的话，浅色底哪天改成灰的，这几条线仍然按白底算分——算出来的绿是假的。
+   */
+  const surface = (() => {
+    const source = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/styles.css'), 'utf8')
+    const block = /:root\[data-theme=['"]light['"]\]\s*\{([^}]*)\}/.exec(source)?.[1]
+    expect(block, '壳样式表里要能找到 :root[data-theme="light"] 那一块').toBeTruthy()
+    const value = /--surface:\s*(#[0-9a-fA-F]{6})/.exec(block!)?.[1]?.toLowerCase()
+    expect(value, '浅色 --surface 必须是一个六位十六进制色').toMatch(/^#[0-9a-f]{6}$/)
+    return value!
+  })()
+
   const luminance = (hex: string): number => {
     const channels = [0, 2, 4].map((index) => Number.parseInt(hex.replace('#', '').slice(index, index + 2), 16) / 255)
     return channels
       .map((value) => (value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
       .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index]!, 0)
   }
-  /** 白底（`--surface` 浅色是 #ffffff）的对比度。 */
-  const contrastOnWhite = (hex: string): number => (1.05) / (luminance(hex) + 0.05)
+  /** 对比度按两条亮度算，底是读到的 `--surface`，不是写死的白。 */
+  const contrastOnSurface = (hex: string): number => {
+    const [high, low] = [luminance(hex), luminance(surface)].sort((left, right) => right - left) as [number, number]
+    return (high + 0.05) / (low + 0.05)
+  }
 
   it('redefines every line, each at least 3:1 on the light surface', () => {
     const light = lineIds.map((id) => tokenValue(lightBlock, `--mi-dashboard-chart-${id}`))
     for (const [index, value] of light.entries()) {
       expect(value, `${lineIds[index]} 在浅色下没有重映射`).toMatch(/^#[0-9a-f]{6}$/)
-      expect(contrastOnWhite(value!), `${lineIds[index]} ${value} 对白底不足 3:1`).toBeGreaterThanOrEqual(3)
+      expect(contrastOnSurface(value!), `${lineIds[index]} ${value} 对浅色底 ${surface} 不足 3:1`).toBeGreaterThanOrEqual(3)
     }
   })
 
   it('keeps 3M and 30Y apart by brightness, not by a hue nobody can see at 1.6px', () => {
     // 浅色照抄深色那套「一亮一暗」的关系：一个 4.90:1、一个 8.93:1（差 1.8 倍）。
     // 判据用对比度差，不用 HSL 明度差——取中间值时两条线的对比度会落到同一档，那才是撞成一条线的条件。
-    const threeMonth = contrastOnWhite(tokenValue(lightBlock, '--mi-dashboard-chart-gold')!)
-    const thirtyYear = contrastOnWhite(tokenValue(lightBlock, '--mi-dashboard-chart-btc')!)
+    const threeMonth = contrastOnSurface(tokenValue(lightBlock, '--mi-dashboard-chart-gold')!)
+    const thirtyYear = contrastOnSurface(tokenValue(lightBlock, '--mi-dashboard-chart-btc')!)
     const [bright, dark] = threeMonth < thirtyYear ? [threeMonth, thirtyYear] : [thirtyYear, threeMonth]
     expect(dark / bright).toBeGreaterThanOrEqual(1.7)
   })
@@ -156,8 +172,8 @@ describe('chart palette in light theme', () => {
         const gap = separation(colors[left]!, colors[right]!)
         // 浅色下多一条判据：对比度差 ≥ 2（一个 4.9:1、一个 8.9:1 的两条线，在 1.6px 上不会看成一件事）。
         const contrastGap = Math.abs(
-          contrastOnWhite(tokenValue(lightBlock, `--mi-dashboard-chart-${lineIds[left]}`)!) -
-          contrastOnWhite(tokenValue(lightBlock, `--mi-dashboard-chart-${lineIds[right]}`)!)
+          contrastOnSurface(tokenValue(lightBlock, `--mi-dashboard-chart-${lineIds[left]}`)!) -
+          contrastOnSurface(tokenValue(lightBlock, `--mi-dashboard-chart-${lineIds[right]}`)!)
         )
         expect(
           gap.hue >= palettePolicy.minimumHueSeparationDegrees ||
