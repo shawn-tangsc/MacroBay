@@ -3,6 +3,8 @@ import { Button } from 'antd'
 import type { CrossAssetId, CrossAssetMacroProxyId, CrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
 import type { CrossAssetEventLine } from './crossAssetEventLines'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /**
  * 图上能画的线。行 id 与线 id 在这五条上同名，是刻意的：一格关掉，那一行与那条线一起消失。
@@ -89,6 +91,9 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
   onSelectEvent?: (line: CrossAssetEventLine) => void
 }): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  const timeZone = useShellTimeZone()
+  /** 轴刻度用紧凑口径：同日 `HH:mm`、跨日 `MM-DD HH:mm`，不带时区——五个刻度各印一遍 `GMT+8` 会互相压字。 */
+  const formatTick = (instant: string): string => formatShellClock(instant, { timeZone }) ?? formatTime(instant)
   const policy = crossAssetChartPolicy
   /**
    * A line is listed once it has points, and hidden only when the reader hides it.
@@ -246,7 +251,7 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
             : null}
         </div>
       </div>
-      <div className="mi-cross-asset__ticks" style={{ '--mi-cross-asset-tick-count': policy.tickSlots } as CSSProperties}>{tickLabels.map(({ index, anchor, left }) => <time key={index} style={{ left: `${anchor / policy.width * 100}%`, transform: `translateX(${(left - anchor) / tickWidth * 100}%)`, textAlign: left === 0 ? 'left' : left + tickWidth === policy.width ? 'right' : 'center' }}>{formatTime(curves.index[index].at)}</time>)}</div>
+      <div className="mi-cross-asset__ticks" style={{ '--mi-cross-asset-tick-count': policy.tickSlots } as CSSProperties}>{tickLabels.map(({ index, anchor, left }) => <time key={index} style={{ left: `${anchor / policy.width * 100}%`, transform: `translateX(${(left - anchor) / tickWidth * 100}%)`, textAlign: left === 0 ? 'left' : left + tickWidth === policy.width ? 'right' : 'center' }}>{formatTick(curves.index[index].at)}</time>)}</div>
       {/* 浮层挂在这一栏上，**不挂绘图区**：`max-height: 100%` 分辨率的是这里的栏高。 */}
       {hover && inspectedAt !== undefined
         ? <div ref={tooltipRef} role="tooltip" className="mi-cross-asset__tooltip" style={{ left: hover.tooltipLeft, top: hover.tooltipTop }}>

@@ -118,8 +118,11 @@ describe('cross-asset return chart', () => {
       const buttons = [...host.querySelectorAll<HTMLButtonElement>('[aria-pressed]')]
       await act(async () => { buttons[0].click(); buttons[1].click() })
       expect(buttons[2].disabled).toBe(true)
-      expect(host.textContent).toContain('2026-09-14')
-      expect(host.textContent).toContain('GMT')
+      // 轴刻度是紧凑口径（同日 HH:mm、跨日 MM-DD HH:mm），时区不再每个刻度印一遍（用户 2026-11-25）。
+      const tickText = [...host.querySelectorAll('.mi-cross-asset__ticks time')].map((tick) => tick.textContent ?? '')
+      expect(tickText.length).toBeGreaterThan(0)
+      expect(tickText.every((label) => !label.includes('GMT') && !label.includes('2026-'))).toBe(true)
+      expect(tickText[0]).toContain('12:00')
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
