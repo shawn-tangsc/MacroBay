@@ -70,19 +70,19 @@
    （用户 2026-11-21：「这个抽屉怎么关不掉」）。平台对 portal 到 body 的 antd 抽屉已写同款规则
    （apps/desktop-shell styles.css 的 `.ant-drawer-*`），这里是我们自己画的壳，得自己声明。 */
 .mi-analysis-drawer--overlay { position: fixed; z-index: var(--layer-modal-top); -webkit-app-region: no-drag; }
-.mi-analysis-drawer[data-placement="right"] { inset: 0 0 0 auto; width: min(1280px, 94vw); border-right: 0; border-left: 1px solid var(--border); box-shadow: -12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); }
-.mi-analysis-drawer__controls { display: flex; align-items: center; gap: 6px; flex: none; }
-.mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
+.mi-agent-drawer[data-placement="right"] { inset: 0 0 0 auto; width: min(1280px, 94vw); border-right: 0; border-left: 1px solid var(--border); box-shadow: -12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); }
+.mi-agent-drawer__controls { display: flex; align-items: center; gap: 6px; flex: none; }
+.mi-agent-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
 .mi-analysis-conclusion-card__body { display: grid; gap: 6px; padding-left: 10px; border-left: 2px solid transparent; }
-.mi-analysis-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
-.mi-analysis-drawer__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.mi-analysis-drawer__footer { display: flex; align-items: center; gap: 4px; padding: 6px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--font-meta); }
-.mi-analysis-drawer__meta time { color: var(--muted); font-size: 10.5px; }
-.mi-analysis-drawer__meta span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.mi-analysis-drawer__body { min-height: 0; overflow: auto; padding: 16px; }
-.mi-analysis-drawer__body .mi-analysis-timeline__state { display: flex; align-items: center; gap: 6px; }
+.mi-agent-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
+.mi-agent-drawer__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.mi-agent-drawer__footer { display: flex; align-items: center; gap: 4px; padding: 6px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--font-meta); }
+.mi-agent-drawer__meta time { color: var(--muted); font-size: 10.5px; }
+.mi-agent-drawer__meta span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mi-agent-drawer__body { min-height: 0; overflow: auto; padding: 16px; }
+.mi-agent-drawer__body .mi-analysis-timeline__state { display: flex; align-items: center; gap: 6px; }
 @keyframes mi-analysis-drawer-in { from { transform: translateX(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .mi-analysis-drawer { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .mi-agent-drawer { animation: none; } }
 /* The column is a flex stack: the policy card sits above the split, which owns the rest. */
 .mi-analysis-agent-workspace { display: flex; flex-direction: column;
  min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); color: var(--text); }
@@ -136,7 +136,7 @@
   .mi-analysis-dashboard-layout__panes { grid-template-columns: minmax(0, 1fr); }
   .mi-analysis-agent-workspace { display: none; }
   /* 窄屏时抽屉一次性铺满主区，避免在窄列里再挤出一层可读性问题。 */
-  .mi-analysis-drawer { width: 100%; box-shadow: none; }
+  .mi-agent-drawer { width: 100%; box-shadow: none; }
   .mi-analysis-conclusion-card { margin: 8px; padding: 12px; }
 }
 
@@ -152,39 +152,51 @@
  * 层次沿用 tokens.css 那张表：antd 抽屉 1000 → 圆钮 1100。左抽屉与它的遮罩都在 1000–1001，
  * 低于圆钮；整幅档开着时圆钮根本不渲染（不是压上去），所以不会出现第二层入口。
  */
-.mi-analysis-dashboard-layout { --mi-analysis-drawer-width: 340px; }
+.mi-analysis-dashboard-layout { --mi-analysis-drawer-width: 420px; }
 /* 左抽屉与把手的定位参照：整条落在页内容区的左缘（不是视口左缘，那是外壳侧栏）。
    **只在窄档加**：宽档一个定位上下文都不多，逐像素不变。 */
 .mi-analysis-dashboard-layout[data-compact] { position: relative; }
-/* 并排档：看板**让位**（908 的容器里剩 568），不是被盖住。整幅档不让位——抽屉就是整幅。 */
-.mi-analysis-dashboard-layout__panes[data-drawer='side'][data-edge='left'] { margin-left: var(--mi-analysis-drawer-width); }
-.mi-analysis-dashboard-layout__panes[data-drawer='side'][data-edge='right'] { margin-right: var(--mi-analysis-drawer-width); }
-.mi-analysis-drawer { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; z-index: 1001; background: var(--surface); }
-.mi-analysis-drawer[data-edge='left'] { left: 0; right: auto; border-right: 1px solid var(--border); box-shadow: 12px 0 32px rgb(0 0 0 / 28%); }
-.mi-analysis-drawer[data-edge='right'] { right: 0; left: auto; border-left: 1px solid var(--border); box-shadow: -12px 0 32px rgb(0 0 0 / 28%); }
-.mi-analysis-drawer[data-tier='side'] { width: var(--mi-analysis-drawer-width); }
+/* 并排档：抽屉**覆盖**在右缘那 340 上，看板不重排、保持原宽度（用户 2026-11-24 真机纠正：
+   要的是覆盖式抽屉，不是让位分栏）。看板左侧仍可见可读，所以这一档没有遮罩。
+   拖动中、松手后都不重排——吸附只改抽屉自己的位移。 */
+.mi-agent-drawer { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; z-index: 998; background: var(--surface); }
+.mi-agent-drawer[data-edge='left'] { left: 0; right: auto; border-right: 1px solid var(--border); box-shadow: 12px 0 32px rgb(0 0 0 / 28%); }
+.mi-agent-drawer[data-edge='right'] { right: 0; left: auto; border-left: 1px solid var(--border); box-shadow: -12px 0 32px rgb(0 0 0 / 28%); }
+/* 并排档至少半屏（用户 2026-11-24 真机：固定 340 太窄）。窄于 420 就全宽——仍是覆盖，不是挤压。 */
+.mi-agent-drawer[data-tier='side'] { width: max(50%, var(--mi-analysis-drawer-width)); }
 /* 整幅档：盖住整幅，等于切视图（这一档看板不能读）。 */
-.mi-analysis-drawer[data-tier='full'] { width: 100%; box-shadow: none; }
-.mi-analysis-drawer[data-open='false'] { display: none; }
-.mi-analysis-drawer__head { display: flex; align-items: center; gap: 8px; flex: none; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-.mi-analysis-drawer__head h2 { margin: 0; color: var(--text); font-size: var(--font-body); font-weight: 600; }
-.mi-analysis-drawer__head > :last-child { margin-left: auto; }
-.mi-analysis-drawer__body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: hidden; padding: 10px 0; }
+.mi-agent-drawer[data-tier='full'] { width: 100%; box-shadow: none; }
+.mi-agent-drawer[data-open='false'] { display: none; }
+/* 拖动中：抽屉要看得见、且**不加过渡**（跟手就是 1:1，加过渡就成延迟）。 */
+.mi-agent-drawer[data-drag='true'] { display: flex; }
+/* 松手才 160ms ease-out：吸附展开与回弹收起同一条，两档一致。 */
+.mi-agent-drawer[data-settling='true'] { transition: transform 160ms ease-out; }
+.mi-agent-drawer__head { display: flex; align-items: center; gap: 8px; flex: none; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.mi-agent-drawer__head h2 { margin: 0; color: var(--text); font-size: var(--font-body); font-weight: 600; }
+.mi-agent-drawer__head > :last-child { margin-left: auto; }
+.mi-agent-drawer__body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: hidden; padding: 10px 0 0; }
+/* 结论卡按内容高，不参与分配 */
+.mi-agent-drawer__body > .mi-analysis-conclusion-card { flex: none; margin: 0 12px; }
 /* 重点舆情：自己滚，标题与结论卡不动。 */
-.mi-analysis-drawer__news { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding: 0 12px; }
-/* 整幅档的遮罩：点它关闭。并排档没有遮罩——那边要求看板能读，不是模态。 */
-.mi-analysis-drawer__scrim { position: absolute; inset: 0; z-index: 1000; background: rgb(0 0 0 / 58%); }
+/* 舆情吃满剩下的高度并自己滚：卡若没有确定高度，它内部的 `__drivers`（flex-basis 0）会被压成 0，
+   看起来就是「只有筛选按钮、下面一片空白」。 */
+.mi-agent-drawer__news { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding: 0 12px 12px; }
+.mi-agent-drawer__news > .mi-news-sentiment { flex: 1 1 0; min-height: 0; }
+/* 整幅档的遮罩：只负责变暗，**没有关闭动作**——抽屉 `width:100%` 且 z 更高，压在它上面，
+   点它永远点不到；两档统一只有 X 与 Esc。并排档没有遮罩（看板仍要能读，不是模态）。 */
+.mi-agent-drawer__scrim { position: absolute; inset: 0; z-index: 996; background: rgb(0 0 0 / 58%); }
 /*
- * 左缘把手：视觉 4px、命中 22×128，竖直居中。整条落在页的 12px 左边距里（遮 0 个内容像素）。
+ * 边缘把手：视觉 4px、命中 22×128，竖直居中，落在页的 12px 边距里。
  * z 与遮罩同层、低于抽屉：抽屉一开它就被盖住，不再当第二颗入口。
+ * 抽屉开着时**位置与形状不变**（键盘仍能 Tab 到、Enter 打开）。
  */
-.mi-analysis-drawer__grip { position: absolute; top: 50%; transform: translateY(-50%); width: 22px; height: 128px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; z-index: 1000; }
-.mi-analysis-drawer__grip[data-edge='left'] { left: 0; }
-.mi-analysis-drawer__grip[data-edge='right'] { right: 0; }
-.mi-analysis-drawer__grip i { width: 4px; height: 128px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 55%, transparent); }
-.mi-analysis-drawer__grip:hover i,
-.mi-analysis-drawer__grip:focus-visible i { background: var(--accent); }
-.mi-analysis-drawer__grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mi-agent-drawer__grip { position: absolute; top: 50%; transform: translateY(-50%); width: 22px; height: 128px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; z-index: 997; }
+.mi-agent-drawer__grip[data-edge='left'] { left: 0; }
+.mi-agent-drawer__grip[data-edge='right'] { right: 0; }
+.mi-agent-drawer__grip i { width: 4px; height: 128px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.mi-agent-drawer__grip:hover i,
+.mi-agent-drawer__grip:focus-visible i { background: var(--accent); }
+.mi-agent-drawer__grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /*
  * 窄档的会话：底部上滑聊天框（同一份原型）。
@@ -194,8 +206,8 @@
  *
  * 层次：遮罩 1000、聊天框 1001，都低于圆钮 1100；框开着时圆钮不渲染。
  */
-.mi-agent-sheet__scrim { position: fixed; inset: 0; z-index: 1000; background: rgb(0 0 0 / 58%); }
-.mi-agent-sheet { position: fixed; left: 0; right: 0; bottom: 0; height: auto; min-height: 40dvh; max-height: 70dvh; display: flex; flex-direction: column; z-index: 1001; border-top: 1px solid var(--border); border-radius: 12px 12px 0 0; background: var(--surface); box-shadow: 0 -12px 32px rgb(0 0 0 / 35%); }
+.mi-agent-sheet__scrim { position: fixed; inset: 0; z-index: 996; background: rgb(0 0 0 / 58%); }
+.mi-agent-sheet { position: fixed; left: 0; right: 0; bottom: 0; height: auto; min-height: 40dvh; max-height: 70dvh; display: flex; flex-direction: column; z-index: 997; border-top: 1px solid var(--border); border-radius: 12px 12px 0 0; background: var(--surface); box-shadow: 0 -12px 32px rgb(0 0 0 / 35%); }
 .mi-agent-sheet[data-open="false"] { display: none; }
 .mi-agent-sheet__handle { display: grid; place-items: center; height: 20px; flex: none; }
 .mi-agent-sheet__handle i { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); }
@@ -206,9 +218,18 @@
 /* 舆情块按自身容器收放（它自带 container）；抽屋里给它一条下边框，和对话分开。 */
 .mi-agent-sheet__body > .mi-news-sentiment { padding: 0 12px 8px; border-bottom: 1px solid var(--border); }
 .mi-agent-sheet__body > .mi-analysis-chat { flex: 1; min-height: 0; }
-/* 窄档圆钮钉在右下：这一支没有拖拽，用 `right/bottom` 跟边（同一条 16），转屏、改窗口都不跑位。
-   宽档仍用挂载时算出的像素坐标，可拖。 */
-.mi-agent-floating__button[data-compact] { left: auto; top: auto; right: 16px; bottom: 16px; }
+/*
+ * 窄档底部胶囊（用户 2026-11-24 定）：24 的 `IconButton` 外套 8px 内距 → 外径约 40，
+ * 距底 12、水平居中、带阴影贴着内容浮。z 990：与两个面一样**压在 antd 1000 之下**，
+ * 否则从图标栏打开设置抽屉会被它盖住。宽档那颗可拖圆钮与浮窗面板一行不改。
+ */
+.mi-agent-capsule { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; padding: 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 6px 18px rgb(0 0 0 / 32%); z-index: 990; }
+.mi-agent-capsule .icon-button { width: 24px; height: 24px; }
+/*
+ * 窄档看板**整个滚动容器**留底部内距 56（= 胶囊 40 + 距底 12 + 4 余量）：
+ * 任何一张卡滚到底都不会被胶囊压住。聊天框打开时胶囊不渲染，留白照旧（不闪）。
+ */
+.mi-analysis-dashboard-layout[data-compact] .mi-analysis-dashboard-layout__dashboard { padding-bottom: 56px; }
 
 /* Change rows read as a list of named metrics with both values, so a conclusion
    states what moved without showing the stored machine encoding. */

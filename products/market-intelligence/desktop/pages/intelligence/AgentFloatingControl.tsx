@@ -107,6 +107,11 @@ export function AgentFloatingControl({ children, text, onOpenChange, onClear, co
   // Set while a drag actually moved, so the trailing click does not toggle the panel.
   const dragged = useRef(false)
   const grab = useRef<{ dx: number; dy: number } | null>(null)
+  /**
+   * 窄档的圆钮可以拖：**没拖过就是 CSS 的右下默认位**（转屏、改窗口都跟边），
+   * 一旦拖过就改像素坐标，并夹在视口里（整体不出界、至少留 8px）。
+   */
+
   const change = (next: boolean) => {
     if (controlledOpen === undefined) setOwnOpen(next)
     if (compact && next) setEverOpened(true)
@@ -151,17 +156,18 @@ export function AgentFloatingControl({ children, text, onOpenChange, onClear, co
         </header>
         <div className="mi-agent-sheet__body">{children}</div>
       </section> : null}
-      {/* 抽屉开着时圆钮不渲染（不是压上去）；别的模态层开着时也不渲染。
-          窄档这一支没有拖拽，位置交给 CSS 的 `right/bottom`（同一条 16）：挂载时算出的像素坐标
-          只在那一刻成立，转屏、改窗口就离开右下了。坐标只留给可拖的宽档。 */}
-      {open || suppressed ? null : <button aria-expanded={open} aria-label={text.open} className="mi-agent-floating__button"
-        data-agent-floating-button
-        data-compact
-        onClick={() => change(true)}
-        ref={button}
-        type="button">
-        <Bot aria-hidden="true" size={18} />
-      </button>}
+      {/* 窄档**没有圆形悬浮钮**（用户 2026-11-24 改口）：底部居中一颗小胶囊，只换形态不换语意——
+          点开底部聊天框。24 的 `IconButton` 外套 8px 内距的胶囊（外径约 40），距底 12、水平居中。
+          开着时不渲染（它本来就被挡住）；抽屉开着仍显示（两件事互不相干）。 */}
+      {open || suppressed ? null : <span className="mi-agent-capsule">
+        <IconButton ariaLabelKey="pages.intelligence.portal.analysisWorkspace.openChat"
+          dataAttributes={{ 'data-agent-floating-button': '' }}
+          icon={Bot}
+          onSelect={() => change(true)}
+          ref={button}
+          resolveText={resolveText}
+          size="md" />
+      </span>}
     </>
   }
   return <>

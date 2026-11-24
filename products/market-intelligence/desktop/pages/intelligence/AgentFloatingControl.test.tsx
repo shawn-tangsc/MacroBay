@@ -309,9 +309,9 @@ it('sizes the chat sheet 40–70dvh (dvh, so the keyboard shrinks it) under the 
   expect(sheet.match(/\d+d?vh/g)).toEqual(['40dvh', '70dvh'])
   expect(sheet).toContain('bottom: 0')
   expect(sheet).toContain('border-radius: 12px 12px 0 0')
-  // 遮罩与聊天框都在圆钮（1100）之下：开着时圆钮不渲染，所以两者不会叠出第二层入口。
+  // 遮罩与聊天框都压在 antd 的 1000 之下（996 / 997）：否则从图标栏打开设置抽屉会被它们盖住。
   const scrim = css.slice(css.indexOf('.mi-agent-sheet__scrim {'), css.indexOf('\n}', css.indexOf('.mi-agent-sheet__scrim {')) + 2)
   expect(scrim).toContain('inset: 0')
-  expect(scrim).toContain('z-index: 1000')
-  expect(sheet).toContain('z-index: 1001')
+  expect(scrim).toContain('z-index: 996')
+  expect(sheet).toContain('z-index: 997')
 })
