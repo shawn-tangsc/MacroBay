@@ -16,25 +16,30 @@ const build = (input: Omit<Parameters<typeof buildClockCardModel>[0], 'plaqueNam
  * 圆心只有一处来源、两区不等速、透明度是位置驱动的静态值。
  */
 describe('clock card geometry has one source', () => {
-  it('derives both centres from CARD 336×330 and PAD 12', () => {
-    expect(clockCardCenter.cardX).toBe(168)
-    expect(clockCardCenter.cardY).toBe(165)
-    expect(clockCardCenter.svgX).toBe(156)
-    expect(clockCardCenter.svgY).toBe(153)
-    expect(clockCardGeometry.svgWidth).toBe(312)
-    expect(clockCardGeometry.svgHeight).toBe(306)
+  it('derives both centres from CARD 252×248 and PAD 9', () => {
+    expect(clockCardCenter.cardX).toBe(126)
+    expect(clockCardCenter.cardY).toBe(124)
+    expect(clockCardCenter.svgX).toBe(117)
+    expect(clockCardCenter.svgY).toBe(115)
+    expect(clockCardGeometry.svgWidth).toBe(234)
+    expect(clockCardGeometry.svgHeight).toBe(230)
+    // A 方案（用户 2026-11）：环直径 202、刻度环 156，牌宽上限 96。
+    expect(clockCardGeometry.orbitRadius * 2).toBe(202)
+    expect(clockCardGeometry.scaleRadius * 2).toBe(156)
+    expect(clockPlaqueMaxWidth).toBe(96)
   })
 
   /**
-   * 原型里那四个牌的 left/top 就是这条公式的输出值——照抄公式，四个点必须逐一对上。
-   * 对不上说明角度约定（12 点起、顺时针）或半径被换掉了。
+   * 原型那四个点（336 卡上的 175.54/299.79 等）按 101/135 等比缩到这张卡上，就是这条公式的输出。
+   * 对不上说明角度约定（12 点起、顺时针）、半径或圆心被换掉了。
+   * 原型数值：176.8° (175.54,299.79)、218.4° (84.15,270.80)、288° (39.61,123.28)、337.2° (115.69,40.55)。
    */
-  it('puts the prototype’s four plaques exactly where the prototype puts them', () => {
+  it('puts the prototype’s four plaques where the scaled ring puts them', () => {
     const cases: ReadonlyArray<readonly [number, number, number]> = [
-      [176.8, 175.54, 299.79],
-      [218.4, 84.15, 270.8],
-      [288.0, 39.61, 123.28],
-      [337.2, 115.69, 40.55]
+      [176.8, 131.64, 224.84],
+      [218.4, 63.26, 203.15],
+      [288.0, 29.94, 92.79],
+      [337.2, 86.86, 30.89]
     ]
     for (const [angle, x, y] of cases) {
       const point = clockRingPoint(angle)
@@ -191,7 +196,8 @@ describe('the model built from real schedule dates', () => {
       lastRelease: { date: '2026-11-14', value: '3.74%' }, nextRelease: { date: '2026-12-10' }, periodDays: 30
     }] })
     const past = model.plaques.find((plaque) => plaque.id === 'US.CPI.NSA.YOY:past')!
-    expect(Number(past.x.toFixed(2))).toBe(72)
+    // 夹取下限 = 半宽 48 + 边距 8 = 56（卡 252 宽）。
+    expect(Number(past.x.toFixed(2))).toBe(56)
   })
 
   /** 用户 2026-11-12 定：过去牌与未来牌各判各的，同一指标可以同时占两个位置。 */
@@ -444,6 +450,21 @@ describe('the ring hangs one plaque per release date', () => {
     const plaque = model.plaques.find((entry) => entry.metricKey === 'US.NONFARM.SA.CHANGE')!
     expect(plaque).toBeDefined()
     expect(plaque.value).toBeUndefined()
+  })
+
+  /**
+   * A 方案（卡 248 高）之后，1 天后那块挂在 8° 上、离卡顶只有 24px，而两行名字的牌高 50——
+   * 纵向不夹，上半截就被 `overflow: hidden` 切掉。判据是整块在卡内，且两行名字仍在。
+   */
+  it('keeps a two-line plaque inside the card top edge', () => {
+    const model = build({ today: '2026-11-24', metrics: [
+      { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy', nextRelease: { date: '2026-11-25' } }
+    ] })
+    const plaque = model.plaques[0]!
+    const box = clockPlaqueBox('核心 PCE 年率（季调）')
+    expect(box.height).toBe(50)
+    expect(plaque.y - box.height / 2).toBeGreaterThanOrEqual(0)
+    expect(plaque.y + box.height / 2).toBeLessThanOrEqual(clockCardGeometry.cardHeight)
   })
 
   /** 长名字（`核心 PCE 年率（季调）`）不许顶出卡边：牌宽按上限算，位置再夹一次。 */

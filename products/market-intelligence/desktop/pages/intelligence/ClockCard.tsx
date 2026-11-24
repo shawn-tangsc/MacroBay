@@ -6,6 +6,7 @@ import { helpTrigger } from '@platform/ui/components/popover'
 
 import type { ClockCardModel, ClockCenterFace, ClockPlaque, ClockPlaqueStacked } from './clockCardModel'
 import { clockCardCenter, clockCardGeometry, clockPlaqueRaisedZ } from './clockCardModel'
+import { clockSvgGeometry, clockSvgMarks, clockTickRadius } from './clockCardSvg'
 import './clockCard.css'
 
 /**
@@ -15,27 +16,14 @@ import './clockCard.css'
  * 形状、颜色、字体、过渡、流光参数全部照搬；只有这些位置接数据：四块牌的角度与坐标、
  * 牌的不透明度、主位的指标/天数/值、没上环那几行的说明。
  *
- * 圆心只有一处来源：`clockCardGeometry`（CARD 336×330、PAD 12），组件里不写第二份。
- * 下面是**原型冻结的几何路径**（环 r135 / 刻度环 r104 / 8 点 7° 断口 / 12 点连续），
- * 搬过来是为了计算值一模一样；它们不含任何会随数据变的东西。
+ * 圆心只有一处来源：`clockCardGeometry`（CARD 252×248、PAD 9），组件里不写第二份。
+ * 环与刻度环的路径在 `clockCardSvg` 里：照原型逐字搬，再按 A 方案的系数等比缩一次
+ * （用户 2026-11：整体小四分之一），组件里不写死任何一个坐标。
  */
-const GEOMETRY = {
-  zoneFuture: 'M156.00 46.00 A107 107 0 1 1 66.77 212.06 L60.94 215.92 A114 114 0 1 0 156.00 39.00 Z',
-  zonePast: 'M60.24 200.74 A107 107 0 0 1 156.00 46.00 L156.00 39.00 A114 114 0 0 0 53.98 203.87 Z',
-  scaleArcA: 'M156.00 49.00 A104 104 0 1 1 69.28 210.40',
-  scaleArcB: 'M62.93 199.40 A104 104 0 0 1 156.00 49.00',
-  glowClipA: 'M156.00 53.50 A99.5 99.5 0 1 1 73.03 207.92 L65.52 212.89 A108.5 108.5 0 1 0 156.00 44.50 Z',
-  glowClipB: 'M66.95 197.40 A99.5 99.5 0 0 1 156.00 53.50 L156.00 44.50 A108.5 108.5 0 0 0 58.90 201.41 Z',
-  flowClipA: 'M156.00 50.50 A102.5 102.5 0 1 1 70.53 209.57 L68.03 211.23 A105.5 105.5 0 1 0 156.00 47.50 Z',
-  flowClipB: 'M64.27 198.74 A102.5 102.5 0 0 1 156.00 50.50 L156.00 47.50 A105.5 105.5 0 0 0 61.58 200.07 Z',
-  flowFan: 'M156.0 153.0 L17.44 73.00 A160.0 160.0 0 0 1 294.56 73.00 Z',
-  pointer: 'M156.0 37.0 l-4.5 -10 h9 z'
-} as const
-
 /** 刻度：按 30° 布置 12 个位置，240° 那个已删（它在 8 点断口上）→ 实画 11 根。 */
 const TICK_ANGLES = [0, 30, 60, 90, 120, 150, 180, 210, 270, 300, 330] as const
-const TICK_INNER = 92
-const TICK_OUTER = 104
+const TICK_INNER = clockTickRadius.inner
+const TICK_OUTER = clockTickRadius.outer
 
 function tick(angle: number): Readonly<{ x1: number; y1: number; x2: number; y2: number }> {
   const radians = angle * Math.PI / 180
@@ -173,45 +161,51 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
   const centerPlaqueId = center?.kind === 'metric' ? `${center.metricKey}:future` : undefined
 
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
-  // 用户 2026-11-15：**不再缩放**。卡保持 336×330、`transform` 为单位矩阵，
-  // 只由外层容器决定它放在哪、旁边是谁；内部尺寸与 537 项计算值一项不动。
-  return <section className="mi-clock" aria-label={text.ariaLabel}>
+  // 用户 2026-11 拍板 A 方案后卡是 252×248（几何常量一处来源），仍**不用 transform 缩放**：
+  // `transform` 为单位矩阵，只由外层容器决定它放在哪、旁边是谁。
+  /**
+   * 环上那道流光的圆心：**从几何常量来**，CSS 里不存第二份。
+   * 它曾经写死过 `transform-origin: 156px 153px`——卡一缩小，旋转轴就偏出去 39px，光斑转到环外，
+   * 用户看到的只是「流光不见了」。现在两个变量由这里给，改尺寸只改几何常量。
+   */
+  return <section className="mi-clock" aria-label={text.ariaLabel}
+    style={{ '--mi-clock-center-x': `${clockCardCenter.svgX}px`, '--mi-clock-center-y': `${clockCardCenter.svgY}px` } as React.CSSProperties}>
       <svg className="mi-clock__svg" viewBox={`0 0 ${clockCardGeometry.svgWidth} ${clockCardGeometry.svgHeight}`} aria-hidden="true">
         <defs>
           <filter id="miClockFlowGlow" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="2.5" /></filter>
           <clipPath id="miClockGlowClip" clipPathUnits="userSpaceOnUse">
-            <path d={GEOMETRY.glowClipA} fill="#fff" /><path d={GEOMETRY.glowClipB} fill="#fff" />
+            <path d={clockSvgGeometry.glowClipA} fill="#fff" /><path d={clockSvgGeometry.glowClipB} fill="#fff" />
           </clipPath>
           <clipPath id="miClockFlowClip" clipPathUnits="userSpaceOnUse">
-            <path d={GEOMETRY.flowClipA} fill="#fff" /><path d={GEOMETRY.flowClipB} fill="#fff" />
+            <path d={clockSvgGeometry.flowClipA} fill="#fff" /><path d={clockSvgGeometry.flowClipB} fill="#fff" />
           </clipPath>
           <linearGradient id="miClockFlowGrad" gradientUnits="userSpaceOnUse" x1="65.93" y1="153.00" x2="246.07" y2="153.00">
             <stop className="mi-clock__flowStart" offset="0" /><stop className="mi-clock__flowEnd" offset="1" />
           </linearGradient>
         </defs>
         <circle className="mi-clock__ring" cx={clockCardCenter.svgX} cy={clockCardCenter.svgY} r={clockCardGeometry.orbitRadius} strokeWidth="1" opacity=".9" />
-        <path className="mi-clock__zone-future" d={GEOMETRY.zoneFuture} />
-        <path className="mi-clock__zone-past" d={GEOMETRY.zonePast} />
-        <path d={GEOMETRY.scaleArcA} fill="none" stroke="currentColor" strokeWidth="1" />
-        <path d={GEOMETRY.scaleArcB} fill="none" stroke="currentColor" strokeWidth="1" />
+        <path className="mi-clock__zone-future" d={clockSvgGeometry.zoneFuture} />
+        <path className="mi-clock__zone-past" d={clockSvgGeometry.zonePast} />
+        <path d={clockSvgGeometry.scaleArcA} fill="none" stroke="currentColor" strokeWidth="1" />
+        <path d={clockSvgGeometry.scaleArcB} fill="none" stroke="currentColor" strokeWidth="1" />
         {TICK_ANGLES.map((angle) => {
           const line = tick(angle)
           return <line key={angle} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} stroke="currentColor" strokeWidth="1" />
         })}
         <g clipPath="url(#miClockGlowClip)"><g className="mi-clock__orbit">
-          <path className="mi-clock__glow" d={GEOMETRY.flowFan} fill="url(#miClockFlowGrad)" />
+          <path className="mi-clock__glow" d={clockSvgGeometry.flowFan} fill="url(#miClockFlowGrad)" />
         </g></g>
         {/* 内圈那块静态渐变扇：仍用旧遮罩（半径 102.5~105.5），与高光无关。 */}
         <g clipPath="url(#miClockFlowClip)"><g className="mi-clock__orbit">
-          <path d={GEOMETRY.flowFan} fill="url(#miClockFlowGrad)" clipPath="url(#miClockFlowClip)" />
+          <path d={clockSvgGeometry.flowFan} fill="url(#miClockFlowGrad)" clipPath="url(#miClockFlowClip)" />
         </g></g>
 
         {/* 12 点「现在点」：环连着，这是位置标记，不是断口收口。 */}
-        <circle className="mi-clock__nowmark" cx={clockCardCenter.svgX} cy={42.5} r="3.5" />
-        <circle className="mi-clock__zoneend" cx="63.86" cy="213.99" r="3.5" />
-        <circle className="mi-clock__zoneend" cx="57.11" cy="202.30" r="3.5" />
-        <path className="mi-clock__now" d={GEOMETRY.pointer} />
-        <text className="mi-clock__now" x={clockCardCenter.svgX} y="67.0" textAnchor="middle" fontSize="11">{text.now}</text>
+        <circle className="mi-clock__nowmark" cx={clockCardCenter.svgX} cy={clockSvgMarks.nowMarkY} r="3.5" />
+        <circle className="mi-clock__zoneend" cx={clockSvgMarks.zoneEndA.x} cy={clockSvgMarks.zoneEndA.y} r="3.5" />
+        <circle className="mi-clock__zoneend" cx={clockSvgMarks.zoneEndB.x} cy={clockSvgMarks.zoneEndB.y} r="3.5" />
+        <path className="mi-clock__now" d={clockSvgGeometry.pointer} />
+        <text className="mi-clock__now" x={clockCardCenter.svgX} y={clockSvgMarks.nowLabelY} textAnchor="middle" fontSize="11">{text.now}</text>
       </svg>
 
       {/* 中央两张面（用户 2026-11-21 拍板，42 号文件）：平时利率路径，±24 小时内切成指标。
@@ -276,7 +270,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
 
       {/* 状态行（用户 2026-11-15）：只留 ⓘ——「● 实时 · 详细 ↗」删掉；ⓘ 不能删，
           里面装着来源说明、撞牌让位与其他没上环的原因（`not-selected` 那条在上一行的溢出行里，
-          不重复搬到这里——两处各说一半，读者会以为漏了）。容器保留（它是 ⓘ 的定位上下文），卡高仍 330。 */}
+          不重复搬到这里——两处各说一半，读者会以为漏了）。容器保留（它是 ⓘ 的定位上下文）。 */}
       <div className="mi-clock__foot">
         {/* 底部这格也是 ⓘ，与溢出行那颗**同一套交互**（`helpTrigger` → Popover）：一张卡上不留两种
             交互（原生 `title` 在键盘/触屏上唤不出来，且与上面的浮层不一致）。

@@ -19,7 +19,7 @@
   /* 牌子最大宽度（用户 2026-11-21：「这个事件面板太宽了」）：长名字两行也装得下，又不越过环。
      这个数在 `clockCardModel.clockPlaqueMaxWidth` 里也有一份，用于横向夹取；
      两处必须同值，由 `ClockCard.test.tsx` 的守卫用例盯着。 */
-  --mi-clock-plaque-max-width: 128px;
+  --mi-clock-plaque-max-width: 96px;
   /* 牌子的最小盒：与 `clockPlaqueLayout.clockPlaqueMinWidth / clockPlaqueOneLineHeight` 同值（守卫用例盯着）。 */
   --mi-clock-plaque-min-width: 62px;
   --mi-clock-plaque-min-height: 37px;
@@ -38,16 +38,18 @@
 /* 层叠上下文只在这张卡内部成立：牌是 `position:absolute` + 层级（`--mi-clock-z`，抬起时行内置顶），卡若不自建上下文，
    牌的层级会跳到外层，和「分析详情」那种 `z-index:3` 的就地抽屉比大小——牌就压到抽屉上面去了
    （用户 2026-11-15 的截图）。`isolation: isolate` 只建上下文、不改任何尺寸与颜色，符合「卡内部不动」。 */
-.mi-clock { isolation: isolate; position: relative; width: 336px; height: 330px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
-.mi-clock__svg { position: absolute; left: 12px; top: 12px; width: 312px; height: 306px; pointer-events: none; color: var(--muted); }
+.mi-clock { isolation: isolate; position: relative; width: 252px; height: 248px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.mi-clock__svg { position: absolute; left: 9px; top: 9px; width: 234px; height: 230px; pointer-events: none; color: var(--muted); }
 .mi-clock__svg .mi-clock__ring { fill: none; stroke: var(--border-strong); }
 .mi-clock__svg circle[stroke='currentColor'], .mi-clock__svg line { fill: none; stroke: currentColor; }
 .mi-clock__orbit path { fill: url(#miClockFlowGrad); stroke: none; }
 .mi-clock__svg .mi-clock__now { fill: var(--accent); stroke: none; }
 /* 外圈那条流光**不再旋转**：`loadingStandard` 规定全仓只有 `loadingState.css` 拥有旋转动画
    （转圈＝「正在加载」的信号，别处一转，读者就分不清这屏是在忙还是纯装饰）。
-   现在换成**环流高光**：沿环推进一段描边（`stroke-dashoffset`），元素本身不旋转。 */
-.mi-clock__orbit { transform-origin: 156px 153px; animation: mi-clock-spin 8s linear infinite; }
+   现在换成**环流高光**：沿环推进一段描边，元素本身不旋转。
+   旋转轴**必须**是环心：`--mi-clock-center-x/-y` 由组件从 `clockCardCenter` 写进来（见 ClockCard.tsx），
+   这里不许再写一份像素圆心——写死的那次，卡改小后光斑整个转到环外，看起来就是「流光没了」。 */
+.mi-clock__orbit { transform-origin: var(--mi-clock-center-x, 50%) var(--mi-clock-center-y, 50%); animation: mi-clock-spin 8s linear infinite; }
 /*
  * 装饰性流光（原实现，2026-11-20 恢复）：环内那扇渐变光**整圈自转**，8 秒一圈。
  *
@@ -64,7 +66,7 @@
 
 
 
-.mi-clock__core { position: absolute; left: 168px; top: 165px; transform: translate(-50%, -50%); width: 160px; padding: 2px 4px; background: var(--surface); border-radius: 50%; text-align: center; display: grid; gap: 1px; justify-items: center; z-index: 2; }
+.mi-clock__core { position: absolute; left: 126px; top: 124px; transform: translate(-50%, -50%); width: 120px; padding: 2px 4px; background: var(--surface); border-radius: 50%; text-align: center; display: grid; gap: 1px; justify-items: center; z-index: 2; }
 .mi-clock__row1 { display: flex; align-items: baseline; gap: 5px; justify-content: center; }
 .mi-clock__name { font-size: var(--font-body); font-weight: 600; color: var(--muted-strong); }
 .mi-clock__badge { font-size: var(--font-meta); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: 999px; padding: 0 5px; }
@@ -132,5 +134,5 @@
   .mi-clock__node { transition: none; }
 }
 
-/* 叠在卡右上角：绝对定位，不参与布局——卡 336×330、圆心、四块牌、主位的计算值一个都不变。 */
+/* 叠在卡右上角：绝对定位，不参与布局——环、牌、主位的计算值一个都不变。 */
 .mi-clock__action { position: absolute; top: var(--mi-clock-action-inset); right: var(--mi-clock-action-inset); z-index: var(--mi-clock-overlay-z, 100); }

@@ -5,7 +5,7 @@
  * 这里只算「放哪儿、多透」，不碰 DOM：组件照算出来的角度与坐标摆，样式照原型原样搬。
  *
  * 三条不能被改掉的口径（原型里逐字写过）：
- * 1. **圆心只有一处来源**：卡 336×330、内距 12 → 卡圆心 (168,165)、SVG 圆心 (156,153)；
+ * 1. **圆心只有一处来源**：卡 252×248、内距 9 → 卡圆心 (126,124)、SVG 圆心 (117,115)；
  *    牌、色带、刻度、流光、主位全由这两个常量算，不许各自写死。
  * 2. **两区不等速**：未来区 240° = 30 天（1 天 8°）；过去区按各自周期 P 算
  *    （`360 − 距上次发布天数 ÷ P × 360`，月度约 12°/天）。同一个「1 天」在两区角度不同，
@@ -15,16 +15,16 @@
 
 export const clockCardGeometry = Object.freeze({
   /** 卡宽高与内距：圆心的唯一来源。 */
-  cardWidth: 336,
-  cardHeight: 330,
-  pad: 12,
-  /** SVG 画布：卡扣掉两侧内距（312×306），圆心由它和 pad 一起决定。 */
-  svgWidth: 336 - 2 * 12,
-  svgHeight: 330 - 2 * 12,
+  cardWidth: 252,
+  cardHeight: 248,
+  pad: 9,
+  /** SVG 画布：卡扣掉两侧内距（234×230），圆心由它和 pad 一起决定。 */
+  svgWidth: 252 - 2 * 9,
+  svgHeight: 248 - 2 * 9,
   /** 刻度环半径（里面那圈带短线的环）。 */
-  scaleRadius: 104,
-  /** 轨道半径：指标牌挂在这条圆上。 */
-  orbitRadius: 135,
+  scaleRadius: 78,
+  /** 轨道半径：指标牌挂在这条圆上（环直径 202）。 */
+  orbitRadius: 101,
   /** 未来区：240° 对应 30 天。 */
   futureArcDegrees: 240,
   futureHorizonDays: 30,
@@ -39,6 +39,16 @@ export const clockCardGeometry = Object.freeze({
    */
   periodDaysRange: Object.freeze({ min: 1, max: 366 })
 })
+
+/**
+ * 原型那张卡的轨道半径（336×330、SVG 圆心 (156,153)、r135）。
+ * A 方案等比缩小时**以它为分母**算系数，SVG 里的弧与刻度都照这个系数重算——
+ * 手绘路径不重写，只按比例搬（见 `clockCardSvg.ts`）。
+ */
+export const prototypeOrbitRadius = 135
+
+/** 等比重算系数：这张卡的轨道 ÷ 原型轨道（252 宽时 = 101 / 135 ≈ 0.748）。 */
+export const clockCardSvgScale = clockCardGeometry.orbitRadius / prototypeOrbitRadius
 
 /** 卡圆心：只有这一处算它（原型 (168,165) 与 SVG (156,153) 都由 CARD/PAD 得出）。 */
 export const clockCardCenter = Object.freeze({
@@ -128,8 +138,8 @@ export function clockPastAngle(daysSince: number, periodDays: number): number {
 }
 
 /**
- * 角度 → 卡片坐标（相对 12 点顺时针，半径默认轨道 135）。
- * 原型的四个点就是这条公式的判据：176.8° → (175.54, 299.79)、218.4° → (84.15, 270.80)…
+ * 角度 → 卡片坐标（相对 12 点顺时针，半径默认轨道 101）。
+ * 原型的四个点按同一比例缩到这张卡上就是判据（见 `clockCardModel.test.ts`）。
  */
 export function clockRingPoint(angle: number, radius: number = clockCardGeometry.orbitRadius):
 Readonly<{ x: number; y: number }> {
@@ -143,22 +153,33 @@ Readonly<{ x: number; y: number }> {
 /**
  * 牌子最大宽度（用户 2026-11-21：「这个事件面板太宽了」，长名字顶出卡右缘被裁）。
  *
- * 336 卡宽、圆心 168、轨道 r135 → 环最左 33、最右 303。牌子居中挂在环上，半宽超过 33 就会出卡。
- * 128 是折中：两行装得下「核心 PCE 年率（季调）」这类长名字，又不越过环。**盒子与位置两侧都要管**，
- * 只改 `max-width` 不夹位置，牌仍会被推到卡外一半。
+ * 卡 252 宽、圆心 126、轨道 r101 → 环最左 25、最右 227。牌子居中挂在环上，半宽超过 25 就会出卡。
+ * 96 是 128 按 0.75 缩下来的（用户 2026-11 拍板 A 方案）：仍装得下两行名字，又不越过环。
+ * **盒子与位置两侧都要管**，只改 `max-width` 不夹位置，牌仍会被推到卡外一半。
  */
-export const clockPlaqueMaxWidth = 128
+export const clockPlaqueMaxWidth = 96
 
 /** 牌子在卡内留的边距：牌虽然贴着环，但不许贴到卡边（截图里就是贴上去被裁的）。 */
 const PLAQUE_EDGE_MARGIN = 8
 
 /**
- * 牌子的横向夹取：按最大宽算半宽，保证**整块**留在 `[0, 336]` 内。
+ * 牌子的横向夹取：按最大宽算半宽，保证**整块**留在 `[0, 252]` 内。
  * 只夹横向——纵向是环的几何，一点不动。
  */
 export function clampPlaqueX(x: number): number {
   const half = clockPlaqueMaxWidth / 2
   return Math.min(Math.max(x, half + PLAQUE_EDGE_MARGIN), clockCardGeometry.cardWidth - half - PLAQUE_EDGE_MARGIN)
+}
+
+/**
+ * 牌子的纵向夹取：**整块留在卡内**。
+ *
+ * A 方案（卡 248 高）之后，1 天后那块牌挂在 8° 上、卡顶只隔 24px，而两行名字的牌有 50 高，
+ * 上半截会被 `overflow: hidden` 切掉。横向早就有夹取，纵向也必须有——两者都只挪位置，不动环的几何。
+ */
+export function clampPlaqueY(y: number, size: ClockPlaqueSize): number {
+  const half = size.height / 2
+  return Math.min(Math.max(y, half + PLAQUE_EDGE_MARGIN), clockCardGeometry.cardHeight - half - PLAQUE_EDGE_MARGIN)
 }
 
 /** 角度归一到 [0, 360)：过去区算出来可能是负数或 ≥360。 */
@@ -194,7 +215,7 @@ export type ClockPlaqueSize = Readonly<{ width: number; height: number }>
 /**
  * 牌子的盒子：宽度由名字算——名字越长盒子越宽，超过上限就折两行、盒子到上限。
  *
- * 为什么按名字估而不是按 CSS 最大值一把算：`min-width 62 / max-width 128` 之间差别一倍，
+ * 为什么按名字估而不是按 CSS 最大值一把算：`min-width 62 / max-width 96` 之间差别也不小，
  * 按上限算会把 62 宽的短牌当成 128 宽，明明不叠的两块被判成要错开；按最小值算又会漏判。
  * 估价只服务于「叠了多少」，与真实渲染的差由 `clockPlaqueOverlapCap` 兜住。
  */
@@ -311,7 +332,9 @@ function placePlaque(
   size: ClockPlaqueSize,
   placed: readonly Readonly<{ plaque: ClockPlaque; rect: ClockPlaqueRect }>[]
 ): Readonly<{ plaque: ClockPlaque; rect: ClockPlaqueRect }> | undefined {
-  const base = { plaque, rect: clockPlaqueRect(plaque, size) }
+  // 先保证整块在卡内（横向既有夹取、纵向按这块自己的高），再谈叠多少；错开也从夹好的位置起算。
+  const anchor: ClockPlaque = { ...plaque, x: clampPlaqueX(plaque.x), y: clampPlaqueY(plaque.y, size) }
+  const base = { plaque: anchor, rect: clockPlaqueRect(anchor, size) }
   const neighbours = placed.filter((other) => plaqueOverlapRatio(base.rect, other.rect) > 0)
   if (neighbours.length === 0) return base
   // 一组最多两块：一上来就叠到两块上，位置不足。
@@ -320,7 +343,7 @@ function placePlaque(
   for (let step = 1; step <= clockPlaqueNudgeMaxSteps; step += 1) {
     // 先朝圆心、再朝外：朝里更容易避开邻牌，也不容易把牌推出卡边。
     for (const direction of [-1, 1] as const) {
-      const moved = nudgeRadially(plaque, direction * step * clockPlaqueNudgeStep, size)
+      const moved = nudgeRadially(anchor, direction * step * clockPlaqueNudgeStep, size)
       if (moved === undefined) continue
       const rect = clockPlaqueRect(moved, size)
       const blockers = placed.filter((other) => plaqueOverlapRatio(rect, other.rect) > 0)

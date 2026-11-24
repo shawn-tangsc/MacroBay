@@ -7,8 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { ClockCard } from './ClockCard'
 import {
-  buildClockCardModel, clockPlaqueMaxWidth, clockPlaqueMinWidth, clockPlaqueOneLineHeight,
-  clockPlaqueOverlayZ, clockPlaqueRaisedZ, clockRingPoint, type ClockScheduleMetric
+  buildClockCardModel, clockCardCenter, clockCardGeometry, clockPlaqueMaxWidth, clockPlaqueMinWidth,
+  clockPlaqueOneLineHeight, clockPlaqueOverlayZ, clockPlaqueRaisedZ, clockRingPoint,
+  type ClockScheduleMetric
 } from './clockCardModel'
 import { clockCardText } from './clockCardText'
 
@@ -368,6 +369,38 @@ it('renders the orbit glow that spins', async () => {
  * 牌子宽度上限只有一处事实：模型里用于横向夹取的值，必须与 CSS 里那盒子的上限同一个数。
  * 两处各写一份、某天只改一边，牌子又会被夹出卡外或撑破卡缘。
  */
+/**
+ * 环上流光的旋转轴必须是环心（用户 2026-11：「流光看不见了」）。
+ *
+ * 它曾经写死成 `transform-origin: 156px 153px`（旧卡的圆心）。卡缩到 252×248 后轴偏出 39px，
+ * 光斑被转到环外，肉眼就是「流光没了」。判据是**组件给的圆心变量 = 几何常量**，
+ * 而且样式表里不许再出现字面像素圆心——换任何卡尺寸都不该再断一次。
+ */
+it('drives the flow animation from the ring centre, not from a hard-coded pixel', async () => {
+  const { host } = await render()
+  const card = host.querySelector<HTMLElement>('.mi-clock')!
+  expect(card.style.getPropertyValue('--mi-clock-center-x')).toBe(`${clockCardCenter.svgX}px`)
+  expect(card.style.getPropertyValue('--mi-clock-center-y')).toBe(`${clockCardCenter.svgY}px`)
+  // 环心就是 SVG 画布中心：换尺寸时两者一起走，轴不会偏。
+  expect(clockCardCenter.svgX).toBe(clockCardGeometry.svgWidth / 2)
+  expect(clockCardCenter.svgY).toBe(clockCardGeometry.svgHeight / 2)
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const orbit = /\.mi-clock__orbit \{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(orbit, '旋转轴必须读组件给的变量').toContain('transform-origin: var(--mi-clock-center-x')
+  expect(orbit, '不许再写死像素圆心').not.toMatch(/transform-origin:\s*[\d.]+px/u)
+})
+
+/**
+ * 卡本体按 A 方案缩小（用户 2026-11：整体小四分之一）：252×248，内距 9 → SVG 234×230，
+ * 中央块 120。几何常量在 `clockPlaqueLayout`，样式表必须同值，否则环会被裁。
+ */
+it('draws the card at the size the user asked for', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  expect(css, '卡本体').toMatch(/\.mi-clock \{[^}]*width: 252px; height: 248px;/u)
+  expect(css, 'SVG 画布').toMatch(/\.mi-clock__svg \{[^}]*width: 234px; height: 230px;/u)
+  expect(css, '中央块').toMatch(/\.mi-clock__core \{[^}]*width: 120px;/u)
+})
+
 it('keeps the plaque width limit identical in the model and the stylesheet', () => {
   const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
   expect(css).toContain(`--mi-clock-plaque-max-width: ${clockPlaqueMaxWidth}px`)
