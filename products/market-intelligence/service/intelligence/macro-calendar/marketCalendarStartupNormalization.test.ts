@@ -82,23 +82,32 @@ describe('启动链幂等规范化', () => {
     expect(after[0]!.period_key).toBe('2026-11-17')
   })
 
-  it('同国家+码+期次两行 → 合并成一行，被删整行进审计并记规则分支', () => {
+  /**
+   * **同一期、不同首发布日 → 两条不同的发布，都留**（Chief 2026-11-24 改契约）。
+   *
+   * 旧桶二按（国家+码+期次）合并、忽略首发布日：CA 经济信心 2026-09 源上发了三条
+   * （10-05 50.5 / 10-13 51.3 / 10-19 51.7），启动后只剩最后一条，前两条的值只留在审计表里——
+   * 那不是 churn 的小账，是**丢值**。主键含 `first_scheduled_date` 本来就是「排期不同＝两行」。
+   */
+  it('同一期、三条不同排期（各带不同值）→ 三行都在、三个值都在，一条都不删', () => {
     const database = setup()
-    seed(database, { metricKey: 'US.C.NONE.LEVEL', periodKey: '2026-10', firstScheduledDate: '2026-10-01',
-      valuesJson: '{"actual":"1.0"}', valueState: 'present' })
-    seed(database, { metricKey: 'US.C.NONE.LEVEL', periodKey: '2026-10', firstScheduledDate: '2026-10-05',
-      valuesJson: '{"actual":"1.2"}', valueState: 'present' })
+    const one = (firstScheduledDate: string, actual: string) => seed(database, {
+      metricKey: 'CA.ECONOMIC_CONFIDENCE.NONE.LEVEL', periodKey: '2026-09', firstScheduledDate,
+      valuesJson: JSON.stringify({ actual }), valueState: 'present', providerId: '0xrouter' })
+    one('2026-10-05', '50.50')
+    one('2026-10-13', '51.30')
+    one('2026-10-19', '51.70')
     const report = run(database)
-    expect(report.droppedRows).toBe(1)
     const after = rows(database)
-    expect(after).toHaveLength(1)
-    // 都有 actual → 取首发布日最晚那条（修订值）。
-    expect(after[0]!.first_scheduled_date).toBe('2026-10-05')
-    const audit = database.prepare('select rule, deleted_row_json from mi_calendar_events__merge_audit_v1')
-      .all() as Array<{ rule: string; deleted_row_json: string }>
-    expect(audit).toHaveLength(1)
-    expect(audit[0]!.rule).toBe('period-resolve-dup/latest-when-all-have-actual')
-    expect(JSON.parse(audit[0]!.deleted_row_json).first_scheduled_date).toBe('2026-10-01')
+    expect(after).toHaveLength(3)
+    expect(after.map((row) => JSON.parse(String(row.values_json)).actual).sort())
+      .toEqual(['50.50', '51.30', '51.70'])
+    expect(report.droppedRows).toBe(0)
+    // 审计表不许有删行记录：这三条不是重复。
+    expect((database.prepare('select count(*) c from mi_calendar_events__merge_audit_v1').get() as { c: number }).c).toBe(0)
+    // 幂等：第二遍 0 变更。
+    expect(run(database)).toMatchObject({ droppedRows: 0, periodsResolved: 0 })
+    expect(rows(database)).toHaveLength(3)
   })
 
   /**
@@ -106,20 +115,19 @@ describe('启动链幂等规范化', () => {
    * 两家对同一期给出不同的数，合并会挑一个留下、另一个消失——那正是「谁也说不清哪来的」。
    * 同源的两行仍按老规则合并（二读/三读是同一家的一次修订）。
    */
-  it('两家两条行、actual 不同 → 保留两行（不并），并计数；同源两行照旧合并', () => {
+  it('两家两条行、actual 不同 → 两行都留（值不同，任何一侧都不许被抹掉）', () => {
     const database = setup()
     seed(database, { metricKey: 'US.E.NONE.RATE', periodKey: '2026-09', firstScheduledDate: '2026-10-03',
       valuesJson: '{"actual":"4.1"}', valueState: 'present', providerId: 'narwhal' })
     seed(database, { metricKey: 'US.E.NONE.RATE', periodKey: '2026-09', firstScheduledDate: '2026-10-04',
       valuesJson: '{"actual":"4.2"}', valueState: 'present', providerId: '0xrouter' })
     const report = run(database)
-    expect(report.conflictGroupsKept).toBe(1)
     expect(report.droppedRows).toBe(0)
     const after = rows(database)
     expect(after).toHaveLength(2)
     expect(after.map((row) => row.source_provider_id).sort()).toEqual(['0xrouter', 'narwhal'])
     // 第二遍仍保留两行：这是持久语义，不是「第一次不并、第二次并」。
-    expect(run(database)).toMatchObject({ conflictGroupsKept: 1, droppedRows: 0 })
+    expect(run(database)).toMatchObject({ droppedRows: 0 })
     expect(rows(database)).toHaveLength(2)
   })
 

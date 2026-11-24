@@ -279,8 +279,7 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     report(`[macro-calendar] 启动规范化：重算 ${normalized.valueStateToPresent + normalized.valueStateToMissing} 行`
       + `（转 present ${normalized.valueStateToPresent} / 转 missing ${normalized.valueStateToMissing}）、`
       + `并值 ${normalized.mergedRows} 行、解析期次 ${normalized.periodsResolved} 条、删重复 `
-      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、`
-      + `跨源冲突保留 ${normalized.conflictGroupsKept} 组、耗时 ${elapsedMs}ms`
+      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、耗时 ${elapsedMs}ms`
       // **改名的原值必须上日志**：只写「解析 N 条」看不出是哪种形状没被认出来，也看不出谁被改了名。
       + (normalized.renamedToUnknown > 0
         ? `；改名 unknown ${normalized.renamedToUnknown} 行（原期次 ${
