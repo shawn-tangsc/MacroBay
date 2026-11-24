@@ -349,7 +349,7 @@ describe('crypto intelligence dashboard', () => {
     const cardRule = cssBlock(styles, '.mi-defensive-premium {')
     // 图高与列宽各只有一处定义：这里、以及 ChartFrame 的 init 高度，两处必须相等。
     expect(cardRule).toContain(`--mi-defensive-premium-chart-height: ${CHART_HEIGHT}px`)
-    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 240px')
+    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 8px')
     expect(cardRule).toContain('grid-template-columns: minmax(0, 1fr) var(--mi-defensive-premium-gauge-width) minmax(0, 1fr)')
     // 一列三道（用户 2026-11-23 删掉卡头与格名行之后）：图 168 / 说明 auto / 列尾留白 1fr。
@@ -1524,7 +1524,7 @@ describe('the defensive premium band', () => {
     expect(cssBlock(styles, '.mi-defensive-premium {')).not.toContain('repeat(2')
   })
 
-  it('keeps the card at the designed sizes: no source line, 240px gauge column, one 24px action', async () => {
+  it('keeps the card at the designed sizes: no source line, 184px gauge column, one 24px action', async () => {
     const container = await renderBand(skewClient({ kind: 'steeper' }))
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
     // 卡上没有来源行：来源身份在卡头 ⓘ 与两格的行名上说。
@@ -1532,7 +1532,7 @@ describe('the defensive premium band', () => {
     expect(band.textContent).not.toContain('Alternative.me')
     // 列宽与图高各只有一处定义（两个变量），三列都用它们。
     const cardRule = cssBlock(styles, '.mi-defensive-premium {')
-    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 240px')
+    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
     expect(cardRule).toContain('--mi-defensive-premium-chart-height: 168px')
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 8px')
     // 标题行的动作与文字按钮同档（24）：图标按钮用 md，换态时不跳 2px。
@@ -1549,12 +1549,12 @@ describe('the defensive premium band', () => {
   it('sizes every canvas from its own column, never by borrowing another column', async () => {
     // 真机事故（用户 2026-11-22）：真实布局还没量到时仪表按曲线的 416 出了一张图，弧横着压到中列。
     // 判据：没有布局（happy-dom 的 clientWidth = 0）时，每张图用**本列**名义宽兜底——
-    // 仪表 240（1040 下中列）、两侧走势各 392（列间距 8 之后两格 392）；416 不是任何一列的真实宽度。
+    // 仪表 184（中列）、两侧走势各 420（1040 下： (1040 − 184 − 16) / 2）；416 不是任何一列的真实宽度。
     const container = await renderBand(skewClient({ kind: 'steeper' }))
     const width = (selector: string) => container.querySelector(selector)?.getAttribute('width')
-    expect(width('[data-sentiment-gauge] svg')).toBe('240')
-    expect(width('[data-half="fear-greed"] [data-chart="fear-greed"] svg')).toBe('392')
-    expect(width('[data-half="skew"] [data-chart="skew"] svg')).toBe('392')
+    expect(width('[data-sentiment-gauge] svg')).toBe('184')
+    expect(width('[data-half="fear-greed"] [data-chart="fear-greed"] svg')).toBe('420')
+    expect(width('[data-half="skew"] [data-chart="skew"] svg')).toBe('420')
     expect(container.querySelectorAll('svg[width="416"]')).toHaveLength(0)
   })
 
@@ -1855,7 +1855,7 @@ describe('the defensive premium band', () => {
     const legacy = cssBlock(styles, '@container (max-width: 899px) {')
     expect(legacy).not.toContain('.mi-defensive-premium')
     // 堆叠后仪表独占一行：不限宽会被拉成 800×168 的扁半圆。
-    expect(stacked).toContain('.mi-defensive-premium__col--gauge { width: min(240px, 100%); justify-self: center; }')
+    expect(stacked).toContain('.mi-defensive-premium__col--gauge { width: min(184px, 100%); justify-self: center; }')
   })
 
   it('leaves the fear-greed chart exactly as it was before the skew rework', () => {
@@ -1879,9 +1879,9 @@ describe('the defensive premium band', () => {
     expect(skewGrid).toMatchObject({ left: 32, right: 28, bottom: 24 })
     expect(skewGrid.bottom).toBe((option.grid as { bottom: number }).bottom)
     expect(skewGrid.left).toBe((option.grid as { left: number }).left)
-    // 净绘图宽（1040 下每格 392）：左 392 − 32 − 16 = 344、右 392 − 32 − 28 = 332，与界面定稿同一组数。
-    expect(392 - 32 - (option.grid as { right: number }).right).toBe(344)
-    expect(392 - skewGrid.left - skewGrid.right).toBe(332)
+    // 净绘图宽（1040 下每格 420）：左 420 − 32 − 16 = 372、右 420 − 32 − 28 = 360。
+    expect(420 - 32 - (option.grid as { right: number }).right).toBe(372)
+    expect(420 - skewGrid.left - skewGrid.right).toBe(360)
     // 横轴跟着数据走（不是钉住 30 天的窗口）：5 个读数就只印 5 个刻度，首日就是数据最早那天。
     const axis = (option.xAxis as { data: string[]; axisLabel: { interval: (index: number) => boolean } }).data
     expect(axis).toHaveLength(5)

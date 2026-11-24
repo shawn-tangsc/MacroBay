@@ -106,7 +106,7 @@ describe('the gauge column', () => {
     // 判据按**看得见的弧底**算，不按几何弦（Chief + 界面 2026-11-24）：半圆最低可见点 = 圆心 y + 描边半宽 5。
     // 圆心 85.1% → y = 143.0，可见弧底 148.0，两侧轴底 168 − 24 = 144，差 4.0（判据 ≤4）。
     // 82.8% 差 0 但会把弧再抬 4px、弧顶离图位顶只剩 24，与两侧图顶距不齐，算过不采用。
-    // 半径 min(w/2 − 10, h − 22)：240 列下 110、184 列下 82。
+    // 半径 min(w/2 − 10, h − 22)：184 列下 82（用户 2026-11-24 把中列从 240 收到 184）。
     expect(GAUGE_CHART_HEIGHT).toBe(CHART_HEIGHT)
     for (const width of [184, 240]) {
       const option = gaugeChartOption({ score: 22, width, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
@@ -117,10 +117,19 @@ describe('the gauge column', () => {
       // 可见弧底（弦 + 10 宽描边的一半）离两侧轴底 4.0 ≤ 4；按弦算只有 0.9，那是描边，不是没对齐。
       expect(Math.abs(centerY + 5 - axisBottom)).toBeLessThanOrEqual(4)
       expect(series.radius).toBe(Math.max(24, Math.min(width / 2 - 10, GAUGE_CHART_HEIGHT - 22)))
+      // 盘心圆盘与指针（用户 2026-11-24）：盘半径 = 弧半径 35%（四舍五入），指针长度 = 半径 − 10
+      // （弧的描边宽），分数在盘心。184 列下：35% × 82 = 28.7 → 盘半径 29（直径 58）、指针 72。
+      const disk = series as unknown as { anchor: { size: number }; pointer: { length: number }; detail: { offsetCenter: number[] } }
+      expect(disk.anchor.size).toBe(Math.round(series.radius * 0.35) * 2)
+      expect(disk.pointer.length).toBe(series.radius - 10)
+      expect(disk.detail.offsetCenter).toEqual([0, 0])
     }
-    // 240 列下圆心 y = 147.84、半径 110：把这两个数钉住，改圆心或半径都得先改这条用例。
-    const wide = gaugeChartOption({ score: 22, width: 240, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-    expect((wide.series as Array<{ radius: number }>)[0]!.radius).toBe(110)
+    // 184 列下半径 82：把半径、盘径、指针长度钉住，改其中任何一个都得先改这条用例。
+    const wide = gaugeChartOption({ score: 22, width: 184, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const wideSeries = (wide.series as Array<{ radius: number; anchor: { size: number }; pointer: { length: number } }>)[0]!
+    expect(wideSeries.radius).toBe(82)
+    expect(wideSeries.anchor.size).toBe(58)
+    expect(wideSeries.pointer.length).toBe(72)
   })
 
   it('gives the needle a value only when there is a score', () => {
@@ -140,7 +149,8 @@ describe('the gauge column', () => {
     expect(styles).toContain('grid-template-rows: var(--mi-defensive-premium-chart-height) auto minmax(0, 1fr)')
     // 默认 240（用户 2026-11-22 把仪表放到中间后加的宽）；940–995 那档才退回 184。
     // 两处分开断言：只写一个 `toContain(184px)` 会被窄档那条规则满足，主档写错也不红。
-    expect(styles).toContain('--mi-defensive-premium-gauge-width: 240px')
-    expect(styles).toContain('@container (min-width: 940px) and (max-width: 995px)')
+    expect(styles).toContain('--mi-defensive-premium-gauge-width: 184px')
+    // 184 成了所有宽度的默认，960 那一档的覆盖规则随之删掉。
+    expect(styles).not.toContain('@container (min-width: 940px) and (max-width: 995px)')
   })
 })

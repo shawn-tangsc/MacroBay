@@ -147,7 +147,9 @@
    尺寸收在两个变量里：`--mi-defensive-premium-gauge-width`（中间那列）与 `--mi-defensive-premium-chart-height`，
    用例按这两个名字对账，不在三处各写一遍。 */
 .mi-defensive-premium {
-  --mi-defensive-premium-gauge-width: 240px;
+  /* 中列 184（Chief 2026-11-24）：240 太宽，弧大、两侧被挤窄、两处空档也显大。
+     184 下弧宽 164（半径 82），两边各让出 28 给两张曲线。 */
+  --mi-defensive-premium-gauge-width: 184px;
   /* 列间距 8（界面 2026-11-24）：12 太松，两块绘图区之间白得厉害。头栏三轨用同一个变量，
      所以头栏的轨间距跟着变——左轨的数值都是按「读得顺」定的，8 仍然够。 */
   --mi-defensive-premium-column-gap: 8px;
@@ -233,6 +235,11 @@
 /* 图：ECharts 画在 canvas 容器里，外层 figure 定高定宽；读数行与图之间的 10 是列的第三行上距。 */
 .mi-defensive-premium__chart { position: relative; display: block; align-self: end; min-width: 0; margin: 0; height: var(--mi-defensive-premium-chart-height); }
 .mi-defensive-premium__chart-canvas { width: 100%; height: 100%; }
+/* 仪表那一列的图必须在中列里**显式**居中（Chief 2026-11-24：真机上弧中心比卡片中心偏右 22px，
+   探针里 offsetLeft 却是 0）。所以不靠隐式居中：宽取中列 100%，左右外距 auto；
+   判据只有一条——弧中心与卡片中心差 ≤1px，按 998 与 1040 两个宽度出图验。 */
+.mi-defensive-premium__col--gauge > .mi-defensive-premium__chart-slot,
+.mi-defensive-premium__col--gauge .mi-defensive-premium__chart { width: 100%; margin-inline: auto; }
 .mi-defensive-premium__chart--placeholder { position: relative; display: grid; align-content: start; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 70%, transparent); border-radius: 6px; }
 /* 转圈叠在空图框里、不占行：图框高度由同一个变量给，换态不塌。 */
 .mi-defensive-premium__chart-wait { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
@@ -466,12 +473,6 @@
  * 读数行就折成两行、41px 压进固定的 24px 读数轨，把图那一行顶下去。只给这张卡，别的带子
  * 仍按 899 堆叠——它们的下限不是 940，跟着改会连带它们提前换版式。
  */
-/* 940–995 这一档：仪表列退回 184（两格 366–372），996 起才用 240——
-   240 那档两侧各要 388，两格低于 366 英文读数就折行压图（界面 2026-11-22 定的）。 */
-@container (min-width: 940px) and (max-width: 995px) {
-  .mi-defensive-premium { --mi-defensive-premium-gauge-width: 184px; }
-}
-
 @container (max-width: 939px) {
   /* 窄处三列上下排：仪表一列、两格各占满一行；每列 minmax(0,1fr)，图表不会因为剩 40px 被压成负宽。 */
   .mi-defensive-premium { grid-template-columns: minmax(0, 1fr); }
@@ -482,7 +483,7 @@
   .mi-defensive-premium__topbar-mid { grid-column: 2; grid-row: 1; justify-self: end; }
   .mi-defensive-premium__topbar-tail { grid-column: 1 / -1; grid-row: 2; }
   /* 堆叠后仪表独占一行：不限宽会被拉成「800×168」的扁半圆，限到 240 并居中。 */
-  .mi-defensive-premium__col--gauge { width: min(240px, 100%); justify-self: center; }
+  .mi-defensive-premium__col--gauge { width: min(184px, 100%); justify-self: center; }
 }
 
 /*
@@ -745,8 +746,9 @@
 .mi-crypto-dashboard__macro-row > .mi-clock { flex: none; }
 .mi-crypto-dashboard__macro-row > .mk-dash-expectation { flex: 1 1 auto; min-width: 0; }
 
-/* 期望图那一格：与钟表同高 330，卡片外观与抽屉里那块同族（边框/圆角/底色用同一批 token）。 */
-.mk-dash-expectation { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px 12px 12px 52px; box-sizing: border-box;
+/* 期望图那一格：与钟表同高（248，由 `clockCardGeometry.cardHeight` 传来，本文件不存第二份），
+   卡片外观与抽屉里那块同族（边框/圆角/底色用同一批 token）。 */
+.mk-dash-expectation { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px 0 12px 12px; box-sizing: border-box;
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
 .mk-dash-expectation__head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .mk-dash-expectation__head > h2 { margin: 0; font-size: var(--font-body); font-weight: 600; color: var(--muted-strong); white-space: nowrap; }
@@ -756,7 +758,7 @@
 /* 这一格**必须是定位祖先**：图的舞台是 `.mk-plot__stage { position:absolute; inset:0 }`，
    抽屉里靠 `.mk-plot { position:relative }` 把它框在图上。少了这句，舞台会贴到更外层，
    鼠标在哪都不会触发读数面板——用户 2026-11-15 报的「鼠标一动就出面板」就是这个。 */
-.mk-dash-expectation__plot { position: relative; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.mk-dash-expectation__plot { position: relative; flex: 1 1 0; min-height: 0; min-width: 0; }
 
 /* 右栏顶部现在装 AI 结论（原来钟表卡在这）：占满整栏、不留居中内距。 */
 [data-dashboard-policy-slot] { display: block; padding-inline: 0; }

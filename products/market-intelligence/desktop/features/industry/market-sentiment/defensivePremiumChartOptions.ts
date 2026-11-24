@@ -336,6 +336,11 @@ export function gaugeChartOption(input: {
   const { palette, fonts } = input
   const pointer = input.score !== undefined
   const radius = Math.max(24, Math.min(input.width / 2 - 10, input.height - 22))
+  // 盘心那个圆盘（用户 2026-11-24：中间是个空盘，只有一个 11 和一根半路的指针，像没画完）。
+  // 盘半径取弧半径的 35%（240 列下 110 × 0.35 ≈ 38），底色是卡片面、一条细边让它从背景里立起来；
+  // 分数落在盘心。指针长度做到接近弧内缘（半径减 10，那 10 就是弧的描边宽）。
+  const diskRadius = Math.round(radius * 0.35)
+  const pointerLength = Math.max(24, radius - 10)
   return {
     animation: false,
     aria: { enabled: false },
@@ -356,15 +361,21 @@ export function gaugeChartOption(input: {
           ]
         }
       },
-      pointer: { show: pointer, length: '52%', width: 3, itemStyle: { color: palette.text } },
-      anchor: { show: pointer, size: 8, itemStyle: { color: palette.surface, borderColor: palette.text, borderWidth: 2 } },
+      pointer: { show: pointer, length: pointerLength, width: 3, itemStyle: { color: palette.text } },
+      // 盘是画在指针之上的（ECharts 先画指针再画 anchor）：指针看起来从盘缘出发、一直指到刻度内缘。
+      anchor: {
+        show: pointer,
+        size: diskRadius * 2,
+        itemStyle: { color: palette.surface, borderColor: palette.grid, borderWidth: 1 }
+      },
       axisTick: { show: false },
       splitLine: { show: false },
       axisLabel: { show: false },
       detail: {
         show: pointer,
         valueAnimation: false,
-        offsetCenter: [0, '-42%'],
+        // 分数在盘心（原来在 '-42%' 是给没有盘的一根指针让位）。
+        offsetCenter: [0, 0],
         fontSize: fonts.metricSm,
         fontWeight: 650,
         fontFamily: FONT,

@@ -43,14 +43,14 @@ export const GAUGE_CHART_HEIGHT = CHART_HEIGHT
  * 走势格的兜底宽：1040 内容宽下两格各 388。
  * **416 不是任何一列的真实宽度**——它就是那次「仪表按 416 画、弧压到中列」的来源（用户 2026-11-22）。
  */
-const CHART_FALLBACK_WIDTH = 392
+const CHART_FALLBACK_WIDTH = 420
 
 /**
  * 仪表的兜底宽：它是**中间一列 240 的格子**（940–995 那档退回 184），绝不能借曲线那 388/416。
  * 借了的下场是真实布局还没量到时按别人的宽画一张弧，弧横着压到中列图上
  * （用户 2026-11-22 的截图：`11-14`、`11-22` 和右轴标题都被盖住）。
  */
-const GAUGE_FALLBACK_WIDTH = 240
+const GAUGE_FALLBACK_WIDTH = 184
 
 /** 图的主题：颜色与字号都从宿主的 CSS 变量读，读不到才用兜底值。 */
 function readChartTheme(element: Element): { palette: ChartPalette; fonts: ChartFonts } {
