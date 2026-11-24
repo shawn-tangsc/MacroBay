@@ -101,19 +101,21 @@ describe('the gauge column', () => {
     expect(gauge.querySelector('[aria-live]')).toBeNull()
   })
 
-  it('fills the whole cell: 168-high canvas, center 88%, radius formula untouched (user 2026-11-24)', () => {
+  it('fills the whole cell: 168-high canvas, visible arc bottom on the axis bottom (user 2026-11-24)', () => {
     // 档位词搬走后图里没有字要留位置，画布回满 168，与两侧走势图等高。
-    // 圆心 88% → y = 147.8；半径 min(w/2 − 10, h − 22)：240 列下 110、184 列下 82。
-    // 弧弦 147.8、描边到约 152.8，比两侧轴底（168 − 24 = 144）低 3.8——判据是「差 ≤4」。
+    // 判据按**看得见的弧底**算，不按几何弦（Chief + 界面 2026-11-24）：半圆最低可见点 = 圆心 y + 描边半宽 5。
+    // 圆心 85.1% → y = 143.0，可见弧底 148.0，两侧轴底 168 − 24 = 144，差 4.0（判据 ≤4）。
+    // 82.8% 差 0 但会把弧再抬 4px、弧顶离图位顶只剩 24，与两侧图顶距不齐，算过不采用。
+    // 半径 min(w/2 − 10, h − 22)：240 列下 110、184 列下 82。
     expect(GAUGE_CHART_HEIGHT).toBe(CHART_HEIGHT)
     for (const width of [184, 240]) {
       const option = gaugeChartOption({ score: 22, width, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
       const series = (option.series as Array<{ center: [string, string]; radius: number }>)[0]!
-      expect(series.center).toEqual(['50%', '88%'])
-      const centerY = 0.88 * GAUGE_CHART_HEIGHT
-      // 弧弦仍在画布之内（描边半径 5 不越界），与两侧轴底（168 − 24 = 144）相差 3.8 ≤ 4。
-      expect(centerY + 5).toBeLessThanOrEqual(GAUGE_CHART_HEIGHT)
-      expect(Math.abs(centerY - (GAUGE_CHART_HEIGHT - 24))).toBeLessThanOrEqual(4)
+      expect(series.center).toEqual(['50%', '85.1%'])
+      const centerY = 0.851 * GAUGE_CHART_HEIGHT
+      const axisBottom = GAUGE_CHART_HEIGHT - 24
+      // 可见弧底（弦 + 10 宽描边的一半）离两侧轴底 4.0 ≤ 4；按弦算只有 0.9，那是描边，不是没对齐。
+      expect(Math.abs(centerY + 5 - axisBottom)).toBeLessThanOrEqual(4)
       expect(series.radius).toBe(Math.max(24, Math.min(width / 2 - 10, GAUGE_CHART_HEIGHT - 22)))
     }
     // 240 列下圆心 y = 147.84、半径 110：把这两个数钉住，改圆心或半径都得先改这条用例。
