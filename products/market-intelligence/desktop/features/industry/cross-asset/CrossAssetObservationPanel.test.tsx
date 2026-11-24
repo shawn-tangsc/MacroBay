@@ -364,30 +364,27 @@ describe('cross-asset observation workspace', () => {
       const price = host.querySelector('[data-asset-price="gold"]')!
       expect(price.textContent).toContain('3413.90')
       expect(host.querySelector('[data-asset-price="gold"] [data-live-state]')).toBeNull()
-      const badge = host.querySelector('[data-status-row="gold"] th [data-live-state]')!
-      expect(badge.getAttribute('data-live-state')).toBe('live')
-      expect(badge.textContent).toBe(text.liveStateLabels.live)
-      expect(badge.getAttribute('title')).toBeNull()
-      expect(badge.getAttribute('tabindex')).toBe('0')
-      await act(async () => { (badge as HTMLElement).focus() })
-      // 提示是一句语言模板 + `{time}`：模板那句必须在，且后面真的被填了观测时间——
-      // 只断言「包含模板」会让「时间没填进去」也算通过（模板里本来就有那句话）。
+      // 「实时」这一档不再挂 pill（用户 2026-11-25）；那句话住在行名旁的 ⓘ 里，仍然带观测时间。
+      expect(host.querySelector('[data-status-row="gold"] th [data-live-state]')).toBeNull()
+      // ⓘ 里那句话仍在，而且填了观测时间：模板里的 `{time}` 不能空着。
+      const infoButton = host.querySelector<HTMLButtonElement>('[data-status-row="gold"] th button')!
+      await act(async () => { infoButton.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); infoButton.focus() })
+      const hintText = document.querySelector('[data-row-hint="gold"]')?.textContent ?? document.body.textContent ?? ''
       const hintHead = text.liveHint.split('{time}')[0]!.trim()
-      const bubbles = [...document.querySelectorAll('.ant-tooltip-inner')].map(node => node.textContent ?? '')
-      expect(bubbles.some(line => line.startsWith(hintHead) && line.length > hintHead.length)).toBe(true)
-      expect(badge.getAttribute('data-live-observed')).toBe(String(atMs + 5_000))
+      expect(hintText.startsWith(hintHead) || hintText.includes(hintHead)).toBe(true)
+      expect(hintText).not.toContain('{time}')
       // The four windows are still the closed-bar figures: the live tick moved none of them.
       expect(host.querySelector('[data-asset-return="gold:15m"]')?.textContent).toBe('+0.05%')
       expect(host.querySelector('[data-asset-return="gold:24h"]')?.textContent).toBe('−0.40%')
       // The dollar row carries no live badge, even though it is the other connected macro row.
       expect(host.querySelector('[data-status-row="dxy"] [data-live-state]')).toBeNull()
 
-      // A delayed tick keeps the badge, with the delayed wording rather than a live claim.
+      // A delayed tick still keeps the badge: that one is a warning, not a live claim.
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
         { client: client as never, macroSnapshot: macro({ state: 'stale', price: '3413.90', atMs }) as never, text })))
       expect(host.querySelector('[data-status-row="gold"] th [data-live-state]')?.textContent).toBe(text.liveStateLabels.stale)
 
-      // No live field: the cell falls back to the stored level, with no badge and no invented figure.
+      // No live field: the cell falls back to the stored level, with no invented figure.
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
         { client: client as never, macroSnapshot: macro() as never, text })))
       const stored = host.querySelector('[data-asset-price="gold"]')!
@@ -398,7 +395,7 @@ describe('cross-asset observation workspace', () => {
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
-  it('keeps the live badge and the four closed windows side by side in both languages', async () => {
+  it('leaves the four closed windows untouched when a live tick arrives, in both languages', async () => {
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
     const asOf = '2026-09-14T12:00:00.000Z'
@@ -412,9 +409,9 @@ describe('cross-asset observation workspace', () => {
           readings: [{ seriesId: 'xau-usd', level: 3412.55, atMs, returns: {}, live: { state: 'live' as const, price: '3413.90', atMs } }]
         }
         await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, macroSnapshot: macro as never, text })))
-        const badge = host.querySelector('[data-live-state]')!
-        expect(badge.textContent).toBe(text.liveStateLabels.live)
-        expect(badge.textContent?.length).toBeGreaterThan(0)
+        // 实时那一档不挂 pill；价格照旧是流上的价，四个窗口仍是已闭合 K 线的答案。
+        expect(host.querySelector('[data-live-state]')).toBeNull()
+        expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toContain('3413.90')
         // Every window the store could not answer stays a dash: a live price never fills a hole.
         for (const window of ['15m', '1h', '24h', '7d']) {
           expect(host.querySelector(`[data-asset-return="gold:${window}"]`)?.textContent).toBe(text.windowNoData)

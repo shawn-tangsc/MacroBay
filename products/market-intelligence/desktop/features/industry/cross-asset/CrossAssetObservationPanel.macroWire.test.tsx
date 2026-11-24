@@ -87,7 +87,8 @@ describe('the macro rows against the real wire payload', () => {
 
     // Gold's 最新 cell is the live tick, not the stored bar, and no window is computed from it.
     expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toBe('4088.58')
-    expect(host.querySelector('[data-status-row="gold"] [data-live-state]')).not.toBeNull()
+    // 实时那一档不挂 pill（用户 2026-11-25）：价格仍是流上的价，说明在行名旁的 ⓘ 里。
+    expect(host.querySelector('[data-status-row="gold"] [data-live-state]')).toBeNull()
     expect(cell(host, 'gold', '15m')).toBe('−0.09%')
     expect(cell(host, 'gold', '24h')).toBe('−1.87%')
   })
