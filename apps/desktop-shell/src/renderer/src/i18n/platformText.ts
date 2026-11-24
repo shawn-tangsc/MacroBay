@@ -1346,13 +1346,14 @@ export type PlatformText = {
       group: string
       text: string
       /**
-       * 「文字」「海报」两行**共用**的三个状态词（只有 `noImage` 属于海报那一行，留在
-       * `poster.state`）。挂在海报名下，将来改海报的措辞会悄悄改掉文字行——所以提到这一层。
+       * 「文字」「海报」两行**共用**的三个状态词。`noImage`（这一版没有图）只属海报那一行，
+       * 留在 `poster.state`——挂在海报名下的共用词会让改海报措辞时悄悄改掉文字行。
        */
       state: { sent: string; unconfirmed: string; failed: string }
       poster: {
         label: string
-        state: { sent: string; unconfirmed: string; failed: string; noImage: string }
+        /** 只剩 `noImage`：三个共用状态词已在 `detail.state`（见上）。 */
+        state: { noImage: string }
         counts: { all: (count: number) => string; partial: (failed: number, total: number) => string }
         /**
          * 数字与原因之间那个「·」：两者字号不同（数字弱化、原因是正文色），只能是两个节点，
@@ -2822,9 +2823,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         poster: {
           label: '海报',
           state: {
-            sent: '已发送',
-            unconfirmed: '等回执',
-            failed: '未发送',
             noImage: '这一版没有图',
           },
           counts: {
@@ -4284,9 +4282,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         poster: {
           label: 'Poster',
           state: {
-            sent: 'Sent',
-            unconfirmed: 'Awaiting receipt',
-            failed: 'Not sent',
             noImage: 'No poster in this edition',
           },
           counts: {

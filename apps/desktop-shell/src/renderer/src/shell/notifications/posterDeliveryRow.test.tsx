@@ -298,10 +298,12 @@ describe('海报行：渲染', () => {
 
 describe('海报行：文案键全部来自壳的文案表', () => {
   it('uses the landed platform keys, one per state', () => {
-    for (const state of ['sent', 'unconfirmed', 'failed', 'noImage'] as const) {
-      expect(text.state[state].length).toBeGreaterThan(0)
+    // 三个共用状态词在 `detail.state`（「文字」「海报」两行同一个词）；只有 `noImage` 留在这里。
+    for (const state of ['sent', 'unconfirmed', 'failed'] as const) {
+      expect(labels.detail.state[state].length).toBeGreaterThan(0)
     }
+    expect(text.state.noImage.length).toBeGreaterThan(0)
     // 状态词不带参数（StatusPill 只收键）：四个都必须是字符串，不是函数。
-    expect(typeof text.state.sent).toBe('string')
+    expect(typeof labels.detail.state.sent).toBe('string')
   })
 })
