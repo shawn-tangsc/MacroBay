@@ -30,7 +30,7 @@ import {
 import { discordUserAgent } from '../../../ai/agent-platform/channels/discord/discordUserAgent'
 import { resolveActiveProxy } from '../../../network/activeProxyState'
 import { createChannelImageWiring } from './channelImageWiring'
-import { channelAttachmentTurnText } from '../channelAttachmentTurnText'
+import { channelAttachmentOnlyTurn } from '../channelAttachmentTurnText'
 import { configurePosterPublish } from '../../../ai/agent-platform/channels/channelPosterPublishRegistry'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
@@ -215,9 +215,9 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     // 同一个运行时实例：通道分发前会把这个会话标成「手机通道」，工具审批不进卡片队列。
     runtime: agentRuntimeService,
     runs: channelDispatchRuns,
-    // 只带图、没有配文：给助手一句说明（含稳定引用），别让这一轮变成空回合。
-    attachmentsOnlyText: async (attachments) =>
-      channelAttachmentTurnText((await settingsStore.get()).language, attachments),
+    // 只带图、没有配文：气泡给读者一句「收到」，模型另拿「只有引用、没有画面」的约束。
+    attachmentsOnlyTurn: async (attachments) =>
+      channelAttachmentOnlyTurn((await settingsStore.get()).language, attachments),
     failureText: async (kind, reason) => {
       const language = (await settingsStore.get()).language
       if (kind === 'run-interrupted') {

@@ -43,17 +43,19 @@ export class ChannelInboundExecutionCoordinator {
     inbound: ChannelInboundRepository
     delivery: ChannelDeliveryService
     cipher: ChannelPayloadCipher
-    runtime: { sendMessage: (request: { agentId: string; sessionId: string; text: string; runId: string }) => Promise<AgentChatRuntimeResult> }
+    runtime: { sendMessage: (request: { agentId: string; sessionId: string; text: string; displayText?: string; runId: string }) => Promise<AgentChatRuntimeResult> }
     runs?: ChannelDispatchRunRepository
     /** 失败原因码闭集之一；界面据此说人话。`dispatch-failed-unknown` 是**兜底**，不是解释。 */
     failureText?: (kind: 'run-failed' | 'run-interrupted', reason?: DispatchFailureReason) => string | Promise<string>
     /**
-     * 只带附件、没有配文的消息，交给助手的那句话（含每条附件的稳定引用）。
+     * 只带附件、没有配文的消息：读者气泡里的那一句（`displayText`）与**模型**这一轮拿到的内容（`text`）。
      *
      * 为什么要它：这一轮原来是**空回合**——助手什么都没拿到，聊天里也看不出「收到过」，
-     * 读者分不清「没发」「发了没处理」。文案归注入方（按读者语言），这里只负责别让它变成空的。
+     * 读者分不清「没发」「发了没处理」。两半必须分开：气泡里只描述发生了什么（不替读者表态），
+     * 「只拿到引用、没有画面」这条约束进 `text`（模型），归注入方按读者语言写。
      */
-    attachmentsOnlyText?: (attachments: ChannelInboundPayload['attachments']) => string | Promise<string>
+    attachmentsOnlyTurn?: (attachments: ChannelInboundPayload['attachments']) =>
+      { text: string; displayText: string } | Promise<{ text: string; displayText: string }>
     now?: () => Date
     leaseMs?: number
     setInterval?: (callback: () => void, intervalMs: number) => Timer
@@ -131,7 +133,14 @@ export class ChannelInboundExecutionCoordinator {
       const payload = await this.decrypt(admitted)
       // 手机通道没有确认卡：分发前标记这个会话，工具审批直接收口，不排队等界面。
       markChannelSession(binding.sessionId)
-      const runtime = await this.deps.runtime.sendMessage({ agentId: binding.agentId, sessionId: binding.sessionId, text: await this.turnText(payload), runId: owner.dispatchId })
+      const turn = await this.turnInput(payload)
+      const runtime = await this.deps.runtime.sendMessage({
+        agentId: binding.agentId,
+        sessionId: binding.sessionId,
+        text: turn.text,
+        ...(turn.displayText === undefined ? {} : { displayText: turn.displayText }),
+        runId: owner.dispatchId
+      })
       if (this.deps.runs) {
         const text = getAgentTextParts(runtime.assistantMessage.data).join('\n')
         const encrypted = await this.deps.cipher.encrypt(owner.channelId, new TextEncoder().encode(text))
@@ -188,15 +197,18 @@ export class ChannelInboundExecutionCoordinator {
    * 这一轮存在。有配文时逐字照旧（不追加附件说明，否则每一轮历史消息都会变样）；
    * 既没文字也没附件时保持原样——那种消息本来就没有内容可转述。
    */
-  private async turnText(payload: ChannelInboundPayload): Promise<string> {
-    if (payload.text !== null && payload.text.trim().length > 0) return payload.text
-    if (payload.attachments.length === 0) return payload.text ?? ''
-    const composed = await this.deps.attachmentsOnlyText?.(payload.attachments)
+  private async turnInput(payload: ChannelInboundPayload): Promise<{ text: string; displayText?: string }> {
+    if (payload.text !== null && payload.text.trim().length > 0) return { text: payload.text }
+    if (payload.attachments.length === 0) return { text: payload.text ?? '' }
+    // 两半分开：气泡只放读者那句话，模型额外拿到「只有引用、没有画面」的约束。
+    const composed = await this.deps.attachmentsOnlyTurn?.(payload.attachments)
     if (composed !== undefined) return composed
     // 没装文案端口时退成**数据行**：这里不写硬编码人话（可见文案归注入方）。
-    return payload.attachments
-      .map((attachment) => `${attachment.kind} ${attachment.mimeType} ref=${attachment.stableRef}`)
-      .join('\n')
+    return {
+      text: payload.attachments
+        .map((attachment) => `${attachment.kind} ${attachment.mimeType} ref=${attachment.stableRef}`)
+        .join('\n')
+    }
   }
 
   private async decrypt(admission: { channelId: string; ciphertext: Uint8Array; keyRef: string; keyRevision: number }): Promise<ChannelInboundPayload> {
