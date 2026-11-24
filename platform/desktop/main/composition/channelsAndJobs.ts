@@ -35,7 +35,7 @@ import { configurePosterPublish } from '../../../ai/agent-platform/channels/chan
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { pruneChannelRuntimeAudits } from '../../../ai/agent-platform/channels/channelRuntimeAuditPrune'
-import { setChannelRuntimeAuditPrune } from './slots'
+import { getChannelAttachmentBlobStore, setChannelRuntimeAuditPrune } from './slots'
 import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../../../ai/agent-platform/channels/channelRuntimeFailureMirror'
 import { channelConversationTitle } from '../../../ai/agent-platform/channels/channelConversationName'
 import { channelAdapterDescriptor } from '../../../ai/agent-platform/channels/channelAdapterDescriptors'
@@ -45,6 +45,7 @@ import {
   touchChannelConversation
 } from '../../../ai/agent-platform/channels/channelConversationBindings'
 import { resolveDeliveryTarget } from '../../../ai/agent-platform/channels/channelDeliveryTargetResolution'
+import { captureTelegramAttachment } from '../../../ai/agent-platform/channels/telegram/telegramAttachmentCapture'
 import { getNotificationRuntime } from '../../../notifications/ipc/registerNotificationIpc'
 import { notifyChannelConnectionLost } from '../../../notifications/producers/channelConnectionLost'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../../../notifications/contracts/notificationContracts'
@@ -168,9 +169,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
   // **同一个实例**同时充当文本与图片出口：只有一张路由表（方案 §2），不开第二张。
   const channelDeliveryRouter = new ChannelDeliveryTransportRouter({
     typeForChannel: (channelId) => channelManagementRepository.channelType(channelId),
-    // 图片能力还取决于「这条通道绑定的会话是什么种类」：绑定到 QQ 频道（guild）的通道发不了图，
-    // 该走文字。目标解析复用投递层那**唯一一份** `resolveDeliveryTarget`（不在这里写第二套过滤）；
-    // 没绑定/多绑定时它回 false，这里就回 null，能力按适配器声明走（不改变现状）。
+    // 图片能力还要看目标会话的种类（绑到 QQ 频道的发不了图）；目标解析复用投递层那一份，判不出就不收窄。
     targetKindForChannel: (channelId) => {
       const target = resolveDeliveryTarget(channelManagementService, channelId)
       return target.ok ? target.kind : null
@@ -216,8 +215,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     runtime: agentRuntimeService,
     runs: channelDispatchRuns,
     // 只带图、没有配文：气泡给读者一句「收到」，模型另拿「只有引用、没有画面」的约束。
-    attachmentsOnlyTurn: async (attachments) =>
-      channelAttachmentOnlyTurn((await settingsStore.get()).language, attachments),
+    attachmentsOnlyTurn: async (attachments) => channelAttachmentOnlyTurn((await settingsStore.get()).language, attachments),
     failureText: async (kind, reason) => {
       const language = (await settingsStore.get()).language
       if (kind === 'run-interrupted') {
@@ -316,6 +314,8 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     vault: channelCredentialVault,
     getPlatformFetch,
     delivery: telegramDeliveryTransport,
+    // 入站即拉（v1 只有 Telegram）：拿不到字节不改投递，状态写在附件上，读者侧分清两种读不到。
+    captureAttachment: (attachment, api, signal) => captureTelegramAttachment({ attachment, api, store: getChannelAttachmentBlobStore(), signal }),
     getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
     ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
       channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation }),

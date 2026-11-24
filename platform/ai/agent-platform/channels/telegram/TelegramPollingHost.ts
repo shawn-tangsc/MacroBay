@@ -1,5 +1,5 @@
 import type { ChannelInboundService } from '../ChannelInboundService'
-import type { ChannelInboundResult } from '../ChannelInboundContracts'
+import type { ChannelInboundResult, ChannelVerifiedInboundAttachment } from '../ChannelInboundContracts'
 import { ChannelConnectionOutage, connectionCauseOfCode, type ChannelConnectionCause } from '../channelConnectionOutage'
 import { TelegramOffsetRepository } from './TelegramOffsetRepository'
 import { TelegramApiClient, chromiumErrorName, classifyTransportFailure } from './TelegramApiClient'
@@ -56,6 +56,11 @@ export class TelegramPollingHost {
      * 恢复靠状态行与操作记录体现，不另开一条事件（需求 v2.17 §11.5）。
      */
     onConnectionLost?: (input: { cause: ChannelConnectionCause; disconnectedAt: string }) => void
+    /**
+     * 入站附件的字节落盘（0.4.5，v1 只有 Telegram）：宿主只负责「问一次」，怎么拉、拉不拉得动、
+     * 写不写得进 store 都在注入方。没有这一项 = 只登记引用（测试与老装配路径）。
+     */
+    captureAttachment?: (attachment: ChannelVerifiedInboundAttachment, api: TelegramApiClient, signal: AbortSignal) => Promise<import('../ChannelInboundContracts').ChannelInboundAttachmentCaptureState>
     /** 时钟注入：判定按毫秒时间戳算，测试不该等真实退避。 */
     now?: () => number
     setTimeout?: (callback: () => void, ms: number) => Timer
@@ -166,6 +171,13 @@ export class TelegramPollingHost {
         if (!this.deps.offsets.commitIfCurrent(this.deps.channelId, this.deps.generation, update.update_id + 1)) return this.close('not-current')
         continue
       }
+      // 入站即拉（0.4.5）：每条附件先问一次落盘；拿不到字节也照常投递，状态写在附件上，
+      // 让读者侧能分清「暂时读不到」和「没有」。
+      const attachments = fact.attachments === undefined
+        ? undefined
+        : await Promise.all(fact.attachments.map(async (attachment) => this.deps.captureAttachment === undefined
+          ? attachment
+          : { ...attachment, capture: await this.deps.captureAttachment(attachment, this.deps.api, this.deps.signal) }))
       const result = await this.deps.inbound.receive({
         // 没有权限这类「必须回一句」的场景：走同一条通道、同一个会话键。
         reply: async (text: string) => {
@@ -183,7 +195,7 @@ export class TelegramPollingHost {
         conversationKind: fact.conversationKind,
         mentionedBot: fact.mentionedBot,
         ...(fact.text === undefined ? {} : { text: fact.text }),
-        ...(fact.attachments ? { attachments: fact.attachments } : {}),
+        ...(attachments ? { attachments } : {}),
         acknowledge: async () => {
           if (this.deps.signal.aborted || !this.deps.offsets.commitIfCurrent(this.deps.channelId, this.deps.generation, update.update_id + 1)) {
             throw new Error('telegram-offset-commit-failed')

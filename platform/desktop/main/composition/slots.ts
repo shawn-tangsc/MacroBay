@@ -24,6 +24,20 @@ let installedProductManifestIds: string[] = []
 let agentTaskRunController: ReturnType<typeof createAgentTaskRunController> | null = null
 /** 通道运行审计的批量裁剪（0.4.3 B3）：由通道组合根设置，保留期任务读取。 */
 let channelRuntimeAuditPrune: (() => { removedFailureRows: number; removedLifecycleRows: number }) | null = null
+/** 入站附件字节的内容寻址 store（0.4.5）：repositories 建一次，通道分片与将来的清理作业读同一个实例。 */
+let channelAttachmentBlobStore: ChannelAttachmentBlobStoreHandle | null = null
+
+type ChannelAttachmentBlobStoreHandle = ReturnType<typeof import('../../../storage/contentAddressedBlobs').createContentAddressedBlobStore>
+
+export function setChannelAttachmentBlobStore(value: ChannelAttachmentBlobStoreHandle): void {
+  channelAttachmentBlobStore = value
+}
+
+/** 未初始化即抛：静默拿到 `undefined` 会让入站附件以为「写成功了」。 */
+export function getChannelAttachmentBlobStore(): ChannelAttachmentBlobStoreHandle {
+  if (channelAttachmentBlobStore === null) throw new Error('channel-attachment-blob-store-before-init')
+  return channelAttachmentBlobStore
+}
 
 export function setAgentTaskExecutionCoordinator(value: AgentTaskExecutionCoordinator | null): void {
   agentTaskExecutionCoordinator = value

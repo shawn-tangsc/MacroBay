@@ -4,12 +4,27 @@ import type { ChannelPayloadCipher } from '../../../secrets/channels/channelCred
 import type { ChannelConversationKind, ChannelInboundDisposition } from './channelContracts'
 
 // Provider adapters must validate this ref before crossing the inbound boundary.
+/**
+ * 附件字节的落盘状态（0.4.5）。三态分开，是因为读者看到的话不同：
+ * - `stored`：字节在本地，随时能取（消息行只留 `fileRef`，不留字节）；
+ * - `unavailable`：这类附件我们不收（超 2MB / 不在 png·jpeg·webp 白名单 / 引用形状不对）——
+ *   重试没用，读者需要换一张图；
+ * - `unreadable`：这次没取到（下载失败 / 写盘校验失败）——**可重试**，不许说成「没有」。
+ *
+ * 没有这一项 = 老记录，或者这个平台只登记引用、字节从不落盘（v1 只有 Telegram 真拉取）。
+ */
+export type ChannelInboundAttachmentCaptureState =
+  | { state: 'stored'; fileRef: string }
+  | { state: 'unavailable'; reasonCode: 'attachment-too-large' | 'attachment-unsupported-type' | 'attachment-ref-invalid' }
+  | { state: 'unreadable'; reasonCode: 'attachment-download-failed' | 'attachment-store-failed' }
+
 export type ChannelVerifiedInboundAttachment = {
   kind: 'image' | 'file'
   stableRef: string
   name?: string
   mimeType: string
   sizeBytes?: number
+  capture?: ChannelInboundAttachmentCaptureState
 }
 
 export type ChannelInboundFacts = {
@@ -120,6 +135,7 @@ export type ChannelInboundPayload = {
     name: string | null
     mimeType: string
     sizeBytes: number | null
+    capture?: ChannelInboundAttachmentCaptureState
   }>
 }
 
@@ -145,7 +161,8 @@ export function encodeChannelInboundPayload(facts: ChannelInboundFacts): Uint8Ar
         stableRef: attachment.stableRef,
         name: attachment.name ?? null,
         mimeType: attachment.mimeType,
-        sizeBytes: attachment.sizeBytes ?? null
+        sizeBytes: attachment.sizeBytes ?? null,
+        ...(attachment.capture === undefined ? {} : { capture: attachment.capture })
       }
     })
   }
