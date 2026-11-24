@@ -4,23 +4,24 @@ import {
 import { clockRingCategories, type ClockRingCategory } from './clockRingCategories'
 
 /**
- * 环上的箭头（用户 2026-11 第三版）：**每个大类一支，从轨道内侧朝外指**。
+ * 环上的箭头（用户 2026-11）：**每个大类一支，整支收在表盘内侧、朝外指**。
  *
- * 形状沿用原来 12 点那支「现在」小三角，翻过来朝外：箭尖落在轨道 r101 上，箭身向内到 r91，
- * 底边宽 9（半宽 4.5）。原来那支「现在」箭头删掉——环上只留四支类别箭头，不与任何东西混。
+ * 形状沿用原来 12 点那支「现在」小三角：最外点 r72（离彩色流光带内缘 74.4 留 2.4px）、
+ * 最内点 r64、长 8、底宽 9。原来那支「现在」箭头删掉——环上只留四支类别箭头，不与任何东西混。
  *
- * 名字挂在**轨道外侧**（箭头正外侧、水平居中）：外侧只需「名字高 15 + 间距 2」，
- * 环到卡边有 23/25px，放得下；名字之间相撞就沿顺时针每步 8px 推开，最多 6 步，
- * 仍不行就把该名字降级进卡右下那颗 ⓘ，**不叠字、不出卡**。
+ * 名字是圆角小卡，**径向对准自己的箭头**，中心 r92（落在彩色流光带外面、r101 那根发丝线里面
+ * 这条带上；斜角上四角会各越界几像素，界面设计已同意）。相撞时沿顺时针每步 8px 推开，
+ * 最多 6 步；推不动就把该名字降级进卡右下那颗 ⓘ，**不叠字、不出卡**。
  */
 export const clockArrowGeometry = Object.freeze({
   /**
-   * 箭尖半径：**指刻度那圈**（流光真正跑的位置 r74.4–81.2），不是外面那根发丝线 r101
-   * （用户 2026-11 定 B 版）。箭尖 81 落在流光带外缘，底边 71 在刻度圈里。
+   * 箭头**整支收在表盘内侧**（用户 2026-11 第三次修正）：最外点 72、离流光带内缘 74.4 留 2.4px，
+   * 最内点 64、离中央椭圆最紧的 80° 那支还有 2.5px；长 8、底宽 9、方向朝外不变。
+   * 判据是**箭头上没有任何一点落在 r ≥ 74 的彩色流光带里**——探进环里那次真机一眼就看出来了。
    */
-  tipRadius: 81,
-  /** 箭身内端半径（箭尖 − 10）。 */
-  baseRadius: 71,
+  tipRadius: 72,
+  /** 箭身内端半径（箭尖 − 8）。 */
+  baseRadius: 64,
   /** 底边半宽（原三角底边 9）。 */
   halfWidth: 4.5,
   /** 名字卡高（11px 一行 + 上下内距与描边）。 */
@@ -117,29 +118,19 @@ export function placeClockNames(
   const demoted: ClockRingCategory[] = []
   const halfHeight = clockArrowGeometry.nameHeight / 2
   /**
-   * 名字盒：径向中心先按 r110.4，若四角伸进 r104 以内就一点点往外挪（最多到贴边为止）。
+   * 名字盒：**直接按 r92 径向摆**，再夹进卡内（离卡缘 ≥2px）。
    *
-   * 两条约束在**近水平角度**上会打架：3 点方向环到卡边只有 25px，横排名字 22px 宽，
-   * 想同时「四角 ≥104」与「离卡缘 ≥2」是不可能的（需要 114.7 半径、但那里只剩 13px）。
-   * 这时以「不出卡」为准——名字被切掉比压一点环更糟；其余角度都满足四角 ≥104。
+   * 不再「按四角 ≥104 往外挪」——那是旧版名字挂在发丝线外面时的规则，留着它会把每张卡
+   * 顶到 r106 骑在外圈发丝线上（2026-11-24 Chief 核出来的真错）。斜角上四角会各自越界几像素
+   * （实测最远 107，越一条 1px 装饰线），界面设计已同意接受：再收窄就丢内距。
    */
   const boxOf = (angle: number, width: number): ClockNameBox => {
     const halfWidth = width / 2
     const margin = clockArrowGeometry.nameEdgeMargin
-    const fits = (radius: number): ClockNameBox | undefined => {
-      const point = clockRingPoint(angle, radius)
-      const x = Math.min(Math.max(point.x, halfWidth + margin), clockCardGeometry.cardWidth - halfWidth - margin)
-      const y = Math.min(Math.max(point.y, halfHeight + margin), clockCardGeometry.cardHeight - halfHeight - margin)
-      const box = { x, y, width }
-      if (x !== point.x || y !== point.y) return box
-      return Math.hypot(x - clockCardCenter.cardX, y - clockCardCenter.cardY) === 0 ? box : box
-    }
-    for (let radius = clockArrowNameRadius; radius <= clockArrowNameRadius + 14; radius += 1) {
-      const box = fits(radius)
-      if (box !== undefined && cornersOutsideRing(box)) return box
-    }
-    // 走到这里说明「四角 ≥104」与「不出卡」在这条角度上不可兼得：取能放下的最外一档。
-    return fits(clockArrowNameRadius + 14) ?? fits(clockArrowNameRadius)!
+    const point = clockRingPoint(angle, clockArrowNameRadius)
+    const x = Math.min(Math.max(point.x, halfWidth + margin), clockCardGeometry.cardWidth - halfWidth - margin)
+    const y = Math.min(Math.max(point.y, halfHeight + margin), clockCardGeometry.cardHeight - halfHeight - margin)
+    return { x, y, width }
   }
   const step = clockArrowGeometry.nudgeStep / clockArrowNameRadius * 180 / Math.PI
   for (const input of inputs) {
@@ -156,14 +147,6 @@ export function placeClockNames(
 }
 
 type ClockNameBox = Readonly<{ x: number; y: number; width: number }>
-
-/** 名字盒四角是否都在 r104 之外（环上的箭头在 r91–101，盒子不许压到环）。 */
-function cornersOutsideRing(box: ClockNameBox): boolean {
-  const halfWidth = box.width / 2
-  const halfHeight = clockArrowGeometry.nameHeight / 2
-  return [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(([signX, signY]) =>
-    Math.hypot(box.x + signX! * halfWidth - clockCardCenter.cardX, box.y + signY! * halfHeight - clockCardCenter.cardY) >= 104)
-}
 
 function boxesIntersect(left: ClockNameBox, right: ClockNameBox): boolean {
   // 两盒之间要留 `nameGapPx` 的缝；沿任一轴让开就算不撞。

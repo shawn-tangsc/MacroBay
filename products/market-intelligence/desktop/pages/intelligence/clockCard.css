@@ -96,7 +96,8 @@
 .mi-clock__arrow.is-payrolls { fill: var(--mi-clock-cat-payrolls); }
 .mi-clock__arrow.is-pce { fill: var(--mi-clock-cat-pce); }
 
-/* 名字挂在轨道外侧：坐标由模型算（`left/top` 是盒子中心），这里只负责绝对定位与居中。
+/* 名字卡径向对准自己的箭头，中心在 r92（彩色流光带外、r101 发丝线内那条带上）：
+   坐标由模型算（`left/top` 是盒子中心），这里只负责绝对定位与居中。
    少了 `position: absolute` 的那一版，四个名字会落回文档流、从左上一列往下排（2026-11-24 真机）。 */
 .mi-clock__category { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; z-index: 4; }
 /* 名字是一张**圆角小卡**（用户 2026-11）：底用 `--surface-raised`（两套主题都有语义），

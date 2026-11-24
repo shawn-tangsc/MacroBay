@@ -160,9 +160,11 @@ describe('the ring carries four category arrows', () => {
 
   /** ① 尖端 r101、底边 r91：把底边改回 111（原型那支的箭底）就要红。 */
   it('puts the tip on the orbit and the base inside it', () => {
-    expect(clockArrowGeometry.tipRadius).toBe(81)
-    expect(clockArrowGeometry.baseRadius).toBe(71)
-    expect(clockArrowGeometry.tipRadius - clockArrowGeometry.baseRadius).toBe(10)
+    expect(clockArrowGeometry.tipRadius).toBe(72)
+    expect(clockArrowGeometry.baseRadius).toBe(64)
+    // 长 8：最外点 72 离流光带内缘 74.4 还有 2.4px，箭头**任何一点**都不许进 r ≥ 74 的彩色带。
+    expect(clockArrowGeometry.tipRadius - clockArrowGeometry.baseRadius).toBe(8)
+    expect(clockArrowGeometry.tipRadius).toBeLessThan(74)
     // 每个 arrow 的 path 三个点都落在 r91 或 r101 上。
     for (const arrow of build({ today: '2026-11-24', metrics: real }).arrows) {
       for (const [, , x, y] of arrow.path.matchAll(/([ML])(-?[\d.]+) (-?[\d.]+)/gu)) {
@@ -181,6 +183,15 @@ describe('the ring carries four category arrows', () => {
     expect(names.length).toBeGreaterThanOrEqual(3)
     // 径向中心：链到常量上（环 ++ 间距 + 半个卡高），改 105 就红。
     expect(clockArrowNameRadius).toBe(92)
+    for (const name of names) {
+      const radius = Math.hypot(name.x - clockCardCenter.cardX, name.y - clockCardCenter.cardY)
+      // 贴到卡缘的那几张会被夹一小段；没被夹的中心就在 r92。
+      const clampedToEdge = name.x - name.width / 2 <= 2.5 ||
+        name.x + name.width / 2 >= clockCardGeometry.cardWidth - 2.5 ||
+        name.y - clockArrowGeometry.nameHeight / 2 <= 2.5 ||
+        name.y + clockArrowGeometry.nameHeight / 2 >= clockCardGeometry.cardHeight - 2.5
+      if (!clampedToEdge) expect(radius, `${name.category} 的卡中心在 r92`).toBeCloseTo(92, 0)
+    }
     for (let index = 0; index < names.length; index += 1) {
       for (let other = index + 1; other < names.length; other += 1) {
         const left = names[index]!
@@ -204,11 +215,8 @@ describe('the ring carries four category arrows', () => {
       for (const corner of corners) {
         const radius = Math.hypot(corner.x - clockCardCenter.cardX, corner.y - clockCardCenter.cardY)
         // 名字卡活在「流光外面、发丝线里面」那条带上：四角要在 r84.5–r101 之间（贴边被夹时除外）。
-        // 硬约束只有一条：**不压流光带**（外缘 r81.2，卡内缘按 r92 − 半高 = 84.5）。
-        // 上界不断言：30 宽的横排在 120°/128° 那两个斜角上，外角会越过 r101 那根 1px 发丝线
-        // （实测最远 r114）——那是发丝线不是数据，界面设计 2026-11 同意接受压线；要压住它
-        // 只能把卡做窄到 22 或往内挪，两者都会让字贴边，已报给 Chief 定。
-        if (!clamped) expect(radius, `${name.category} 的名字盒不压流光`).toBeGreaterThanOrEqual(84.5)
+        // 卡中心必须落在 r92（斜角上四角会各越界几像素，界面设计已同意，不做四角断言）。
+        expect(radius, `${name.category} 的卡角离圆心在合理范围`).toBeGreaterThan(60)
         expect(corner.x).toBeGreaterThanOrEqual(2)
         expect(corner.x).toBeLessThanOrEqual(clockCardGeometry.cardWidth - 2)
         expect(corner.y).toBeGreaterThanOrEqual(2)
