@@ -44,20 +44,20 @@
 .mi-clock__svg circle[stroke='currentColor'], .mi-clock__svg line { fill: none; stroke: currentColor; }
 .mi-clock__orbit path { fill: url(#miClockFlowGrad); stroke: none; }
 .mi-clock__svg .mi-clock__now { fill: var(--accent); stroke: none; }
-/* 外圈那条流光**不再旋转**：`loadingStandard` 规定全仓只有 `loadingState.css` 拥有旋转动画
-   （转圈＝「正在加载」的信号，别处一转，读者就分不清这屏是在忙还是纯装饰）。
-   现在换成**环流高光**：沿环推进一段描边，元素本身不旋转。
-   旋转轴**必须**是环心：`--mi-clock-center-x/-y` 由组件从 `clockCardCenter` 写进来（见 ClockCard.tsx），
-   这里不许再写一份像素圆心——写死的那次，卡改小后光斑整个转到环外，看起来就是「流光没了」。 */
-.mi-clock__orbit { transform-origin: var(--mi-clock-center-x, 50%) var(--mi-clock-center-y, 50%); animation: mi-clock-spin 8s linear infinite; }
 /*
- * 装饰性流光（原实现，2026-11-20 恢复）：环内那扇渐变光**整圈自转**，8 秒一圈。
+ * 环内那扇渐变光**整圈自转**，8 秒一圈——这是构图里的一道光，不是「正在读取」。
  *
- * 与加载态的转圈怎么区分：加载态是**整块区域被 `loadingState` 替换**，两者不会同屏；
- * 这里的卡在没有加载时也一直在，读者看到的是构图里的一道光，不是「正在读取」。
- * 这条旋转在 `loadingStandard` 里是一处**具名例外**（只允许本文件 `.mi-clock__orbit`），
- * 谁在别处加 `rotate(360deg)`，那条守卫照样红。
+ * 与加载态怎么区分：加载态是**整块区域被 `loadingState` 替换**，两者不会同屏；所以这条旋转在
+ * `loadingStandard` 里是一处**具名例外**（只允许本文件 `.mi-clock__orbit`），别处加 `rotate(360deg)` 照样红。
+ *
+ * 旋转轴**必须**是环心：`--mi-clock-center-x/-y` 由组件从 `clockCardCenter` 写进来（见 ClockCard.tsx），
+ * 这里不许再写一份像素圆心——写死的那次，卡从 336 缩到 252 后轴偏出 39px，光斑整个转到环外，
+ * 读者看到的只是「流光不见了」（用户 2026-11-24）。
+ *
+ * 路径里**没有** `stroke-dasharray / dashoffset`：光是渐变 `userSpaceOnUse` 扇面，
+ * 所以不存在「环周长（2π×101≈634.6）与虚线长度要对上」这件事——别去补不存在的数。
  */
+.mi-clock__orbit { transform-origin: var(--mi-clock-center-x, 50%) var(--mi-clock-center-y, 50%); animation: mi-clock-spin 8s linear infinite; }
 @keyframes mi-clock-spin { to { transform: rotate(360deg); } }
 /* 减少动态效果：不转，但**必须留在画面上**——不是 `display: none`（那会让人以为它坏了）。 */
 @media (prefers-reduced-motion: reduce) {
