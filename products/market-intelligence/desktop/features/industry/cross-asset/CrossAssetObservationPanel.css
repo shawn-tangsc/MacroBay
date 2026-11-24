@@ -69,9 +69,6 @@
  * 单元格垂直居中，读数落在行的中线上；窄屏单列时没有并排的列，行为不变。
  */
 .mi-cross-asset__quote { display: flex; flex-direction: column; }
-/* 表按自然高度排之后，左栏底部会剩下高度：把那句脚注压到栏底，余量就成了「表与脚注之间的一段空白」，
-   而不是表格下方一块空框；也保证右边那条分隔线仍然到底。 */
-.mi-cross-asset__quote > small { margin-top: auto; }
 .mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }
 /* 行高走应用列表行那一档（ui-rules 速查：列表行 44 单行 / 60 两行）。
    不用「自然高」：四五行的表自然高只有 29，旁边那张图的地板都比它高，左栏底下会空出一大块。 */

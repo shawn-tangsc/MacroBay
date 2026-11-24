@@ -474,9 +474,11 @@ describe('cross-asset observation workspace', () => {
     expect(css).not.toMatch(/\.mi-cross-asset__body \{[^}]*min-height/)
     expect(css).toContain('--mi-cross-asset-chart-height-wide: 116px')
     expect(css).toMatch(/\.mi-cross-asset__status-table tbody tr \{ height: 44px; \}/)
-    // 表不许吃余量（`flex: 1` 会把行拉松）；余量落在脚注上方，不是表格下方一块空框。
+    // 表不许吃余量（`flex: 1` 会把行拉松）。
     expect(css).toMatch(/\.mi-cross-asset__status-table \{[^}]*flex: none/)
-    expect(css).toMatch(/\.mi-cross-asset__quote > small \{[^}]*margin-top: auto/)
+    // 表下面那句「已闭合涨跌 · 最后一根已收盘 K 线 …」已删（用户 2026-11-24：废话、而且那是纳指那一行
+    // 自己的收盘时刻，挂在整张表下面说「谁的」不清楚）。连它那条只把它压到栏底的规则一起收掉。
+    expect(css).not.toMatch(/\.mi-cross-asset__quote > small/)
     // 图框地板要能生效：svg 必须脱离文档流，否则它拿 viewBox 的 1000×200 内在比例（宽 × 0.2）
     // 把地板整个盖过去（界面设计 2026-11-23 探到的那处）。
     expect(css).toMatch(/\.mi-cross-asset__plot svg \{[^}]*position: absolute;[^}]*inset: 0/)

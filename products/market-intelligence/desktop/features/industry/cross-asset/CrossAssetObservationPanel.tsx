@@ -33,7 +33,7 @@ import { CrossAssetQuoteLegStatus } from './CrossAssetQuoteLegStatus'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
 import {
-  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, RowHint, RowName, SourceUnavailableRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
+  AssetStatusRow, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, RowHint, RowName, SourceUnavailableRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
   type MacroDriverId, type RowMetrics, type Text
 } from './crossAssetStatusRows'
 import { crossAssetTextKeys, crossAssetWindowLabelKeys } from './crossAssetTextKeys'
@@ -313,7 +313,6 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
             : null}
           <tbody data-status-section="intraday">{visibleRows.map(renderStatusRow)}</tbody>
         </table>
-        <small>{text.closed}{snapshot ? <IndexObservation snapshot={snapshot} text={text} formatTime={formatTime} /> : null}</small>
       </div>
       {crossAssetReadingEnabled && !allChartLinesUnusable ? <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <FocusPopover

@@ -196,13 +196,6 @@ export function IndexStatusRow({ snapshot, text, formatTime }: {
     <WindowCells id="index" metrics={assetMetrics(snapshot, 'index')} text={text} />
   </tr>
 }
-/** The last closed bar of the index row, in the snapshot's own clock. */
-export function IndexObservation({ snapshot, text, formatTime }: {
-  snapshot: CrossAssetSnapshot; text: Text; formatTime: (value: string, precision: 'second') => string
-}): React.ReactElement | null {
-  const at = snapshot.lastClosed?.index?.at
-  return at ? <>{` · ${text.lastClosedBar} `}<time>{formatTime(at, 'second')}</time></> : null
-}
 
 /**
  * 美元 / 黄金这两行：水平、四个窗口，以及行名旁那句「偏旧 · 截至 …」。

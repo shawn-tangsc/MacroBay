@@ -180,6 +180,20 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       // …but 7d is not an hour-of-day question. This snapshot was taken on the 24h range, whose curve
       // covers twenty-four hours, so no curve reaches back seven days and the column stays 无数据.
       expect(cell(page.host, '7d').textContent).toBe(text.windowNoData)
+    } finally {
+      await page.unmount()
+    }
+  })
+
+  it('keeps the last-closed time on the Nasdaq row itself, not as a table-wide footnote', async () => {
+    // 用户 2026-11-24：表下那句「已闭合涨跌 · 最后一根已收盘 K 线 …」是废话，而且那个时刻是**纳指那一行**
+    // 自己的收盘点，挂在整张表下面说不清是谁的。事实留在那一行（`data-last-closed-at`，不换行、不占高度），
+    // 表下不再有那句脚注。
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs) })
+    try {
+      const price = page.host.querySelector('[data-asset-price="index"]')
+      expect(price?.getAttribute('data-last-closed-at')).toMatch(/^2026-/)
+      expect(page.host.querySelector('.mi-cross-asset__quote > small')).toBeNull()
     } finally { await page.unmount() }
   })
 
@@ -679,7 +693,8 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     const tableRule = css.match(/\.mi-cross-asset__status-table\s*\{([^}]*)\}/)
     expect(tableRule?.[1] ?? '').toContain('flex: none')
     expect(tableRule?.[1] ?? '').not.toMatch(/display\s*:/)
-    expect(css).toMatch(/\.mi-cross-asset__quote > small \{[^}]*margin-top: auto/)
+    // 表下那句脚注删了，压它到底的规则也一起删（用户 2026-11-24）。
+    expect(css).not.toMatch(/\.mi-cross-asset__quote > small/)
     expect(css).toContain('.mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }')
   })
 
