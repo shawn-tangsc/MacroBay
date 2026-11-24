@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import { Button } from 'antd'
 import { Bot } from 'lucide-react'
@@ -51,6 +52,11 @@ type Props = {
    */
   onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   floatingText: AgentFloatingControlText
+  /**
+   * 布局根上的挂点：会话入口必须**常驻整页**。窄档里这一栏整体隐藏，挂在 aside 里面等于没有入口
+   * （用户 2026-11-24 报的「看板里看不见那颗钮」）。不传时退回原地渲染，便于单挂组件。
+   */
+  floatingHost?: HTMLDivElement | null
 }
 
 /**
@@ -61,7 +67,7 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenSettings, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenSettings, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, floatingHost, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const resolveProductText = useProductTextKey()
   const contextRenderers = useMemo(
@@ -199,6 +205,8 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
       </section>
 
   // 右栏现在只有一块（日历卡那行已搬走）：没有可拖的两块，`--mi-chat-percent` 与拖拽状态一并撤掉。
+  const floating = <AgentFloatingControl onOpenChange={setChatOpen} text={floatingText}>{chatPanel}</AgentFloatingControl>
+  const control = floatingHost === undefined || floatingHost === null ? floating : createPortal(floating, floatingHost)
   return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title}>
     {/* The policy card keeps its own row; the calendar and the news share what is left in half. */}
     {railHeader}
@@ -214,6 +222,6 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
       onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}
     />
     </div>
-    <AgentFloatingControl onOpenChange={setChatOpen} text={floatingText}>{chatPanel}</AgentFloatingControl>
+    {control}
   </aside>
 }

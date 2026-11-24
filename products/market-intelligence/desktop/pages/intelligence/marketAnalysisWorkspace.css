@@ -83,7 +83,6 @@
 .mi-analysis-drawer__body .mi-analysis-timeline__state { display: flex; align-items: center; gap: 6px; }
 @keyframes mi-analysis-drawer-in { from { transform: translateX(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .mi-analysis-drawer { animation: none; } }
-.mi-analysis-dashboard-layout__switch { display: none; padding: var(--mi-agent-gap); }
 /* The column is a flex stack: the policy card sits above the split, which owns the rest. */
 .mi-analysis-agent-workspace { display: flex; flex-direction: column;
  min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); color: var(--text); }
@@ -122,21 +121,20 @@
 .mi-analysis-agent-workspace .mi-analysis-timeline__detail { padding: 8px 0; }
 .mi-analysis-agent-workspace .mi-analysis-timeline__detail-content dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 /*
- * 单栏切换点跟着看板数据带的需求走，而不是一个独立常数。
+ * 单栏阈值跟着看板数据带的需求走，而不是一个独立常数。
  *
- * 切换点两侧必须是同一种数据带形态，否则一跨过去版面会同时跳两次（Agent 栏出现 + 数据带塌成单列）。
+ * 阈值两侧必须是同一种数据带形态，否则一跨过去版面会同时跳两次（Agent 栏出现 + 数据带塌成单列）。
  * 看板并排要 900px 内容宽，加上两侧页边距各 32px、Agent 栏下限 340px，窗口内容宽到 1304px 才同时成立；
  * 所以这里在 1303px 以下切成单栏：此时看板拿到整行（1303 − 64 = 1239，仍是并排），再往上两栏都在
  * 各自可用的宽度里。原来的 1100px 是按旧的 1176px 闸门定的，两栏并存量下看板只有 760px，只能堆叠。
  *
- * 切换不卸载会话：Segmented 只是换显示的那一栏。
+ * **窄档没有「切换」这回事**（用户 2026-11-24 拍板）：看板永远是底盘、整幅宽度；agent 不从旁边换进来，
+ * 而是从底部上滑（会话入口在布局根上常驻，见 `MarketAnalysisDashboardLayout` 的挂点）。
+ * 这一栏在窄档整体隐藏——**只是隐藏，不卸载**：会话状态与会话本身都还在，抽屉关掉就是回到这个状态。
  */
 @container mi-analysis-dashboard (max-width: 1303px) {
-  .mi-analysis-dashboard-layout__switch { display: block; }
   .mi-analysis-dashboard-layout__panes { grid-template-columns: minmax(0, 1fr); }
-  .mi-analysis-dashboard-layout[data-compact-view="dashboard"] .mi-analysis-agent-workspace,
-  .mi-analysis-dashboard-layout[data-compact-view="agent"] .mi-analysis-dashboard-layout__dashboard { display: none; }
-  .mi-analysis-agent-workspace { border-left: 0; }
+  .mi-analysis-agent-workspace { display: none; }
   /* 窄屏时抽屉一次性铺满主区，避免在窄列里再挤出一层可读性问题。 */
   .mi-analysis-drawer { width: 100%; box-shadow: none; }
   .mi-analysis-conclusion-card { margin: 8px; padding: 12px; }

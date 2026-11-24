@@ -1,7 +1,6 @@
 import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { cloneElement, useCallback, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Segmented } from '@platform/ui/components/segmented'
 import type { MarketAnalysisReadableLocale } from '../../../contracts/marketAnalysisReadableText'
 import type { productText } from '../../shared/i18n/productText'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
@@ -70,13 +69,6 @@ export type MarketAnalysisDashboardInjection = Readonly<{
  * define keys such as `empty`, `loading` and `title`, and merging them would let
  * one surface silently display the other surface's text.
  */
-/** 视图切换的三个键（整组名 + 两个选项）；点分路径指向本页自己的 `analysisWorkspace` 块。 */
-const workspaceSwitchKeys = Object.freeze({
-  label: 'pages.intelligence.portal.analysisWorkspace.view',
-  dashboard: 'pages.intelligence.portal.analysisWorkspace.dashboard',
-  agent: 'pages.intelligence.portal.analysisWorkspace.title'
-})
-
 export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenAnalysisSettings, onOpenCalendar = () => undefined, calendarEventTitles, readCalendarMonth, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void; onOpenAnalysisSettings?: () => void
   /** 舆情那颗设置入口：打开配置抽屉、落在「采集与数据」的**舆情组**（未传时舆情仍用本地弹框）。 */
   onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
@@ -107,7 +99,9 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
    * 「±30 分」反应的读取器，由页面注入（它才拥有跨资产那条查询与它的客户端）。不注入就没有那一行。
    */
   readCalendarReaction?: CalendarCardReactionReader }): React.ReactElement {
-  const [view, setView] = useState('dashboard')
+  // 会话入口（圆钮）挂在**布局根**上，不进 agent 栏：窄档那一栏是隐藏的，挂在里面等于没有入口
+  // （用户 2026-11-24 的「看板里看不见那颗钮」就是这个）。agent 栏把面板 portal 到这里。
+  const [floatingHost, setFloatingHost] = useState<HTMLDivElement | null>(null)
   // 视图切换的键：与界面原来的「市场看板 / 数字货币解读 Agent」逐字一致，只是不再从已解析的句子回填。
   const resolveWorkspaceText = useProductTextKey()
   const [binding, setBinding] = useState<AnalysisWorkspaceBinding>()
@@ -202,10 +196,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           onRefresh={cardData.reload}
         />
 
-  return <div className="mi-analysis-dashboard-layout" data-compact-view={view}>
-    <div className="mi-analysis-dashboard-layout__switch"><Segmented value={view} onChange={value => setView(value as 'dashboard' | 'agent')}
-      ariaLabelKey={workspaceSwitchKeys.label} resolveText={resolveWorkspaceText}
-      items={[{ value: 'dashboard', labelKey: workspaceSwitchKeys.dashboard }, { value: 'agent', labelKey: workspaceSwitchKeys.agent }]} /></div>
+  return <div className="mi-analysis-dashboard-layout">
     <div className="mi-analysis-dashboard-layout__panes">
       <div className="mi-analysis-dashboard-layout__dashboard">
         {conclusionHost ? createPortal(<LatestAnalysisConclusionCard
@@ -271,6 +262,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
         language={locale ?? 'zh-CN'}
         floatingText={{ open: text.calendarCard.expandAgent, close: text.calendarCard.closeAgent, title: text.calendarCard.agentTitle, clear: text.calendarCard.clearConversation }}
+        floatingHost={floatingHost}
         railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
         text={text}
         timeline={timeline}
@@ -297,5 +289,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         timelineText={timelineText}
       />
     </div>
+    {/* 会话入口的落点：整页常驻，窄档也在（agent 栏本身在窄档是隐藏的）。 */}
+    <div className="mi-analysis-dashboard-layout__agent-control" data-agent-control-host ref={setFloatingHost} />
   </div>
 }
