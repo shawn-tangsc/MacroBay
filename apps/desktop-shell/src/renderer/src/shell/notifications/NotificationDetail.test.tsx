@@ -147,7 +147,7 @@ describe('详情视图（#46 ①）', () => {
     // 「文字」在前、「海报」紧随其后（同一次推送的两条消息必须挨着）。
     expect(flat(rows[0]?.querySelector('dt')?.textContent)).toBe(flat(labels.detail.text))
     expect(flat(rows[1]?.querySelector('dt')?.textContent)).toBe(flat(labels.detail.poster.label))
-    expect(flat(rows[1]?.querySelector('.status-pill')?.textContent)).toBe(flat(labels.detail.poster.state.sent))
+    expect(flat(rows[1]?.querySelector('.status-pill')?.textContent)).toBe(flat(labels.detail.state.sent))
     // 列表级的批量动作在详情里不出现。
     expect(document.querySelector('.notification-center-footer')).toBeNull()
   })
