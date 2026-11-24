@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { MacroCalendarInterpretationInput, MacroCalendarInterpretationView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { registeredEventNames } from '../../../contracts/indicatorNames'
+import { gradeCalendarEvent } from './calendarEventImportance'
 import type { MacroCalendarRepository } from './macroCalendarRepository'
 import type { MacroCalendarRevision } from './macroCalendarContracts'
 import { buildCalendarInterpretationEnvelope } from './interpretation/calendarEventInterpretationEnvelope'
@@ -50,6 +51,9 @@ export function createMacroCalendarInterpretationService(deps: MacroCalendarInte
   function read(input: MacroCalendarInterpretationInput): MacroCalendarInterpretationView {
     const resolved = resolve(input)
     if (resolved === undefined) return { state: 'absent' }
+    // 没有实际值就不该有解读：这一段没有「这次偏了多少」可讲，调模型只会写出一段「尚未公布」。
+    // 读者提前打开看到的是缺值三态（详情其余部分照旧），不是一段模型文字。
+    if (!hasActual(resolved.revision)) return { state: 'absent' }
     if (calendarInterpretationTier(resolved.revision.importanceGrade) === 'never') return { state: 'not-applicable' }
     const row = readCalendarInterpretation(deps.database, {
       eventKey: input.eventKey, dataKey: resolved.dataKey, locale: input.locale
@@ -65,8 +69,11 @@ export function createMacroCalendarInterpretationService(deps: MacroCalendarInte
     const resolved = resolve(input)
     if (resolved === undefined) return { state: 'absent' }
     const revision = resolved.revision
+    // 产品 2026-11-25 护栏一：**没有实际值不生成**。这里不落失败标记——还没到生成的时候。
+    if (!hasActual(revision)) return { state: 'absent' }
     const result = await deps.generator.generate({
       eventKey: input.eventKey,
+      family: familyOf(revision),
       importance: revision.importanceGrade,
       locale: input.locale,
       values: displayValues(revision),
@@ -128,6 +135,25 @@ export function createMacroCalendarInterpretationService(deps: MacroCalendarInte
     request: (input) => generate(input, 'request'),
     backfill: (input) => generate(input, 'auto')
   }
+}
+
+/** 「有实际值」只认展示串非空：空串是源还没给，不是给了 0。 */
+/**
+ * 族：与重要性表同一套名字（指标码第二段 / 官方标题键归到同一个族名）。
+ * 只用于用量计数——**不参与判档**，档仍由 `importanceGrade` 给。
+ */
+function familyOf(revision: MacroCalendarRevision): string {
+  const isMetricKey = revision.eventNameKey.includes('.')
+  const graded = gradeCalendarEvent({
+    countryCode: revision.countryCode,
+    ...(isMetricKey ? { metricKey: revision.eventNameKey } : { titleKey: revision.eventNameKey }),
+    eventFamily: revision.eventFamily
+  })
+  return graded?.family ?? revision.eventFamily
+}
+
+function hasActual(revision: MacroCalendarRevision): boolean {
+  return revision.actual !== undefined && revision.actual.displayValue.trim().length > 0
 }
 
 function displayValues(revision: MacroCalendarRevision): Readonly<{ actual?: string; consensus?: string; previous?: string }> {

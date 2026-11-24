@@ -48,7 +48,7 @@ function harness(invokeImpl: (request: { taskId: string; messages: readonly { ro
     }
   })
   const generate = (overrides: Partial<Parameters<typeof generator.generate>[0]> = {}) => generator.generate({
-    eventKey: facts.eventKey, importance: 'high', locale: 'zh-CN', values,
+    eventKey: facts.eventKey, family: 'CPI', importance: 'high', locale: 'zh-CN', values,
     buildEnvelope: () => buildCalendarInterpretationEnvelope({ event: facts, history: [] }),
     trigger: 'request', ...overrides
   })
@@ -141,5 +141,41 @@ describe('calendarEventInterpretation: 失败与重试', () => {
   it('模型没就绪：model-unavailable（不是 provider-error，读者的下一步不一样）', async () => {
     const h = harness(async () => ({ ok: false as const, errorCode: 'missing-api-key', trace: { taskId: 't', durationMs: 1 } }))
     expect(await h.generate()).toEqual({ state: 'failed', failureCode: 'model-unavailable' })
+  })
+})
+describe('calendarEventInterpretation: 成本护栏（产品 2026-11-25）', () => {
+  it('同一事件单飞：并发两次只调一次模型，两次都拿到同一段', async () => {
+    let calls = 0
+    let release: (() => void) | undefined
+    const h = harness(async (request) => {
+      calls += 1
+      // 第一次卡住，让第二个请求真的落在「在飞」窗口里。
+      await new Promise<void>((resolve) => { release = resolve })
+      return { ok: true as const, output: { text: echoEnvelope(request) }, providerId: 'p', modelId: 'm', trace: { taskId: 't', providerId: 'p', modelId: 'm', durationMs: 1 } }
+    })
+    const first = h.generate()
+    const second = h.generate()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(calls).toBe(1)
+    release?.()
+    const [a, b] = await Promise.all([first, second])
+    expect(a.state).toBe('ready')
+    expect(b.state).toBe('ready')
+    expect(calls).toBe(1)
+  })
+
+  it('计数按「族 + 档」报一次：只记，不拦', async () => {
+    const counted: Array<{ family: string; importance: string; state: string }> = []
+    const db = database()
+    const generator = createCalendarInterpretationGenerator({
+      database: db, now: () => now,
+      count: (line) => { counted.push({ family: line.family, importance: line.importance, state: line.state }) },
+      invoke: async (request) => ({ ok: true as const, output: { text: echoEnvelope(request) }, providerId: 'p', modelId: 'm', trace: { taskId: 't', providerId: 'p', modelId: 'm', durationMs: 1 } })
+    })
+    await generator.generate({
+      eventKey: facts.eventKey, family: 'CPI', importance: 'high', locale: 'zh-CN', values,
+      buildEnvelope: () => buildCalendarInterpretationEnvelope({ event: facts, history: [] }), trigger: 'request'
+    })
+    expect(counted).toEqual([{ family: 'CPI', importance: 'high', state: 'ready' }])
   })
 })

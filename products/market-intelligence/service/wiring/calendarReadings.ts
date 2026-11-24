@@ -180,6 +180,8 @@ export function wireMacroCalendarEventInterpretation(deps: Readonly<{
   database: DatabaseSync
   invoke: Parameters<typeof createCalendarInterpretationGenerator>[0]['invoke']
   now?: () => string
+  /** 用量计数落一行结构化日志（仓库里没有用量报告设施，报告按这个 marker 聚合）。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   /** 高档自动补生成：没有作业运行时就不注册（测试与演示装配可以不排作业）。 */
   jobRuntime?: Parameters<typeof registerCalendarEventInterpretationBackfill>[0]
   readLocale?: () => Promise<'zh-CN' | 'en-US'>
@@ -187,7 +189,11 @@ export function wireMacroCalendarEventInterpretation(deps: Readonly<{
   const now = deps.now ?? (() => new Date().toISOString())
   const interpretation = createMacroCalendarInterpretationService({
     repository: deps.repository, database: deps.database,
-    generator: createCalendarInterpretationGenerator({ database: deps.database, now, invoke: deps.invoke }), now
+    generator: createCalendarInterpretationGenerator({
+      database: deps.database, now, invoke: deps.invoke,
+      count: (line) => deps.log?.('info', 'MI_CALENDAR_INTERPRETATION_USAGE', { ...line })
+    }),
+    now
   })
   // 「实际值落库后自动生成一次」的自动那半：按轮扫已发布的高档行，一轮有上限。
   if (deps.jobRuntime !== undefined && deps.readLocale !== undefined) {

@@ -29,6 +29,11 @@ export type CalendarInterpretationGeneratorDeps = Readonly<{
   database: DatabaseSync
   invoke: (request: Parameters<CalendarInterpretationInvoke>[0]) => ReturnType<CalendarInterpretationInvoke>
   now: () => string
+  /**
+   * 用量计数（产品 2026-11-25）：**按族 + 档**报一次，进了用量报告才好回答「高档是不是约 20 次/月」。
+   * 计数不是节流：它只记，不拦。
+   */
+  count?: (line: Readonly<{ eventKey: string; family: string; importance: string; state: CalendarInterpretationGenerationResult['state'] | 'skipped' }>) => void
 }>
 
 type CalendarInterpretationInvoke = (
@@ -44,6 +49,8 @@ export type CalendarInterpretationGeneration = Readonly<{
   importance: 'high' | 'medium' | 'low' | undefined
   locale: CalendarInterpretationLocale
   values: CalendarInterpretationValues
+  /** 族（指标码第二段 / 官方标题键族名）：只用于用量计数，不参与判据。 */
+  family: string
   /** 冻结信封：调用方按事件身份组好（往期、来源名都在里面），这里不读库拼它。 */
   buildEnvelope: () => Readonly<{ envelope: CalendarInterpretationEnvelope; snapshotHash: string; evidenceScope: readonly string[] }>
   /** `request`：读者点开或点重试；`auto`：高档的后台补生成，失败不重试。 */
@@ -57,7 +64,28 @@ export type CalendarInterpretationGenerationResult =
   | Readonly<{ state: 'failed'; failureCode: CalendarInterpretationFailureCode }>
 
 export function createCalendarInterpretationGenerator(deps: CalendarInterpretationGeneratorDeps) {
-  async function generate(input: CalendarInterpretationGeneration): Promise<CalendarInterpretationGenerationResult> {
+  /**
+   * **同一事件单飞**（产品 2026-11-25 成本护栏）：连点、双击、快速重开不产生第二次模型调用。
+   * 键含 `data_key` 与 `locale`：同一事件的数据变了、或读者换了语言，本来就该是另一次生成。
+   * 存在闭包里而不是模块级：两份服务实例（测试、演示装配）不共享在飞队列。
+   */
+  const inFlight = new Map<string, Promise<CalendarInterpretationGenerationResult>>()
+
+  function generate(input: CalendarInterpretationGeneration): Promise<CalendarInterpretationGenerationResult> {
+    const flightKey = `${input.eventKey}|${calendarInterpretationDataKey(input.values)}|${input.locale}`
+    const pending = inFlight.get(flightKey)
+    if (pending !== undefined) return pending
+    const started = run(input)
+      .then((result) => {
+        deps.count?.({ eventKey: input.eventKey, family: input.family, importance: input.importance ?? 'ungraded', state: result.state })
+        return result
+      })
+      .finally(() => { inFlight.delete(flightKey) })
+    inFlight.set(flightKey, started)
+    return started
+  }
+
+  async function run(input: CalendarInterpretationGeneration): Promise<CalendarInterpretationGenerationResult> {
     if (calendarInterpretationTier(input.importance) === 'never') return { state: 'not-applicable' }
     const dataKey = calendarInterpretationDataKey(input.values)
     const key = { eventKey: input.eventKey, dataKey, locale: input.locale }

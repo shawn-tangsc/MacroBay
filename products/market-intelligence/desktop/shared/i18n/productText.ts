@@ -1304,9 +1304,14 @@ mi: miText['zh-CN'],
              */
             interpretation: {
               title: 'AI 解读',
-              generatedAt: '生成于 {time}',
-              basis: '依据：{scope}',
-              generating: '正在生成解读…',
+              /* 一条模板键：时刻与依据范围之间的标点属于文案，不进代码（海报行那个病的第二次）。 */
+              meta: '生成于 {time} · 依据：{scope}',
+              /* 空依据与「读不懂」是两件事：空数组整行不画（这条是只有时刻的那一行）。 */
+              metaTime: '生成于 {time}',
+              /* 三项全认不出时的兜底：不拿空串、也不假装是某一项。 */
+              basisFallback: '这条事件的数据',
+              /* 读与生成共用一句中性文案：句子不按「读/生成」分叉。 */
+              loading: '正在加载解读',
               unavailable: '这次没能生成解读。',
               retry: '重新生成',
               failure: {
@@ -3059,9 +3064,11 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
              */
             interpretation: {
               title: 'AI read',
-              generatedAt: 'Generated {time}',
-              basis: 'Based on: {scope}',
-              generating: 'Generating a read…',
+              /* One template key: the separator belongs to the copy, not to JSX. */
+              meta: 'Generated {time} · Based on: {scope}',
+              metaTime: 'Generated {time}',
+              basisFallback: "this event's data",
+              loading: 'Loading the interpretation',
               unavailable: 'No read could be generated this time.',
               retry: 'Generate again',
               failure: {

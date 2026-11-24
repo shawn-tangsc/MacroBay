@@ -290,6 +290,9 @@ div.mi-economic-calendar__event:hover { background: transparent; }
 .mi-calendar-interpretation > h3 { margin: 0; color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); font-weight: 600; }
 .mi-calendar-interpretation p { margin: 0; color: var(--mi-economic-text); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-calendar-interpretation__meta { color: var(--mi-economic-muted); font-size: var(--font-meta); }
+.mi-calendar-interpretation__failed { display: grid; gap: 6px; }
+/* 失败句替代的是正文那一槽，字号不跟着掉档（界面设计 2026-11-25）。 */
+.mi-calendar-interpretation__failure { margin: 0; color: var(--mi-economic-muted); font-size: var(--font-body); line-height: var(--line-body); }
 /* 「事件内容」那一段：小标题与详情里的标签同一档字号，不新造一套层级；两行沿用元信息表的栅格。 */
 .mi-calendar-content { display: grid; gap: 8px; }
 .mi-calendar-content > h3 { margin: 0; color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); font-weight: 600; }
