@@ -1724,8 +1724,9 @@ describe('the defensive premium band', () => {
     for (const count of [1, 2, 6, 30]) {
       const container = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, count))
       const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-      expect(band.querySelector('[data-skew-history]')).toBeNull()
-      expect(band.querySelector('[data-skew-accumulating]')).toBeNull()
+      // 图下只有一行：偏斜那一列就两个孩子（图 + 名字行）。重新加回任何说明行都会让这条红——
+      // 只断言某个 `data-*` 属性不存在是不够的，那属性源码里已经没有人发。
+      expect(band.querySelector('[data-half="skew"]')!.children).toHaveLength(2)
       expect(band.textContent).not.toContain('还差')
       expect(band.textContent).not.toContain('开始记录')
       expect(band.textContent!.split('还不够 5 天').length - 1).toBe(1)
@@ -2036,8 +2037,8 @@ describe('the defensive premium band', () => {
     // 说明行整行删掉（用户 2026-11-24）：6 个读数与满窗都只有图下那一行名字，没有第二行。
     for (const count of [6, 30]) {
       const band = (await renderBand(skewClient({ kind: 'steeper' }, count))).querySelector('.mi-defensive-premium')!
-      expect(band.querySelector('[data-skew-history]')).toBeNull()
       expect(band.querySelectorAll('.mi-defensive-premium__col-foot')).toHaveLength(3)
+      expect(band.querySelector('[data-half="skew"]')!.children).toHaveLength(2)
     }
 
     const notConnected = await renderBand()
@@ -2054,8 +2055,8 @@ describe('the defensive premium band', () => {
       expect(column.querySelector('[data-chart="skew"]')).not.toBeNull()
       expect(column.querySelector('figure')).not.toBeNull()
       expect(column.querySelector('.mi-defensive-premium__state-box')).toBeNull()
-      expect(column.querySelector('[data-skew-history]')).toBeNull()
-      expect(column.querySelector('[data-skew-accumulating]')).toBeNull()
+      // 图下只有名字行那一行（不是「没有某个属性」这种查不出来的事）。
+      expect(column.children).toHaveLength(2)
       // 图在前、名字行在后（DOM 顺序也照读者看到的样子：名字读的是它上面那张图）。
       const foot = column.querySelector('.mi-defensive-premium__col-foot')!
       expect(foot.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.skew.name)
