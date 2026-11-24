@@ -16,7 +16,7 @@ import { LatestAnalysisConclusionCard } from './LatestAnalysisConclusionCard'
 import type { AnalysisSelectionState } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisTimeline } from './useMarketAnalysisTimeline'
 import { useSampleNow } from './SampleModeProvider'
-import { drawerWidthFor } from './analysisDrawerDrag'
+import { ANALYSIS_DRAWER_DRAG, drawerWidthFor } from './analysisDrawerDrag'
 import { useAnalysisDrawerDrag } from './useAnalysisDrawerDrag'
 import { useAnalysisDrawerWheel } from './useAnalysisDrawerWheel'
 import { AnalysisDrawerSurface } from './AnalysisDrawerSurface'
@@ -43,13 +43,13 @@ export const MARKET_ANALYSIS_COMPACT_MAX_WIDTH = 1303
  *
  * 用户 2026-11-24 的触发方式还在改（「往左滚 / 按住往左拖」「从右边往左边弹」），落边随时可能翻。
  * 所以「靠哪一边」只在这一个字段里写死，样式按 `data-edge` 挂左/右两套；翻边改这一处，
- * 340 的宽度与 900 的并排阈值同理——不在样式里散落。
+ * 抽屉宽度与 900 的并排阈值同理——不在样式里散落。
  */
 export const MARKET_ANALYSIS_DRAWER = {
   edge: 'right' as 'left' | 'right',
   /** 并排档的**最小**宽：实际是 `max(50%, 420px)`（用户真机：固定 340 太窄）。 */
   width: 420,
-  /** ≥ 这个容器宽：并排（看板让位 340）；更窄：整幅遮盖（等于切视图）。 */
+  /** ≥ 这个容器宽：并排（抽屉**覆盖**右半，看板不重排）；更窄：整幅遮盖（等于切视图）。 */
   sideMinWidth: 900
 } as const
 
@@ -155,7 +155,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
     return () => observer.disconnect()
   }, [layoutNode])
   const compact = layoutWidth > 0 && layoutWidth <= MARKET_ANALYSIS_COMPACT_MAX_WIDTH
-  /** 并排档（看板让位 340，仍可读）还是整幅档（遮盖，等于切视图）。 */
+  /** 并排档（覆盖右半、看板不重排、仍可读）还是整幅档（遮盖，等于切视图）。 */
   const drawerTier: MarketAnalysisDrawerTier = layoutWidth >= MARKET_ANALYSIS_DRAWER.sideMinWidth ? 'side' : 'full'
   // 视图切换的键：与界面原来的「市场看板 / 数字货币解读 Agent」逐字一致，只是不再从已解析的句子回填。
   const resolveWorkspaceText = useProductTextKey()
@@ -211,29 +211,31 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
     setReturnGripFocus(false)
   }, [analysisDrawerOpen, returnGripFocus])
   /**
-   * 拖出抽屉：右缘 0–24px 全高起拖（刨掉圆钮 56×56），左移 ≥ 4px 跟手；
+   * 拖出抽屉：右缘 0–24px 全高起拖（刨掉底部胶囊的 40×40），左移 ≥ 4px 跟手；
    * 界面其余地方要左移 > 8px 且 ≥ 1.5 × 竖直位移。判据在 `analysisDrawerDrag.ts`。
    *
-   * 圆钮是 `position: fixed`（right 16 / bottom 88），所以命中矩形按视口算——它不在舞台里。
+   * 底部胶囊是 `position: fixed`（外径 40、距底 12、水平居中），所以命中矩形按视口算——
+   * 它不在舞台里。胶囊今天就钉在这个位置（窄档不可拖），矩形跟着 CSS 一起算。
    */
   /** 抽屉宽：与样式里那条 `width` 同源（908 的布局根 → 454，吸附线 151.33）。 */
   const drawerWidth = drawerWidthFor({ tier: drawerTier, stageWidth: layoutNode?.getBoundingClientRect().width ?? 0 })
   const drawerDrag = useAnalysisDrawerDrag({
     edge: MARKET_ANALYSIS_DRAWER.edge,
     enabled: compact,
-    // 并排档按 340 算跟手与吸附线；整幅档是页宽（114 / 250 两条线就是这么来的）。
-    // 与样式同源：并排档 max(50%, 420)，整幅档页宽。
+    // 并排档按 max(50%, 420) 算跟手与吸附线（908 的布局根 → 454，吸附线 151.33）；
+    // 整幅档是页宽（748 → 250）。与样式里那条 `width` 同源。
     width: drawerWidth,
     open: analysisDrawerOpen,
     // 两个面互斥：聊天框开着时右缘拖也不动（先关它再拖，别抢）。
     blocked: chatSheetOpen,
     stage: () => layoutNode?.getBoundingClientRect(),
     // 窄档底部胶囊（外径 40、距底 12、水平居中）：起拖条要刨掉它那块。
+    // 两个数只在 `ANALYSIS_DRAWER_DRAG` 写一份，CSS 那条 `inset: -8px` 与它同源（用例守着）。
     button: () => ({
-      left: window.innerWidth / 2 - 20,
-      right: window.innerWidth / 2 + 20,
-      top: window.innerHeight - 52,
-      bottom: window.innerHeight - 12
+      left: window.innerWidth / 2 - ANALYSIS_DRAWER_DRAG.capsuleHitSize / 2,
+      right: window.innerWidth / 2 + ANALYSIS_DRAWER_DRAG.capsuleHitSize / 2,
+      top: window.innerHeight - ANALYSIS_DRAWER_DRAG.capsuleInset - ANALYSIS_DRAWER_DRAG.capsuleHitSize,
+      bottom: window.innerHeight - ANALYSIS_DRAWER_DRAG.capsuleInset
     }),
     onOpenChange: setAnalysisDrawerOpen
   })
@@ -469,6 +471,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         靠哪一边只认 `MARKET_ANALYSIS_DRAWER.edge`：样式按 `data-edge` 挂左/右两套。 */}
     {compact
       ? <AnalysisDrawerSurface
+        chatSheetOpen={chatSheetOpen}
         closeRef={drawerClose}
         dragging={drawerDragging}
         edge={MARKET_ANALYSIS_DRAWER.edge}

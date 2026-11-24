@@ -17,8 +17,12 @@ import type { MarketAnalysisDrawerTier } from './MarketAnalysisDashboardLayout'
  *   跑到看板左半边、右边漏一条。
  * - 遮罩只负责变暗，**没有关闭动作**（抽屉压在它上面，点不到）；两档统一只有 X 与 Esc。
  * - 把手开着时 `inert`：焦点已经在关闭键上，别再 Tab 回一个被盖住的入口。
+ * - **聊天框开着时把手整块不渲染**：它 z 比聊天框遮罩高、又竖直居中，聊天框没铺满时会在上沿
+ *   露半截，成为第二个入口（2026-11-24 复核 A）。比降 z 干净。
  */
-export function AnalysisDrawerSurface({ children, closeRef, dragging, edge, gripRef, newsHostRef, offset, onClose, onOpen, open, resolveText, settling, text, tier, width }: Readonly<{
+export function AnalysisDrawerSurface({ chatSheetOpen, children, closeRef, dragging, edge, gripRef, newsHostRef, offset, onClose, onOpen, open, resolveText, settling, text, tier, width }: Readonly<{
+  /** 底部聊天框开着：它是另一个面，把手这时不该在树上。 */
+  chatSheetOpen: boolean
   /** 抽屉正文（两张卡由调用方构造）。 */
   children: ReactNode
   closeRef: Ref<HTMLButtonElement>
@@ -44,13 +48,14 @@ export function AnalysisDrawerSurface({ children, closeRef, dragging, edge, grip
   width: number
 }>): React.ReactElement {
   return <>
-    {/* 边缘把手：视觉 4px、命中 22×128，竖直居中。整幅档没有热区，只能点它。 */}
-    <button aria-label={text.openAnalysisDrawer} className="mi-agent-drawer__grip"
+    {/* 边缘把手：视觉 4px、命中 22×128，竖直居中。整幅档没有热区，只能点它。
+        聊天框开着时**整块不渲染**（见上面的第三条约束）：它露在聊天框上沿之上，是第二个入口。 */}
+    {chatSheetOpen ? null : <button aria-label={text.openAnalysisDrawer} className="mi-agent-drawer__grip"
       data-edge={edge}
-      inert={open}
+      inert={open || chatSheetOpen}
       onClick={onOpen}
       ref={gripRef}
-      type="button"><i /></button>
+      type="button"><i /></button>}
     {/* 整幅档的遮罩：只负责变暗。**它没有关闭动作**——抽屉 `width:100%` 且 z 更高，
         压在它上面，点它永远点不到；两档统一只有 X 与 Esc 两条关闭路。
         并排档没有遮罩：看板要能读。 */}

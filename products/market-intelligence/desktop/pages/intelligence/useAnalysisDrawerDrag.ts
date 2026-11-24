@@ -28,7 +28,7 @@ export function useAnalysisDrawerDrag(input: Readonly<{
   edge: 'left' | 'right'
   /** 窄档才接：宽档一行不动。 */
   enabled: boolean
-  /** 抽屉宽（并排 340、整幅页宽）：跟手 1:1 与吸附线都按它算。 */
+  /** 抽屉宽（并排 max(50%, 420)、整幅页宽）：跟手 1:1 与吸附线都按它算。 */
   width: number
   /** 已经稳定开着：这时不接新的拖动（只能 X / Esc 关）。 */
   open: boolean

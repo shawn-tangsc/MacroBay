@@ -5,6 +5,10 @@ import { wheelGesture, type WheelSession } from './analysisDrawerDrag'
 /**
  * 触摸板两指横向滑：往左滑弹出右侧抽屉，开着时反向滑收起。
  *
+ * **方向按 macOS 默认「自然滚动」定**：手指往左滑 = `deltaX > 0`（内容跟着手指走），与拖动
+ * 「往左拉出」同一个方向语义。关掉自然滚动时正负会翻——真机方向反了只对调下面两个比较，
+ * 别去改判据里的累计与阈值。
+ *
  * 只做监听与生命周期判定，判据在 `analysisDrawerDrag.ts` 的 `wheelGesture`（纯函数）。
  * 三条不抢：**起点在横向可滚区域里**（那一片自己管横滑）、**抽屉正在被拖动**、
  * **底部聊天框开着**（两个面互斥，先关它）。
@@ -49,9 +53,10 @@ export function useAnalysisDrawerWheel(input: Readonly<{
       if (!decision.fired || decision.session === undefined) return
       const direction = decision.session.direction
       session = undefined
-      // 按**手指方向**：往左滑（自然滚动下 deltaX < 0）→ 右侧抽屉弹出；开着时反向滑 → 收起。
-      if (direction < 0 && !now.open) { event.preventDefault(); now.onOpenChange(true) }
-      else if (direction > 0 && now.open) { event.preventDefault(); now.onOpenChange(false) }
+      // 按**手指方向**、按自然滚动：手指往左滑（`deltaX > 0`）→ 右侧抽屉弹出；开着时反向滑收起。
+      // 关掉自然滚动会反向——真机反了就对调这两个比较（判据里的累计与阈值不动）。
+      if (direction > 0 && !now.open) { event.preventDefault(); now.onOpenChange(true) }
+      else if (direction < 0 && now.open) { event.preventDefault(); now.onOpenChange(false) }
     }
     // `passive: false`：到阈值那一发要 `preventDefault()`，别让页面跟着横滚。
     window.addEventListener('wheel', onWheel, { passive: false })

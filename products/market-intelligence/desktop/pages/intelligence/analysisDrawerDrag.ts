@@ -12,13 +12,13 @@
  *   整次手势交回滚动（中途不再抢；起拖后竖直变大也不交回）。
  * - **C 自管横向的控件**：今天 0 处。真出现时在这里加一条，别去 B 里打补丁。
  *
- * 圆钮的 56×56 命中矩形**不加余量**地从起拖条里刨掉：那块优先归圆钮（点它开聊天框），
- * 否则圆钮永远抢不到点击。
+ * 窄档底部胶囊（外径 40、距底 12、水平居中）的命中矩形**不加余量**地从起拖条里刨掉：
+ * 那块优先归胶囊（点它开聊天框），否则胶囊永远抢不到点击。
  *
- * 吸附线 = 抽屉宽 ÷ 3（并排 114、整幅 250），不看速度；跟手 1:1 无阻尼，拖动中 0ms。
+ * 吸附线 = 抽屉宽 ÷ 3（并排 151.33、整幅 250），不看速度；跟手 1:1 无阻尼，拖动中 0ms。
  */
 
-/** 圆钮命中矩形（视口坐标）。 */
+/** 底部胶囊的命中矩形（视口坐标）。 */
 export type DrawerRect = Readonly<{ left: number; right: number; top: number; bottom: number }>
 
 export type DrawerDragOrigin = 'button' | 'edge' | 'stage'
@@ -28,15 +28,17 @@ export type DrawerDragDecision = 'drag' | 'pending' | 'handoff'
 export const ANALYSIS_DRAWER_DRAG = {
   /** A 起拖条宽：= 看板页内距 20 + 卡内距 4（压 0 个内容像素）。 */
   edgeWidth: 24,
-  /** 圆钮 56 的命中矩形，不加余量。 */
-  buttonHitSize: 56,
+  /** 窄档底部胶囊：外径 40 = 24 的钮 + 8px 命中区外扩，不加余量。 */
+  capsuleHitSize: 40,
+  /** 胶囊距视口底 12。 */
+  capsuleInset: 12,
   /** A：左移 ≥ 4px 就跟手。 */
   edgeTravel: 4,
   /** B：左移 > 8px…… */
   stageTravel: 8,
   /** ……且 ≥ 1.5 × 竖直位移。 */
   verticalRatio: 1.5,
-  /** 吸附线 = 抽屉宽 ÷ 3（并排 114、整幅 250）。 */
+  /** 吸附线 = 抽屉宽 ÷ 3（并排 151.33、整幅 250）。 */
   snapRatio: 3,
   /** 吸附/回弹的过渡：160ms ease-out，两档同一条（拖动中 0ms，不加过渡）。 */
   settleMs: 160
@@ -58,7 +60,7 @@ export function dragOriginAt(input: Readonly<{
   stage: DrawerRect
   /** 抽屉靠的那一边。 */
   edge: 'left' | 'right'
-  /** 圆钮命中矩形；没渲染时传 `undefined`。 */
+  /** 底部胶囊命中矩形；没渲染时传 `undefined`。 */
   button?: DrawerRect | undefined
 }>): DrawerDragOrigin {
   if (input.button && inside(input.x, input.y, input.button)) return 'button'

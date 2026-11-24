@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
-import { ANALYSIS_DRAWER_SIZE } from './analysisDrawerDrag'
+import { ANALYSIS_DRAWER_DRAG, ANALYSIS_DRAWER_SIZE } from './analysisDrawerDrag'
 import { MARKET_ANALYSIS_COMPACT_MAX_WIDTH, MARKET_ANALYSIS_DRAWER, MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 
 /**
@@ -220,7 +220,7 @@ describe('抽屉开着时看板那一层不可聚焦', () => {
  * v3 的两个面（用户 2026-11-24 拍板，`2026-11-24-pad-edge-handle-v3.md`）：
  * 左抽屉＝最新 AI 结论 + 重点舆情；底部聊天框＝对话 + 输入 + 一条「选中事件」。互斥。
  *
- * 两档：容器 ≥900 并排（看板让位 340，908 → 568，遮 0 个内容像素）；<900 整幅遮盖（等于切视图）。
+ * 两档：容器 ≥900 并排（抽屉**覆盖**右半 454、看板不重排、不遮罩）；<900 整幅遮盖（等于切视图）。
  * 靠哪一边由 `MARKET_ANALYSIS_DRAWER.edge` 一处决定，样式按 `data-edge` 挂两套。
  */
 describe('pad 竖屏 v3：左抽屉 + 底部聊天框', () => {
@@ -294,8 +294,11 @@ describe('pad 竖屏 v3：左抽屉 + 底部聊天框', () => {
       css.indexOf('\n}', css.indexOf('.mi-agent-capsule .icon-button::after')) + 2
     )
     expect(rule).toContain('inset: -8px')
-    // 24 + 8 × 2 = 40：与起拖条排除的矩形同一个数。
-    expect(24 + 8 * 2).toBe(40)
+    // 24 + 8 × 2 = 40：与起拖条排除的矩形同一个数——**只在常量里写一份**，两边不许各写各的。
+    expect(ANALYSIS_DRAWER_DRAG.capsuleHitSize).toBe(24 + 8 * 2)
+    expect(ANALYSIS_DRAWER_DRAG.capsuleInset).toBe(12)
+    const capsuleRule = css.slice(css.indexOf('.mi-agent-capsule {'), css.indexOf('\n}', css.indexOf('.mi-agent-capsule {')) + 2)
+    expect(capsuleRule).toContain(`bottom: ${ANALYSIS_DRAWER_DRAG.capsuleInset}px`)
   })
 
   it('整幅档开着时左侧图标栏也 inert（并排档不关，导航要能用）', async () => {
@@ -331,15 +334,32 @@ describe('pad 竖屏 v3：左抽屉 + 底部聊天框', () => {
 
   it('两个面互斥：开一个关另一个（不卸载，草稿与滚动位置都留着）', async () => {
     const container = await mountNarrow(908)
-    // 先开聊天框，再点把手开抽屉：聊天框自己关掉。
-    await act(async () => container.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
-    expect(container.querySelector('[data-agent-sheet]')?.getAttribute('data-open')).toBe('true')
+    // 抽屉先开：焦点落在关闭键，把手 inert。
     await act(async () => grip(container).click())
     expect(drawer(container).getAttribute('data-open')).toBe('true')
-    expect(container.querySelector('[data-agent-sheet]')?.getAttribute('data-open')).toBe('false')
+    // 点胶囊 = 问一句：聊天框开，抽屉自己关掉。
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
+    expect(container.querySelector('[data-agent-sheet]')?.getAttribute('data-open')).toBe('true')
+    expect(drawer(container).getAttribute('data-open')).toBe('false')
     // 关掉只是不可见：两个面都还在树上，没被卸载（草稿、舆情滚动位置都留着）。
     expect(drawer(container)).not.toBeNull()
     expect(container.querySelector('[data-agent-sheet]')).not.toBeNull()
+  })
+
+  it('聊天框开着时把手不渲染（它露在聊天框上沿之上），关掉就回来', async () => {
+    const container = await mountNarrow(908)
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
+    // 把手 z 997 高于聊天框遮罩 996、又竖直居中：聊天框没铺满时会在上沿露半截——那是第二个入口。
+    // 比降 z 干净的做法：聊天框开着时整块不渲染。
+    expect(container.querySelector('.mi-agent-drawer__grip')).toBeNull()
+    // 聊天框关掉：把手回来，且不 inert（抽屉关着，键盘 Tab 得能到它）。
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(container.querySelector('.mi-agent-drawer__grip')).not.toBeNull()
+    expect(grip(container).hasAttribute('inert')).toBe(false)
+    // 回来之后仍能从它开抽屉，焦点照旧落到关闭键上。
+    await act(async () => grip(container).click())
+    expect(drawer(container).getAttribute('data-open')).toBe('true')
+    expect(document.activeElement).toBe(drawer(container).querySelector('.icon-button'))
   })
 
   it('抽屉里是「最新 AI 结论 + 重点舆情」，聊天框里是对话 + 一条「选中事件」', async () => {
@@ -449,12 +469,12 @@ describe('宿主模态层与圆钮', () => {
 })
 
 /**
- * v4 拖动：右缘起拖条（0–24 全高，刨掉圆钮 56×56）＋ 界面其余地方（> 8px 且 ≥ 1.5 × 竖直）
- * ＋ 跟手 1:1 ＋ 吸附线 = 抽屉宽 ÷ 3（并排 114、整幅 250）。
+ * v4 拖动：右缘起拖条（0–24 全高，刨掉底部胶囊 40×40）＋ 界面其余地方（> 8px 且 ≥ 1.5 × 竖直）
+ * ＋ 跟手 1:1 ＋ 吸附线 = 抽屉宽 ÷ 3（并排 151.33、整幅 250）。
  *
  * 判据在 `analysisDrawerDrag.ts`（纯函数），这里钉的是「接上之后行为对不对」。
- * 舞台矩形用 908（960 窗口的内容宽）/ 748（800 窗口）两档；圆钮是 `position: fixed`，
- * 命中矩形按视口算：right 16 / bottom 88 / 56×56。
+ * 舞台矩形用 908（960 窗口的内容宽）/ 748（800 窗口）两档；底部胶囊是 `position: fixed`，
+ * 命中矩形按视口算：水平居中 40、距底 12。
  */
 describe('v4 拖动：起拖条、跟手与吸附', () => {
   const drawerEl = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-analysis-drawer]')!
@@ -666,6 +686,9 @@ it('抽屉里的舆情行数 = 数据条数（12 条，一条不少）', async (
 /**
  * 触摸板两指横向滑（用户 2026-11-24）：往左滑弹出右侧抽屉，开着时反向滑收起。
  *
+ * **符号按 macOS 默认「自然滚动」**：手指往左滑 = `deltaX > 0`（内容跟着手指走）。
+ * 关掉自然滚动会反向——真机方向反了，把 `useAnalysisDrawerWheel` 里那两个比较对调，别动别处。
+ *
  * 只认横向为主（`|deltaX| > |deltaY| × 1.5`）、累计 40px、间隔 < 200ms 算同一段手势；
  * 到阈值那一发才 `preventDefault()`。
  */
@@ -680,19 +703,19 @@ describe('触摸板横向滑动开合', () => {
   it('横 60 竖 0 → 打开', async () => {
     const container = await mountNarrow(908)
     expect(drawerOf(container).getAttribute('data-open')).toBe('false')
-    await wheel(-60, 0)
+    await wheel(60, 0)
     expect(drawerOf(container).getAttribute('data-open')).toBe('true')
   })
 
   it('横 30 竖 0 → 不动（累计没到 40）', async () => {
     const container = await mountNarrow(908)
-    await wheel(-30, 0)
+    await wheel(30, 0)
     expect(drawerOf(container).getAttribute('data-open')).toBe('false')
   })
 
   it('横 20 竖 20 → 不动（竖直为主，那是滚页面）', async () => {
     const container = await mountNarrow(908)
-    await wheel(-20, 20)
+    await wheel(20, 20)
     expect(drawerOf(container).getAttribute('data-open')).toBe('false')
   })
 
@@ -702,19 +725,19 @@ describe('触摸板横向滑动开合', () => {
     expect(drawerOf(container).getAttribute('data-open')).toBe('false')
   })
 
-  it('横 -60 再横 -60（同一段手势）→ 只打开一次，不会来回切', async () => {
+  it('横 60 再横 60（同一段手势）→ 只打开一次，不会来回切', async () => {
     const container = await mountNarrow(908)
-    await wheel(-60, 0)
+    await wheel(60, 0)
     expect(drawerOf(container).getAttribute('data-open')).toBe('true')
-    await wheel(-60, 0)
+    await wheel(60, 0)
     expect(drawerOf(container).getAttribute('data-open')).toBe('true')
   })
 
   it('开着时反向滑 60 → 关上', async () => {
     const container = await mountNarrow(908)
-    await wheel(-60, 0)
-    expect(drawerOf(container).getAttribute('data-open')).toBe('true')
     await wheel(60, 0)
+    expect(drawerOf(container).getAttribute('data-open')).toBe('true')
+    await wheel(-60, 0)
     expect(drawerOf(container).getAttribute('data-open')).toBe('false')
   })
 })
