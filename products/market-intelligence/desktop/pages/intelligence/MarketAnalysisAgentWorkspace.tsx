@@ -57,7 +57,17 @@ type Props = {
    * （用户 2026-11-24 报的「看板里看不见那颗钮」）。不传时退回原地渲染，便于单挂组件。
    */
   floatingHost?: HTMLDivElement | null
+  /** 窄档：入口打开的是底部上滑抽屉，里面的东西是「重点舆情 + 对话」（原型 03 号图）。 */
+  compact?: boolean
+  /** 另有模态层开着：圆钮不渲染。 */
+  suppressed?: boolean
 }
+
+/**
+ * 抽屉关闭控件的读屏名：**键**，不是句子（平台 `IconButton` 只收键）。
+ * 与浮窗面板上的关闭是同一句 `calendarCard.closeAgent`，没有第二份文案。
+ */
+const CLOSE_AGENT_KEY = 'pages.intelligence.portal.calendarCard.closeAgent'
 
 /**
  * Agent column: conversation on top, timeline list underneath, with the
@@ -67,7 +77,7 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenSettings, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, floatingHost, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenSettings, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, floatingHost, compact = false, suppressed = false, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const resolveProductText = useProductTextKey()
   const contextRenderers = useMemo(
@@ -204,8 +214,20 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
             : <LoadingState label={selectionState === 'loading' ? text.analysisTimeline.loading : t.loading} fill />}
       </section>
 
+  const newsNode = <NewsSentimentFeature
+    {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+    language={language}
+    text={text.newsSentiment}
+    onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}
+  />
   // 右栏现在只有一块（日历卡那行已搬走）：没有可拖的两块，`--mi-chat-percent` 与拖拽状态一并撤掉。
-  const floating = <AgentFloatingControl onOpenChange={setChatOpen} text={floatingText}>{chatPanel}</AgentFloatingControl>
+  const floating = <AgentFloatingControl
+    closeKey={CLOSE_AGENT_KEY}
+    compact={compact}
+    onOpenChange={setChatOpen}
+    resolveText={resolveProductText}
+    suppressed={suppressed}
+    text={floatingText}>{compact ? <>{newsNode}{chatPanel}</> : chatPanel}</AgentFloatingControl>
   const control = floatingHost === undefined || floatingHost === null ? floating : createPortal(floating, floatingHost)
   return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title}>
     {/* The policy card keeps its own row; the calendar and the news share what is left in half. */}
@@ -215,12 +237,8 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
     {/* 日历卡那一行搬走后这里只剩一块：不再有可拖的两块，也不留一条空带。
         卡与舆情之间靠 `--mi-agent-gap`（12）隔开——两块都有边框，贴 0 会成 2px 双线。 */}
     {card === undefined ? null : <div className="mi-analysis-agent-workspace__card">{card}</div>}
-    <NewsSentimentFeature
-      {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
-      language={language}
-      text={text.newsSentiment}
-      onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}
-    />
+    {/* 窄档时这一块搬进底部抽屉（原型：重点舆情在对话上面）——不是复制一份，是同一个节点换个位置。 */}
+    {compact ? null : newsNode}
     </div>
     {control}
   </aside>

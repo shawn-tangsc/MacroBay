@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
-import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
+import { MARKET_ANALYSIS_COMPACT_MAX_WIDTH, MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 
 /**
  * pad 竖屏：看板是底盘，会话入口常驻右下（用户 2026-11-24 拍板，原型
@@ -92,4 +92,11 @@ describe('pad 竖屏的会话入口', () => {
     expect(container.querySelector('.mi-analysis-agent-workspace')?.contains(button!)).toBe(false)
     expect(button!.getAttribute('aria-expanded')).toBe('false')
   })
+})
+it('量窄档用的数字，与样式表那条容器查询同值', async () => {
+  // 两个来源会漂：CSS 改了数、JS 还按老数切，抽屉就出现在「两栏其实已经并排」的宽度上。
+  const css = readFileSync(join(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css'), 'utf8')
+  const cssMax = Number(/@container mi-analysis-dashboard \(max-width: (\d+)px\)/.exec(css)?.[1])
+  expect(cssMax).toBeGreaterThan(0)
+  expect(MARKET_ANALYSIS_COMPACT_MAX_WIDTH).toBe(cssMax)
 })

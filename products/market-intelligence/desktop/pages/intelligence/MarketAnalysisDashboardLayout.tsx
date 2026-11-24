@@ -1,5 +1,5 @@
 import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
-import { cloneElement, useCallback, useState, type ReactNode } from 'react'
+import { cloneElement, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { MarketAnalysisReadableLocale } from '../../../contracts/marketAnalysisReadableText'
 import type { productText } from '../../shared/i18n/productText'
@@ -27,6 +27,13 @@ import './marketAnalysisWorkspace.css'
  * (which owns the timeline, the calendar card and the Agent column), so the seam between them is
  * named rather than left as an anonymous object.
  */
+/**
+ * 单栏阈值：与 `marketAnalysisWorkspace.css` 里那条容器查询（`@container mi-analysis-dashboard
+ * (max-width: 1303px)`）**同值**。容器就是布局根自己（`container: mi-analysis-dashboard`），
+ * 所以这里量根元素的 inline-size 就等于量那条查询的量；用例盯着两边一致。
+ */
+export const MARKET_ANALYSIS_COMPACT_MAX_WIDTH = 1303
+
 export type MarketAnalysisDashboardInjection = Readonly<{
   conclusionSlot?: (node: HTMLDivElement | null) => void
   /**
@@ -102,6 +109,18 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
   // 会话入口（圆钮）挂在**布局根**上，不进 agent 栏：窄档那一栏是隐藏的，挂在里面等于没有入口
   // （用户 2026-11-24 的「看板里看不见那颗钮」就是这个）。agent 栏把面板 portal 到这里。
   const [floatingHost, setFloatingHost] = useState<HTMLDivElement | null>(null)
+  // 窄档判定跟 CSS 容器查询同一把尺子：布局根就是这个容器，量它自己的 inline-size。
+  const [layoutNode, setLayoutNode] = useState<HTMLDivElement | null>(null)
+  const [compact, setCompact] = useState(false)
+  useEffect(() => {
+    if (layoutNode === null || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      setCompact(width > 0 && width <= MARKET_ANALYSIS_COMPACT_MAX_WIDTH)
+    })
+    observer.observe(layoutNode)
+    return () => observer.disconnect()
+  }, [layoutNode])
   // 视图切换的键：与界面原来的「市场看板 / 数字货币解读 Agent」逐字一致，只是不再从已解析的句子回填。
   const resolveWorkspaceText = useProductTextKey()
   const [binding, setBinding] = useState<AnalysisWorkspaceBinding>()
@@ -196,7 +215,9 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           onRefresh={cardData.reload}
         />
 
-  return <div className="mi-analysis-dashboard-layout">
+  // 另有模态层开着时圆钮不渲染：它的 z（1100）比那些层（1000/1150/1200）高，压上去就是第二层入口。
+  const agentSuppressed = timelineOpen || analysisSettingsOpen || openEntry !== undefined || eventDetail !== undefined
+  return <div className="mi-analysis-dashboard-layout" ref={setLayoutNode}>
     <div className="mi-analysis-dashboard-layout__panes">
       <div className="mi-analysis-dashboard-layout__dashboard">
         {conclusionHost ? createPortal(<LatestAnalysisConclusionCard
@@ -263,6 +284,8 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         language={locale ?? 'zh-CN'}
         floatingText={{ open: text.calendarCard.expandAgent, close: text.calendarCard.closeAgent, title: text.calendarCard.agentTitle, clear: text.calendarCard.clearConversation }}
         floatingHost={floatingHost}
+        compact={compact}
+        suppressed={agentSuppressed}
         railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
         text={text}
         timeline={timeline}

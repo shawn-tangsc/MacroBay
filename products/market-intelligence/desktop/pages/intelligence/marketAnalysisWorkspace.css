@@ -140,6 +140,32 @@
   .mi-analysis-conclusion-card { margin: 8px; padding: 12px; }
 }
 
+/*
+ * 窄档的会话：底部上滑抽屉（原型 `2026-11-24-pad-agent-drawer.html`）。
+ *
+ * 高度是**定死的**（84%，800 档 88%），不随内容长：空会话时下半必然空着，而输入框是这块里唯一
+ * 要能被肌肉记忆按到的东西——让它随消息条数上下跳是最贵的代价。
+ *
+ * 层次沿用 tokens.css 那张表：antd 抽屉 1000 → 这颗圆钮 1100。遮罩压在 1000 上、抽屉在它上面
+ * 一层，两层都**低于圆钮**；抽屉开着时圆钮根本不渲染（不是压上去），所以不会出现第二层入口。
+ */
+.mi-agent-sheet__scrim { position: fixed; inset: 0; z-index: 1000; background: rgb(0 0 0 / 58%); }
+.mi-agent-sheet { position: fixed; left: 0; right: 0; bottom: 0; height: 84%; display: flex; flex-direction: column; z-index: 1001; border-top: 1px solid var(--border); border-radius: 12px 12px 0 0; background: var(--surface); box-shadow: 0 -12px 32px rgb(0 0 0 / 35%); }
+.mi-agent-sheet[data-open="false"] { display: none; }
+@container mi-analysis-dashboard (max-width: 800px) {
+  /* 800 档纵向更少，抽屉再高一点：露出的看板留一张结论卡的上半。 */
+  .mi-agent-sheet { height: 88%; }
+}
+.mi-agent-sheet__handle { display: grid; place-items: center; height: 20px; flex: none; }
+.mi-agent-sheet__handle i { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); }
+.mi-agent-sheet__head { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; flex: none; }
+.mi-agent-sheet__head h2 { margin: 0; color: var(--text); font-size: var(--font-body); font-weight: 600; }
+.mi-agent-sheet__head > :last-child { margin-left: auto; }
+.mi-agent-sheet__body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+/* 舆情块按自身容器收放（它自带 container）；抽屋里给它一条下边框，和对话分开。 */
+.mi-agent-sheet__body > .mi-news-sentiment { padding: 0 12px 8px; border-bottom: 1px solid var(--border); }
+.mi-agent-sheet__body > .mi-analysis-chat { flex: 1; min-height: 0; }
+
 /* Change rows read as a list of named metrics with both values, so a conclusion
    states what moved without showing the stored machine encoding. */
 .mi-analysis-change__list { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
