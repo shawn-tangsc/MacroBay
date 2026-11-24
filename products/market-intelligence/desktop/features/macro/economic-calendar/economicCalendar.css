@@ -281,6 +281,10 @@ div.mi-economic-calendar__event:hover { background: transparent; }
 .mi-economic-calendar__surprise[data-surprise='above-consensus'] { border-color: var(--mi-economic-amber); color: var(--mi-economic-amber); }
 .mi-economic-calendar__surprise[data-surprise='below-consensus'], .mi-economic-calendar__surprise[data-surprise='in-line'] { border-color: var(--mi-economic-lime); color: var(--mi-economic-lime); }
 .mi-economic-calendar__metadata, .mi-economic-calendar__provenance { display: grid; gap: 8px; }
+/* 事件说明（R36 #34）：三段固定文案，字号与行高都走档位 token，不新造一档。
+   它是正文（读的），不是标签（扫的），所以不跟 dt 那 11px 走。 */
+.mi-calendar-explanation { display: grid; gap: 6px; }
+.mi-calendar-explanation p { margin: 0; color: var(--mi-economic-text); font-size: var(--font-body); line-height: var(--line-body); }
 /* 「事件内容」那一段：小标题与详情里的标签同一档字号，不新造一套层级；两行沿用元信息表的栅格。 */
 .mi-calendar-content { display: grid; gap: 8px; }
 .mi-calendar-content > h3 { margin: 0; color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); font-weight: 600; }

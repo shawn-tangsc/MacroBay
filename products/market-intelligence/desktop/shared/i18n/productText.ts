@@ -1164,6 +1164,141 @@ mi: miText['zh-CN'],
             // `unknown` 是官方路线里没有注册名字的那些行（`labelKey === 'unknown'`）的兜底词，
             // 它不是任何一个发布的名字，所以留在这里。
             events: { ...registeredEventNames['zh-CN'], unknown: '官方宏观事件' },
+            /*
+             * 事件说明（R36 #34「说明文案」那一半，产品审定稿
+             * `docs-private/iterations/r36-calendar-event-enrichment/04-event-explanations-final.md`）。
+             * 25 段 / 25 个概念键：每段三段——这场发布是什么 / 为什么值得看 / 看哪里。
+             * 按「概念」取键，不按族名各写一份——四对同一份数据的族共用一段（见该稿 §1①）；
+             * 族 → 键的映射在 `calendarEventExplanation.ts`，不在这张表里。
+             * 取不到键 → 详情里**整段不出现**：不留空行、不写兜底句、不拿别的族的文案顶上。
+             */
+            explanations: {
+              'cpi': {
+                what: '美国劳工统计局每月公布的消费者物价指数，统计城市家庭一篮子商品和服务的价格变化。',
+                why: '它是市场给美联储降息路径定价时最常引用的通胀读数，读数超出预期时，美元和美债收益率往往同时动。',
+                watch: '先看同比的绝对水平，再看环比是否连续多月偏高，最后看能源和食品之外的分项有没有扩散。'
+              },
+              'core-cpi': {
+                what: '核心 CPI 是同一份发布里剔除食品和能源之后的读数。',
+                why: '食品和能源波动大，核心更能看出通胀的趋势，所以利率预期更看重这一条。',
+                watch: '看环比是否连续几个月停在同一个区间，以及房租、医疗服务这些变化慢的分项在往哪走。'
+              },
+              'nonfarm': {
+                what: '美国劳工统计局每月初发布的非农就业报告，统计企业调查里的新增就业人数。',
+                why: '它同时说明经济还在不在扩张、劳动力市场还有多紧，是美联储决定降息还是按兵不动的关键依据之一。',
+                watch: '看新增人数的三个月均值、前两个月的修正方向，再看失业率和时薪有没有给出同一个信号。'
+              },
+              'unemployment': {
+                what: '失业率来自同一份就业报告的家庭调查，是正在找工作却还没有工作的人占劳动力的比例。',
+                why: '它往往比非农更早出现拐点，也决定市场怎么理解「劳动力市场在降温」这句话。',
+                watch: '看三个月的累计变化，以及它和参与率、非农是不是同向。'
+              },
+              'unemployment-u6': {
+                what: 'U6 是同一份报告里最宽的失业口径，把想找全职却只能做兼职的人、以及近期放弃找工作的人也算进来。',
+                why: '它比官方失业率更贴近基层就业的松紧，经济转弱时上行更快，是判断衰退压力的旁证。',
+                watch: '看 U6 与官方失业率之间的差距有没有扩大。'
+              },
+              'average-hourly-earnings': {
+                what: '平均时薪是同一份就业报告里的工资读数，统计非农企业平均每小时付多少钱。',
+                why: '工资是服务通胀最大的一块成本，涨得太快，市场就会担心通胀下不来。',
+                watch: '看环比的三个月均值，以及它和生产率、核心服务通胀能不能对上。'
+              },
+              'real-average-hourly-earnings': {
+                what: '实际平均时薪是平均时薪扣掉物价之后的读数，代表居民购买力的变化。',
+                why: '工资涨得再快，如果被通胀吃掉，就不会变成消费，所以这一条决定工资上涨的实际含义。',
+                watch: '看同比是正是负，以及它和个人支出、零售销售的方向是否一致。'
+              },
+              'average-weekly-hours': {
+                what: '平均每周工时是同一份就业报告里的工作时间读数。',
+                why: '企业通常先减少工时、再考虑裁员，所以工时下滑常常早于失业率上行。',
+                watch: '看制造业工时和整体工时的分化，以及它和非农新增是否互相印证。'
+              },
+              'participation-rate': {
+                what: '参与率是同一份就业报告里的劳动力供给读数，指适龄人口里在工作或积极找工作的人占多少。',
+                why: '就业增长如果来自更多人进入劳动力市场，和来自企业招人需求，含义完全不同。',
+                watch: '看月度变化，以及 25 到 54 岁这个核心年龄段的方向。'
+              },
+              'private-payrolls': {
+                what: '私营部门就业是同一份报告里扣掉政府之后的就业人数。',
+                why: '政府招聘会盖住私营需求的强弱，这一条更接近企业自己的用工意愿。',
+                watch: '看它和非农总数的差额，以及服务业和商品生产谁在贡献。'
+              },
+              'manufacturing-payrolls': {
+                what: '制造业就业是同一份报告里的行业分项，统计工厂的用工人数。',
+                why: '制造业对利率和海外需求最敏感，它的转向常被当作周期的先行信号。',
+                watch: '看连续几个月的方向，不要只看单月。'
+              },
+              'government-payrolls': {
+                what: '政府就业是同一份报告里的公共部门用工人数，包括联邦、州和地方。',
+                why: '私营部门走弱时，政府招聘能把非农总数托住，所以两者要分开看。',
+                watch: '看联邦和地方各自的变化，以及它是否在解释非农与私营就业之间的缺口。'
+              },
+              'fomc': {
+                what: 'FOMC 是美联储的议息会议，公布利率目标区间，会后有主席记者会，季度会议还会给出经济预测。',
+                why: '它直接决定美元的融资成本，也是全球风险资产估值的锚，传导比任何一份数据都快。',
+                watch: '看结果是否符合预期、声明措辞改了什么、点阵图给出的利率路径，以及记者会的语气。'
+              },
+              'gdp-real-growth': {
+                what: '美国商务部每季度公布三次 GDP，按年化季率报实际增长，三次分别是初值、修正值和终值。',
+                why: '它是判断经济有没有走向衰退、美联储还剩多少空间的主要依据，这一行报的是扣掉价格之后的增长。',
+                watch: '看环比折年率和预期的差距，再看消费、投资、净出口各自贡献了多少。'
+              },
+              'gdp-real-level': {
+                what: '实际 GDP 水平是同一份 GDP 报告里的总量，按年化后的链条美元计，不是增长率。',
+                why: '它给出经济的绝对规模，用来看增长是在多大的体量上发生的。',
+                watch: '看它的季度增量与上一季度的差距，并记住它和年化季率不是同一个数。'
+              },
+              'gdp-deflator': {
+                what: 'GDP 平减指数是同一份 GDP 报告里的整体价格读数，包含经济里所有最终产品。',
+                why: '它是最宽的通胀口径，和 CPI、PCE 放在一起，能看出通胀压力落在哪一层。',
+                watch: '看它和 CPI、PCE 的背离，以及内需部分的价格方向。'
+              },
+              'final-sales': {
+                what: '最终销售是同一份 GDP 报告里扣掉库存变化之后的销售读数。',
+                why: '库存会让 GDP 的短期波动失真，最终销售更接近真实需求。',
+                watch: '看它和 GDP 的差距，以及连续两个季度的方向。'
+              },
+              'pce-price': {
+                what: 'PCE 物价指数是美国商务部每月随个人收入与支出报告公布的物价读数，权重来自居民实际买了什么；这一行是价格，不是支出金额。',
+                why: '它是美联储更偏好的通胀口径，季度版本还进入它的经济预测。',
+                watch: '看同比离 2% 还有多远，以及环比折成一年的速度是在升还是在降。'
+              },
+              'core-pce-price': {
+                what: '核心 PCE 物价指数是同一份报告里剔除食品和能源之后的读数。',
+                why: '美联储判断通胀能不能回到目标，主要看这一条，它也直接连到利率路径的预期。',
+                watch: '看同比是否继续向 2% 收敛，以及近三个月环比折年的方向。'
+              },
+              'personal-income': {
+                what: '个人收入是同一份报告里的居民收入读数，包括工资、经营收入、租金和转移支付。',
+                why: '收入决定后面能不能撑住消费，是消费支出这条链的起点。',
+                watch: '看环比是否稳定、工资收入这一项贡献多少，以及它和时薪的方向是否一致。'
+              },
+              'personal-spending': {
+                what: '个人支出是同一份报告里的居民消费金额，按月公布；这一行是金额，不是物价，季调与未季调是同一组数的两个口径。',
+                why: '消费占美国经济的大头，它的强弱直接决定增长能不能延续。',
+                watch: '看扣掉价格之后的实际增速，以及它和零售销售是否互相印证。'
+              },
+              'real-personal-spending': {
+                what: '实际个人消费支出是扣掉价格之后的消费金额，代表居民真正买到了多少东西。',
+                why: '名义支出可能被涨价推高，实际支出才说明消费是在扩张还是在收缩。',
+                watch: '看环比的实际增速，以及它和名义支出的差距有多大。'
+              },
+              'policy-rate-emu': {
+                what: '欧洲央行管理委员会公布的利率决议，为主要再融资利率和存款便利利率定档。',
+                why: '欧元区是全球美元之外最大的融资池，它的利率决定会改变欧元汇率和跨境资金流向。',
+                watch: '看结果是否符合预期、声明对通胀和增长的表述变了什么，以及行长记者会的语气。'
+              },
+              'policy-rate-gb': {
+                what: '英国央行货币政策委员会公布的银行利率决定，同时给出投票分布。',
+                why: '英国通胀和工资的压力常被当作发达经济体里更早的样本，它的转向对全球利率预期有参考价值。',
+                watch: '看投票是几比几、声明对工资和服务的说法，以及季度货币政策报告里的预测路径。'
+              },
+              'policy-rate-jp': {
+                what: '日本央行公布的政策利率决定，会后有行长记者会。',
+                why: '日元是全球套息交易的主要融资货币，日本利率方向一变，跨境资金的成本就跟着变。',
+                watch: '看结果是否符合预期、声明对工资和通胀的表述，以及行长对下次调整的暗示。'
+              },
+            },
             abbreviations: {
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': '非农', unemployment: '失业率',
               'average-hourly-earnings': '时薪', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: '宏观'
@@ -2764,6 +2899,141 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             categories: { inflation: 'Inflation', employment: 'Employment', growth: 'Growth', 'monetary-policy': 'Monetary policy', consumption: 'Consumption' },
             // 与 zh-CN 同一口径：已注册的引用分析侧词表，`unknown` 是兜底词。
             events: { ...registeredEventNames['en-US'], unknown: 'Official macro event' },
+            /*
+             * 事件说明（R36 #34「说明文案」那一半，产品审定稿
+             * `docs-private/iterations/r36-calendar-event-enrichment/04-event-explanations-final.md`）。
+             * 25 段 / 25 个概念键：每段三段——这场发布是什么 / 为什么值得看 / 看哪里。
+             * 按「概念」取键，不按族名各写一份——四对同一份数据的族共用一段（见该稿 §1①）；
+             * 族 → 键的映射在 `calendarEventExplanation.ts`，不在这张表里。
+             * 取不到键 → 详情里**整段不出现**：不留空行、不写兜底句、不拿别的族的文案顶上。
+             */
+            explanations: {
+              'cpi': {
+                what: 'The US consumer price index, published monthly by the Bureau of Labor Statistics, tracks the prices urban households pay for a basket of goods and services.',
+                why: "It is the inflation reading markets lean on most when pricing the Federal Reserve's rate path; when it comes in above expectations, the dollar and Treasury yields usually move together.",
+                watch: 'Start with the year-over-year level, then check whether the monthly pace has stayed high for several months, and finally whether the rise is spreading beyond energy and food.'
+              },
+              'core-cpi': {
+                what: 'Core CPI is the same release with food and energy removed.',
+                why: 'Food and energy are volatile, so the core reading shows the trend more clearly — which is why rate expectations weight it more heavily.',
+                watch: 'Check whether the monthly pace has held in the same range for months, and where slow-moving items such as rent and medical care are heading.'
+              },
+              'nonfarm': {
+                what: 'The nonfarm payrolls report, published by the Bureau of Labor Statistics early each month, counts the jobs employers added.',
+                why: "It says both whether the economy is still expanding and how tight the labour market is — one of the main inputs into the Fed's decision to cut or hold.",
+                watch: "Look at the three-month average, the direction of the previous two months' revisions, and whether unemployment and hourly earnings tell the same story."
+              },
+              'unemployment': {
+                what: 'The unemployment rate comes from the household survey in the same report: people who are looking for work and do not have it, as a share of the labour force.',
+                why: 'It often turns before payrolls do, and it shapes how markets read the phrase "the labour market is cooling".',
+                watch: 'Look at the three-month change, and whether it moves with participation and payrolls rather than against them.'
+              },
+              'unemployment-u6': {
+                what: 'U6 is the broadest measure of unemployment in the same report: it adds people who want full-time work but can only find part-time, and those who have recently stopped looking.',
+                why: 'It tracks the real looseness of the job market more closely than the official rate and rises faster when the economy weakens, so it is supporting evidence on recession pressure.',
+                watch: 'Watch whether the gap between U6 and the official rate is widening.'
+              },
+              'average-hourly-earnings': {
+                what: 'Average hourly earnings are the pay line in the same report: what nonfarm employers pay per hour on average.',
+                why: 'Wages are the largest cost in services inflation, so a pace that stays too fast keeps markets worried that inflation will not come down.',
+                watch: 'Look at the three-month average of the monthly change, and whether it lines up with productivity and core services inflation.'
+              },
+              'real-average-hourly-earnings': {
+                what: 'Real average hourly earnings are hourly pay after prices are taken out, so they show what a wage actually buys.',
+                why: 'A pay rise that inflation eats does not turn into spending, which is why this line gives wages their real meaning.',
+                watch: 'Check whether the year-over-year change is positive or negative, and whether it moves in the same direction as personal spending and retail sales.'
+              },
+              'average-weekly-hours': {
+                what: 'Average weekly hours are the hours worked line in the same report.',
+                why: 'Firms usually cut hours before they cut jobs, so falling hours often come before unemployment rises.',
+                watch: 'Watch the split between manufacturing and total hours, and whether the direction agrees with payroll growth.'
+              },
+              'participation-rate': {
+                what: 'The participation rate is the labour supply line in the same report: the share of working-age people who are employed or actively looking.',
+                why: 'Jobs growth driven by more people entering the labour market means something different from growth driven by hiring demand.',
+                watch: 'Watch the monthly change and the direction for the 25-to-54 age group.'
+              },
+              'private-payrolls': {
+                what: 'Private payrolls are the same report with government jobs removed.',
+                why: 'Public hiring can mask how strong private demand really is, so this line sits closer to what firms themselves are choosing to do.',
+                watch: 'Look at the gap to total payrolls, and whether services or goods production is doing the hiring.'
+              },
+              'manufacturing-payrolls': {
+                what: 'Manufacturing payrolls are the factory jobs line within the same report.',
+                why: 'Factory work is the most sensitive to interest rates and overseas demand, so its turns are often read as an early cycle signal.',
+                watch: 'Follow the direction over several months rather than a single print.'
+              },
+              'government-payrolls': {
+                what: 'Government payrolls are the public-sector jobs in the same report, at federal, state and local level.',
+                why: 'When private hiring weakens, public hiring can hold up the headline number, so the two need to be read separately.',
+                watch: 'Look at federal and local separately, and whether they explain the gap between total and private payrolls.'
+              },
+              'fomc': {
+                what: "The FOMC sets the federal funds target range; the statement is followed by the chair's press conference, and quarterly meetings add the economic projections.",
+                why: 'It sets the cost of dollar funding and anchors how risk assets are valued worldwide, so it moves markets faster than any single data release.',
+                watch: 'Check whether the decision matched expectations, what changed in the statement, the rate path in the projections, and the tone of the press conference.'
+              },
+              'gdp-real-growth': {
+                what: 'The Commerce Department publishes GDP three times each quarter — advance, second and third estimates — reporting real growth at an annualized quarterly rate.',
+                why: 'It is the main read on whether the economy is heading into recession and how much room the Fed has left, and this line is growth after prices are removed.',
+                watch: 'Compare the annualized rate with expectations, then look at how much consumption, investment and net exports each contributed.'
+              },
+              'gdp-real-level': {
+                what: 'Real GDP, annualized level, is the total in the same GDP report — chained dollars, annualized — not a growth rate.',
+                why: 'It gives the absolute size of the economy, so you can see how large a base the growth is happening on.',
+                watch: 'Look at the quarterly increase against the previous quarter, and keep in mind it is not the same number as the annualized growth rate.'
+              },
+              'gdp-deflator': {
+                what: 'The GDP deflator is the broad price line in the same GDP report, taking in every final product in the economy.',
+                why: 'It is the widest inflation measure; read next to CPI and PCE it shows which layer the price pressure sits in.',
+                watch: 'Watch where it diverges from CPI and PCE, and the price direction for domestic demand.'
+              },
+              'final-sales': {
+                what: 'Final sales are the same GDP report with the change in inventories removed.',
+                why: 'Inventories distort headline GDP in the short run, so final sales sit closer to actual demand.',
+                watch: 'Look at the gap to GDP, and the direction across two consecutive quarters.'
+              },
+              'pce-price': {
+                what: 'The PCE price index is the price reading in the monthly personal income and outlays report, weighted by what households actually buy; this line is a price, not a spending amount.',
+                why: "It is the inflation measure the Fed prefers, and its quarterly version feeds the Fed's projections.",
+                watch: 'Check how far the year-over-year rate still is from 2%, and whether the monthly pace, annualized, is rising or falling.'
+              },
+              'core-pce-price': {
+                what: 'Core PCE is the same report with food and energy removed.',
+                why: 'It is the measure the Fed mostly watches to judge whether inflation is returning to target, and it feeds straight into rate-path expectations.',
+                watch: "Check whether the year-over-year rate keeps closing on 2%, and the direction of the past three months' monthly pace, annualized."
+              },
+              'personal-income': {
+                what: 'Personal income is the household income line in the same report: wages, business income, rent and transfer payments.',
+                why: 'Income decides whether spending can keep going, so it is the start of the spending chain.',
+                watch: 'Check whether the monthly change is steady, how much wage income contributed, and whether it agrees with hourly earnings.'
+              },
+              'personal-spending': {
+                what: 'Personal spending is the household spending amount in the same report, published monthly; this line is an amount rather than a price, and the seasonally adjusted and unadjusted versions are the same figure measured two ways.',
+                why: 'Consumer spending is the largest part of the US economy, so its strength decides whether growth continues.',
+                watch: 'Look at the real change after prices are taken out, and whether retail sales confirm it.'
+              },
+              'real-personal-spending': {
+                what: 'Real personal consumption expenditure is household spending after prices are taken out: how much households actually bought.',
+                why: 'Nominal spending can rise just because prices rose, so only the real figure says whether spending is expanding or shrinking.',
+                watch: 'Look at the real monthly change, and how wide the gap to nominal spending is.'
+              },
+              'policy-rate-emu': {
+                what: 'The ECB Governing Council sets the main refinancing rate and the deposit facility rate.',
+                why: 'The euro area is the largest funding pool outside the dollar, so its decisions move the euro and cross-border flows.',
+                watch: "Check whether the decision matched expectations, what changed in how the statement describes inflation and growth, and the tone of the president's press conference."
+              },
+              'policy-rate-gb': {
+                what: "The Bank of England's Monetary Policy Committee sets Bank Rate and publishes the vote split.",
+                why: 'UK inflation and wage pressure are often read as an early sample for advanced economies, so its turns carry information for global rate expectations.',
+                watch: 'Look at the vote count, what the statement says about wages and services, and the path in the quarterly Monetary Policy Report.'
+              },
+              'policy-rate-jp': {
+                what: 'The Bank of Japan sets its policy rate and holds a press conference by the governor afterwards.',
+                why: 'The yen is the main funding currency in global carry trades, so a change in the direction of Japanese rates changes the cost of cross-border funding.',
+                watch: 'Check whether the decision matched expectations, what the statement says about wages and inflation, and any hint the governor gives about the next move.'
+              },
+            },
             abbreviations: {
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': 'NFP', unemployment: 'Unemployment',
               'average-hourly-earnings': 'Wages', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: 'Macro'
