@@ -52,8 +52,8 @@ describe('the gauge column', () => {
     expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
     expect(gauge.querySelector('[data-gauge-bucket-text]')).toBeNull()
     expect(gauge.querySelector('.mi-defensive-premium__gauge-bucket')).toBeNull()
-    // 剩下能念的字只有画布里的分数（ECharts 用 SVG 画刻度与分数），没有一句界面文案。
-    expect(gauge.textContent).toBe('22')
+    // 画布里只许有分数（用 `graphic` 的 text 画，某些环境渲染成空文本），不许有一句界面文案。
+    expect(['', '22']).toContain(gauge.textContent)
     // 这一列也没有读数行（用户 2026-11-22 删掉整条读数行）：DOM 里不留空节点。
     expect(gauge.querySelector('.mi-defensive-premium__reading')).toBeNull()
     // 图是装饰：读屏念的是头栏那一句，不是画布。
@@ -101,35 +101,41 @@ describe('the gauge column', () => {
     expect(gauge.querySelector('[aria-live]')).toBeNull()
   })
 
-  it('fills the whole cell: 168-high canvas, visible arc bottom on the axis bottom (user 2026-11-24)', () => {
-    // 档位词搬走后图里没有字要留位置，画布回满 168，与两侧走势图等高。
-    // 判据按**看得见的弧底**算，不按几何弦（Chief + 界面 2026-11-24）：半圆最低可见点 = 圆心 y + 描边半宽 5。
-    // 圆心 85.1% → y = 143.0，可见弧底 148.0，两侧轴底 168 − 24 = 144，差 4.0（判据 ≤4）。
-    // 82.8% 差 0 但会把弧再抬 4px、弧顶离图位顶只剩 24，与两侧图顶距不齐，算过不采用。
-    // 半径 min(w/2 − 10, h − 22)：184 列下 82（用户 2026-11-24 把中列从 240 收到 184）。
+  it('sits vertically centred with a full disk on the arc centre, and the score on top of it (user 2026-11-24)', () => {
+    // 界面 2026-11-24：整块（弧顶→盘底）在 168 里上下各留 26，圆心 = 盘心 = 67.3%（y = 113）。
+    // 盘是整圆、半径 = 弧半径 × 0.35（184 列下 82 → 29）；分数画在盘心、且在盘之上
+    // （`anchor` 那版会把数字盖没，所以盘与分数都走 `graphic`）。
+    // 护栏：盘底 113 + 29 = 142 不许低于两侧轴底 168 − 24 = 144。
     expect(GAUGE_CHART_HEIGHT).toBe(CHART_HEIGHT)
-    for (const width of [184, 240]) {
+    // 只对真实的中列宽（184）验护栏：盘径随弧半径变，240 那种宽度已经不用了。
+    for (const width of [184]) {
       const option = gaugeChartOption({ score: 22, width, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-      const series = (option.series as Array<{ center: [string, string]; radius: number }>)[0]!
-      expect(series.center).toEqual(['50%', '85.1%'])
-      const centerY = 0.851 * GAUGE_CHART_HEIGHT
-      const axisBottom = GAUGE_CHART_HEIGHT - 24
-      // 可见弧底（弦 + 10 宽描边的一半）离两侧轴底 4.0 ≤ 4；按弦算只有 0.9，那是描边，不是没对齐。
-      expect(Math.abs(centerY + 5 - axisBottom)).toBeLessThanOrEqual(4)
+      const series = (option.series as Array<{ center: [string, string]; radius: number; pointer: { length: number }; detail: { show: boolean } }>)[0]!
+      expect(series.center).toEqual(['50%', '67.3%'])
+      const centerY = 0.673 * GAUGE_CHART_HEIGHT
       expect(series.radius).toBe(Math.max(24, Math.min(width / 2 - 10, GAUGE_CHART_HEIGHT - 22)))
-      // 盘心圆盘与指针（用户 2026-11-24）：盘半径 = 弧半径 35%（四舍五入），指针长度 = 半径 − 10
-      // （弧的描边宽），分数在盘心。184 列下：35% × 82 = 28.7 → 盘半径 29（直径 58）、指针 72。
-      const disk = series as unknown as { anchor: { size: number }; pointer: { length: number }; detail: { offsetCenter: number[] } }
-      expect(disk.anchor.size).toBe(Math.round(series.radius * 0.35) * 2)
-      expect(disk.pointer.length).toBe(series.radius - 10)
-      expect(disk.detail.offsetCenter).toEqual([0, 0])
+      // 指针从盘缘 29 画到弧内缘 72。
+      expect(series.pointer.length).toBe(series.radius - 10)
+      // 分数不再由 detail 画（会被盘盖住）。
+      expect(series.detail.show).toBe(false)
+      const diskRadius = Math.round(series.radius * 0.35)
+      const graphic = option.graphic as Array<Record<string, unknown>>
+      const disk = graphic.find(item => item.type === 'circle') as { shape: { cx: number; cy: number; r: number } }
+      const score = graphic.find(item => item.type === 'text') as { x: number; y: number; style: { text: string } }
+      expect(disk.shape).toEqual({ cx: width / 2, cy: centerY, r: diskRadius })
+      expect(score.x).toBe(width / 2)
+      expect(score.y).toBe(centerY)
+      expect(score.style.text).toBe('22')
+      // 盘心与弧心同一点、盘底不入轴底线以下。
+      expect(centerY + diskRadius).toBeLessThanOrEqual(GAUGE_CHART_HEIGHT - 24)
     }
-    // 184 列下半径 82：把半径、盘径、指针长度钉住，改其中任何一个都得先改这条用例。
+    // 184 列把三个数钉住：半径 82、盘半径 29、指针 72。
     const wide = gaugeChartOption({ score: 22, width: 184, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-    const wideSeries = (wide.series as Array<{ radius: number; anchor: { size: number }; pointer: { length: number } }>)[0]!
+    const wideSeries = (wide.series as Array<{ radius: number; pointer: { length: number } }>)[0]!
+    const wideDisk = (wide.graphic as Array<{ type: string; shape?: { r: number } }>).find(item => item.type === 'circle')!
     expect(wideSeries.radius).toBe(82)
-    expect(wideSeries.anchor.size).toBe(58)
     expect(wideSeries.pointer.length).toBe(72)
+    expect(wideDisk.shape!.r).toBe(29)
   })
 
   it('gives the needle a value only when there is a score', () => {

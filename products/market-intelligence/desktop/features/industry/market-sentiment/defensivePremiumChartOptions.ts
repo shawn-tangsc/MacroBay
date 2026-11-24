@@ -321,11 +321,10 @@ function lineChartOption(input: {
 /** 仪表：五段弧 + 指针 + 圆盘里的分数；**图里没有任何字**（档位词在头栏中轨，用户 2026-11-24）。
  *  画布与两侧走势图同为 168、在 240 列里居中；半径 min(w/2 − 10, h − 22)——240 列下是 110。
  *
- *  圆心按**看得见的弧底**算，不按几何弦（Chief + 界面 2026-11-24）：半圆的最低可见点是弦再往下
- *  一个描边半宽（弧线宽 10，所以 +5）。判据是「可见弧底与两侧轴底（168 − 24 = 144）差 ≤4」，
- *  反推圆心：85.1% ⇒ y = 143.0 ⇒ 可见弧底 147.9，差 3.9。
- *  88% 那版可见弧底 152.7、差 8.7（按弦算只有 3.8，那是在骗自己）；82.8% 差 0 但会把弧再抬 4px、
- *  弧顶离图位顶只剩 24，与两侧图的顶距不齐，算过不采用。弦在 143.0、比轴底高 4.9——描边宽度，不是没对齐。 */
+ *  圆心按**整块垂直居中**定（界面 2026-11-24）：弧顶到盘底这一块在 168 里上下各留 26，
+ *  所以圆心 = 盘心 = 67.3%（y = 113）：弧顶 31、弦 113、盘底 142。
+ *  此前那版「可见弧底与轴底差 ≤4」（85.1%、y = 143）与本条互斥，作废——只留一条护栏：
+ *  盘底 142 不许低于两侧轴底 168 − 24 = 144。 */
 export function gaugeChartOption(input: {
   score: number | undefined
   width: number
@@ -339,8 +338,13 @@ export function gaugeChartOption(input: {
   // 盘心那个圆盘（用户 2026-11-24：中间是个空盘，只有一个 11 和一根半路的指针，像没画完）。
   // 盘半径取弧半径的 35%（240 列下 110 × 0.35 ≈ 38），底色是卡片面、一条细边让它从背景里立起来；
   // 分数落在盘心。指针长度做到接近弧内缘（半径减 10，那 10 就是弧的描边宽）。
+  // 界面 2026-11-24 定稿：整块（弧顶→盘底）在 168 里上下各留 26，圆心 = 盘心 = 168 的 67.3%（y = 113）。
+  // 盘是**整圆**、半径 = 弧半径 × 0.35（184 列下 82 → 29），盘心与弧心同点，「11」就落在盘心；
+  // 护栏只有一条：盘底 113 + 29 = 142 不许低于两侧轴底 144。
   const diskRadius = Math.round(radius * 0.35)
   const pointerLength = Math.max(24, radius - 10)
+  const centerX = input.width / 2
+  const centerY = 0.673 * input.height
   return {
     animation: false,
     aria: { enabled: false },
@@ -350,7 +354,7 @@ export function gaugeChartOption(input: {
       endAngle: 0,
       min: 0,
       max: 100,
-      center: ['50%', '85.1%'],
+      center: ['50%', '67.3%'],
       radius,
       axisLine: {
         lineStyle: {
@@ -362,27 +366,41 @@ export function gaugeChartOption(input: {
         }
       },
       pointer: { show: pointer, length: pointerLength, width: 3, itemStyle: { color: palette.text } },
-      // 盘是画在指针之上的（ECharts 先画指针再画 anchor）：指针看起来从盘缘出发、一直指到刻度内缘。
-      anchor: {
-        show: pointer,
-        size: diskRadius * 2,
-        itemStyle: { color: palette.surface, borderColor: palette.grid, borderWidth: 1 }
-      },
+      // 盘不用 `anchor`：anchor 是整圆、画在指针之上但压在 detail 之下——上一版就是这样把「11」盖没了，
+      // 而且整圆底边出画布 4px 被切。改成下面 `graphic` 里的上半圆 + 数字：两者都画在系列之上，
+      // 圆盘先、数字后，于是指针从盘缘露出来、分数在盘里看得见。
+      anchor: { show: false },
       axisTick: { show: false },
       splitLine: { show: false },
       axisLabel: { show: false },
-      detail: {
-        show: pointer,
-        valueAnimation: false,
-        // 分数在盘心（原来在 '-42%' 是给没有盘的一根指针让位）。
-        offsetCenter: [0, 0],
-        fontSize: fonts.metricSm,
-        fontWeight: 650,
-        fontFamily: FONT,
-        color: palette.text,
-        formatter: '{value}'
-      },
+      // 分数不再由 `detail` 画（它会被盘盖住），改到 `graphic` 的最上层。
+      detail: { show: false },
       data: [{ value: input.score ?? 0 }]
-    }]
+    }],
+    // 盘 + 分数：整圆，圆心与弧心同一点；分数在盘心。两者都画在系列之上（先盘后字），
+    // 所以指针从盘缘露出来、数字不会被盘盖住（`anchor` 那次就是被盖没了）。
+    graphic: pointer ? [
+      {
+        type: 'circle',
+        z: 10,
+        shape: { cx: centerX, cy: centerY, r: diskRadius },
+        style: { fill: palette.surface, stroke: palette.grid, lineWidth: 1 }
+      },
+      {
+        type: 'text',
+        z: 11,
+        x: centerX,
+        y: centerY,
+        style: {
+          text: String(input.score ?? ''),
+          fill: palette.text,
+          fontSize: fonts.metricSm,
+          fontWeight: 650,
+          fontFamily: FONT,
+          align: 'center',
+          verticalAlign: 'middle'
+        }
+      }
+    ] : []
   }
 }

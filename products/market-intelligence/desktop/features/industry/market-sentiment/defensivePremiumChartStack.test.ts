@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 import { GaugeChart, LineChart } from 'echarts/charts'
-import { GridComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
+import { GraphicComponent, GridComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
 
 import { CHART_MODULES } from './DefensivePremiumCharts'
@@ -60,11 +60,12 @@ describe('the chart stack of this card', () => {
     expect(readFileSync(resolve(root, CHARTS_FILE), 'utf8')).toContain("from 'echarts/core'")
   })
 
-  it('registers exactly these six modules', () => {
+  it('registers exactly these seven modules', () => {
     // 多注册一个、少注册一个、换个顺序都会红：这就是「按需注册没退化」的判据。
-    expect(CHART_MODULES).toHaveLength(6)
+    // GraphicComponent 是仪表盘心那块盘与分数的画法（2026-11-24 加）。
+    expect(CHART_MODULES).toHaveLength(7)
     expect([...CHART_MODULES]).toEqual([
-      LineChart, GaugeChart, GridComponent, TooltipComponent, MarkLineComponent, SVGRenderer
+      LineChart, GaugeChart, GridComponent, TooltipComponent, MarkLineComponent, GraphicComponent, SVGRenderer
     ])
   })
 

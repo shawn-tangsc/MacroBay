@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as echarts from 'echarts/core'
 import { GaugeChart as GaugeSeries, LineChart } from 'echarts/charts'
-import { GridComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
+import { GraphicComponent, GridComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -11,10 +11,12 @@ import type { ChartFonts, ChartOption, ChartPalette } from './defensivePremiumCh
 import { fearGreedChartOption, gaugeChartOption, readChartFonts, readChartPalette, skewChartOption } from './defensivePremiumChartOptions'
 
 /**
- * 注册集合**钉死在这里**：三张图只用到两个系列、三个组件与 SVG 渲染器，不整包引 ECharts。
+ * 注册集合**钉死在这里**：三张图只用到两个系列、四个组件与 SVG 渲染器，不整包引 ECharts。
  * 用例按这个数组逐个比对（多注册一个、少注册一个、换成 `import *` 都会红）。
+ * `GraphicComponent` 是仪表盘心那块盘与分数的唯一画法：gauge 的 `anchor` 会盖住 `detail`
+ * （数字看不见），`graphic` 在系列之上、能先画盘再画字（用户 2026-11-24）。
  */
-export const CHART_MODULES = [LineChart, GaugeSeries, GridComponent, TooltipComponent, MarkLineComponent, SVGRenderer] as const
+export const CHART_MODULES = [LineChart, GaugeSeries, GridComponent, TooltipComponent, MarkLineComponent, GraphicComponent, SVGRenderer] as const
 
 echarts.use([...CHART_MODULES])
 

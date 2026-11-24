@@ -316,19 +316,22 @@ describe('crypto intelligence dashboard', () => {
 
   it('gives the gauge a needle only when there is a reading, and always the same five bands', () => {
     const size = { width: 184, height: CHART_HEIGHT }
-    // 有读数：指针与圆盘里的分数都在，值就是那个分数（指针方向由 ECharts 按 0–100 算）。
+    // 有读数：指针、盘、盘里的分数都在，分数就是那个值（指针方向由 ECharts 按 0–100 算）。
+    // 分数走 `graphic` 的 text（用户 2026-11-24：`detail` 会被盘盖住），所以这里断 graphic 里的那句字。
     for (const score of [0, 50, 100]) {
       const option = gaugeChartOption({ score, ...size, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-      const series = (option.series as Array<{ pointer: { show: boolean }; detail: { show: boolean }; data: Array<{ value: number }> }>)[0]!
+      const series = (option.series as Array<{ pointer: { show: boolean }; data: Array<{ value: number }> }>)[0]!
       expect(series.pointer.show).toBe(true)
-      expect(series.detail.show).toBe(true)
       expect(series.data[0]!.value).toBe(score)
+      const graphic = option.graphic as Array<{ type: string; style?: { text?: string } }>
+      expect(graphic.map(item => item.type)).toEqual(['circle', 'text'])
+      expect(graphic[1]!.style!.text).toBe(String(score))
     }
-    // 没有读数：指针与分数都收起来，五段弧照旧。
+    // 没有读数：指针、盘、分数都收起来，五段弧照旧。
     const blind = gaugeChartOption({ score: undefined, ...size, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
-    const series = (blind.series as Array<{ pointer: { show: boolean }; detail: { show: boolean }; axisLine: { lineStyle: { color: unknown[] } } }>)[0]!
+    const series = (blind.series as Array<{ pointer: { show: boolean }; axisLine: { lineStyle: { color: unknown[] } } }>)[0]!
     expect(series.pointer.show).toBe(false)
-    expect(series.detail.show).toBe(false)
+    expect(blind.graphic).toEqual([])
     expect(series.axisLine.lineStyle.color).toHaveLength(5)
   })
 
