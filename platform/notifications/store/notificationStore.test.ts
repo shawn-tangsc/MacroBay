@@ -83,6 +83,7 @@ describe('归一化：写进去的契约字段必须读得回来', () => {
     safeMetadata: { note: 'ok' },
     edition: { editionId: '2026-11-23:en-US:period_1', locale: 'en-US' },
     editionPoster: { contentHash: '1cb80bea36d77b1d' },
+    editionPosterRow: { status: 'ready' as const, contentHash: '1cb80bea36d77b1d', failureCode: null },
     occurrenceCount: 2,
     collapsedCount: 3,
     createdAt: '2026-11-23T12:01:04.228Z',
@@ -109,6 +110,20 @@ describe('归一化：写进去的契约字段必须读得回来', () => {
     expect(normalized.edition).toEqual({ editionId: '2026-11-23:en-US:period_1', locale: 'en-US' })
     expect(normalized.editionPoster).toEqual({ contentHash: '1cb80bea36d77b1d' })
     expect(normalized.appliedLevels).toEqual(['center', 'desktop', 'channel'])
+  })
+
+  it('海报行（#46）的 `null` 与缺席不合并：读回来仍是 null，老记录仍是 undefined', () => {
+    // `null` 是「那一刻表里没有行」这个事实；被归一化吞成 undefined 就变成「不知道」，
+    // 详情页会把「这一版没有图」藏起来——那是把说过的话收回。
+    const noRow = normalizeNotificationRecord({ ...FULL, editionPosterRow: null })!
+    expect(noRow.editionPosterRow).toBeNull()
+    const legacy = normalizeNotificationRecord({ ...FULL, editionPosterRow: undefined })!
+    expect(legacy.editionPosterRow).toBeUndefined()
+    // 失败行带着原因码回来；`ready` 没 hash 说不通，整项丢掉而不是留半截。
+    expect(normalizeNotificationRecord({ ...FULL, editionPosterRow: { status: 'timeout', contentHash: null, failureCode: 'poster-render-timeout' } })!.editionPosterRow)
+      .toEqual({ status: 'timeout', contentHash: null, failureCode: 'poster-render-timeout' })
+    expect(normalizeNotificationRecord({ ...FULL, editionPosterRow: { status: 'ready', contentHash: '  ', failureCode: null } })!.editionPosterRow)
+      .toBeUndefined()
   })
 
   it('认不出的值整项丢掉，不返回半截脏数据', () => {

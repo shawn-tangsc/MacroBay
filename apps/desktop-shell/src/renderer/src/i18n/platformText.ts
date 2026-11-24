@@ -1333,6 +1333,28 @@ export type PlatformText = {
     centerLinkFailed: string
     centerUnknownHint: string
     channelsHeading: string
+    /**
+     * 通知详情里那一行「海报」（#46）。四态词**不带参数**（`StatusPill` 只收 `labelKey`），
+     * 数字与原因在值那一行拼接；`hint.*` 是 ⓘ 里的两句（逐通道一行 / 不支持图片的那句）。
+     */
+    detail: {
+      poster: {
+        label: string
+        state: { sent: string; unconfirmed: string; failed: string; noImage: string }
+        counts: { all: (count: number) => string; partial: (failed: number, total: number) => string }
+        value: { withReason: (counts: string, reason: string) => string }
+        reason: {
+          timeout: string
+          renderFailed: string
+          tooLarge: string
+          channelRefused: string
+          channelUnavailable: string
+          imageUnavailable: string
+          multiple: string
+        }
+        hint: { unsupportedChannels: (count: number) => string; channelLine: (channel: string, reason: string) => string }
+      }
+    }
   }
   webSearch: {
     title: string
@@ -2764,6 +2786,41 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerReload: '重新加载',
       centerLinkFailed: '这条链接没能打开，稍后再试一次。',
       centerUnknownHint: '批量操作先不可用：通知现在读不到。',
+      /**
+       * 通知详情里那一行「海报」（#46）：键在一处，句子由壳用。
+       * 四态词不带参数（`StatusPill` 只收 `labelKey`），数字紧跟药丸之后用 `counts.*`。
+       */
+      detail: {
+        poster: {
+          label: '海报',
+          state: {
+            sent: '已发送',
+            unconfirmed: '等回执',
+            failed: '未发送',
+            noImage: '这一版没有图',
+          },
+          counts: {
+            all: (count) => `${count} 条通道`,
+            partial: (failed, total) => `${failed}/${total}`,
+          },
+          value: {
+            withReason: (counts, reason) => `${counts} · ${reason}`,
+          },
+          reason: {
+            timeout: '出图超时',
+            renderFailed: '出图失败',
+            tooLarge: '图太大',
+            channelRefused: '通道未收下',
+            channelUnavailable: '通道不可用',
+            imageUnavailable: '图没能取到',
+            multiple: '多个原因',
+          },
+          hint: {
+            unsupportedChannels: (count) => `${count} 个通道不支持图片，未计入`,
+            channelLine: (channel, reason) => `${channel}：${reason}`,
+          },
+        },
+      },
     },
     webSearch: {
       title: '网页搜索',
@@ -4185,6 +4242,38 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerReload: 'Reload',
       centerLinkFailed: 'That link could not be opened. Try again in a moment.',
       centerUnknownHint: 'Bulk actions are unavailable for now: notifications cannot be read right now.',
+      /** The poster row inside a notification detail (#46); the four state words carry no parameters. */
+      detail: {
+        poster: {
+          label: 'Poster',
+          state: {
+            sent: 'Sent',
+            unconfirmed: 'Awaiting receipt',
+            failed: 'Not sent',
+            noImage: 'No poster in this edition',
+          },
+          counts: {
+            all: (count) => `${count} channels`,
+            partial: (failed, total) => `${failed}/${total}`,
+          },
+          value: {
+            withReason: (counts, reason) => `${counts} · ${reason}`,
+          },
+          reason: {
+            timeout: 'render timed out',
+            renderFailed: 'render failed',
+            tooLarge: 'poster too large',
+            channelRefused: 'the channel refused it',
+            channelUnavailable: 'channel unavailable',
+            imageUnavailable: 'poster unavailable',
+            multiple: 'several reasons',
+          },
+          hint: {
+            unsupportedChannels: (count) => `${count} channel${count === 1 ? '' : 's'} cannot receive images; not counted`,
+            channelLine: (channel, reason) => `${channel}: ${reason}`,
+          },
+        },
+      },
     },
     webSearch: {
       title: 'Web Search',

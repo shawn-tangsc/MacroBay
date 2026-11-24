@@ -2,7 +2,8 @@ import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import {
   normalizeAppliedLevels,
   normalizeEdition,
-  normalizeEditionPoster
+  normalizeEditionPoster,
+  normalizeEditionPosterRow
 } from './notificationRecordFields'
 import type { NotificationCopyParam, NotificationCopyParamRef } from '../contracts/notificationCopyPort'
 import type { NotificationCopyNumber } from '../contracts/notificationNumberFormat'
@@ -120,6 +121,8 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
     ...(normalizeEditionPoster(candidate.editionPoster) === undefined
       ? {}
       : { editionPoster: normalizeEditionPoster(candidate.editionPoster) }),
+    // 海报行（#46）：`null`＝没有行、缺席＝不知道，判 `undefined` 才不把两者合并。
+    ...(normalizeEditionPosterRow(candidate.editionPosterRow) === undefined ? {} : { editionPosterRow: normalizeEditionPosterRow(candidate.editionPosterRow) }),
     dedupeKey: candidate.dedupeKey ? String(candidate.dedupeKey) : undefined,
     correlationId: candidate.correlationId ? String(candidate.correlationId) : undefined,
     safeMetadata:

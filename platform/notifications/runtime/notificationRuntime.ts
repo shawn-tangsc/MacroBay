@@ -31,7 +31,8 @@ import type { NotificationEventCatalog } from '../contracts/notificationEventCat
 import type { NotificationProducerOwnership } from '../contracts/notificationProducerOwnership'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import type { NotificationCopyLanguage } from '../../i18n/notificationCopy'
-import { projectNotificationCenterItem } from './notificationCenterProjection'
+import { createNotificationCenterReader } from './notificationCenterRead'
+import type { PosterChannelCapability } from './notificationPosterEvidence'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
@@ -110,6 +111,11 @@ export type NotificationRuntimeDependencies = {
   readDesktopPermission?: () => Promise<DesktopNotificationPermission>
   /** 记录有任何变化（投递 / 标读 / 撤销 / 稍后 / 清理）时调用一次，载荷是递增的版本号。 */
   onChanged?: (change: { version: number }) => void
+  /**
+   * 通道的显示名与图片能力（#46 海报行）：读时来自通道注册表，**只有渲染层那一份投影用**。
+   * 不注入时按「查不到能力」处理（不进分母），不猜。
+   */
+  channelCapability?: PosterChannelCapability
 }
 
 export function createNotificationRuntime(deps: NotificationRuntimeDependencies) {
@@ -394,19 +400,13 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     now: nowIso
   })
 
-  /** 一条记录给渲染层的样子（`category` 取事件目录；没有就无标签）。实现见 `notificationCenterProjection`。 */
-  async function centerItem(
-    record: NotificationRecord,
-    content?: NotificationDeliveryContent
-  ): Promise<NotificationCenterItem> {
-    return projectNotificationCenterItem({
-      record,
-      // 投递路径上正文刚解析过，直接传进来——不解析第二遍，否则同一屏可能出现两种说法。
-      content: content ?? await delivery.resolveContent(record),
-      category: deps.catalog?.get(record.eventTypeId)?.category,
-      language: () => deps.getLanguage?.() ?? Promise.resolve('zh-CN' as const)
-    })
-  }
+  /** 一条记录给渲染层的样子（实现在 `createNotificationCenterReader`：判据与投影一处）。 */
+  const centerItem = createNotificationCenterReader({
+    resolveContent: (record) => delivery.resolveContent(record),
+    categoryOf: (record) => deps.catalog?.get(record.eventTypeId)?.category,
+    language: () => deps.getLanguage?.() ?? Promise.resolve('zh-CN' as const),
+    ...(deps.channelCapability === undefined ? {} : { channelCapability: deps.channelCapability })
+  })
 
   return {
     submit,

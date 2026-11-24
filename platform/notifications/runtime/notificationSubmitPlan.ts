@@ -321,7 +321,8 @@ function toLegacyRequest(
     dedupeKey,
     ...(request.correlationId === undefined ? {} : { correlationId: request.correlationId }),
     ...(request.edition === undefined ? {} : { edition: request.edition }),
-    ...(request.editionPoster === undefined ? {} : { editionPoster: request.editionPoster })
+    ...(request.editionPoster === undefined ? {} : { editionPoster: request.editionPoster }),
+    ...(request.editionPosterRow === undefined ? {} : { editionPosterRow: request.editionPosterRow })
   }
 }
 
@@ -375,6 +376,7 @@ function createRecord(
     ...(request.correlationId === undefined ? {} : { correlationId: request.correlationId }),
     ...(request.edition === undefined ? {} : { edition: request.edition }),
     ...(request.editionPoster === undefined ? {} : { editionPoster: request.editionPoster }),
+    ...(request.editionPosterRow === undefined ? {} : { editionPosterRow: request.editionPosterRow }),
     occurrenceCount: 1,
     createdAt: now,
     updatedAt: now

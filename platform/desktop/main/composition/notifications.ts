@@ -11,6 +11,7 @@ import type {
   NotificationRuntimeSettings
 } from '@platform/notifications/contracts/notificationContracts'
 import { configureNotificationRuntime } from '@platform/notifications/ipc/registerNotificationIpc'
+import type { PosterChannelCapability } from '@platform/notifications/runtime/notificationPosterEvidence'
 import { createChannelPushPort, type ChannelPushPortDeps } from '@platform/notifications/delivery/channelPushPort'
 import { createChannelPosterPushPort, type ChannelPosterPushPortDeps } from '@platform/notifications/delivery/channelPosterPushPort'
 import { getChannelPosterPushSource } from '@platform/ai/agent-platform/channels/channelPosterPushRegistry'
@@ -63,6 +64,11 @@ export type NotificationCompositionPorts = Readonly<{
    * **不另建文案表**。不传就一律解析不到——那会整条降级成兜底句，不会印出 `definitionId`。
    */
   jobTitle?: JobTitleResolver
+  /**
+   * 通道的显示名与图片能力（#46 海报行）：由 app 组合根注入（它才有通道注册表）。
+   * 不传时详情页那一行按「查不到能力」算——不猜，也不把不支持的通道算进分母。
+   */
+  channelCapability?: PosterChannelCapability
 }>
 
 export function composeNotificationRuntime(ports: NotificationCompositionPorts): void {
@@ -109,6 +115,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets }),
     ...(ports.lastDelivery === undefined ? {} : { lastDelivery: ports.lastDelivery }),
     ...(ports.resolvePushChannels === undefined ? {} : { resolvePushChannels: ports.resolvePushChannels }),
+    ...(ports.channelCapability === undefined ? {} : { channelCapability: ports.channelCapability }),
   })
 }
 
@@ -196,6 +203,7 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     push,
     ...(pushImage === undefined ? {} : { pushImage }),
     resolvePushChannels: pushTarget,
+    ...(ports.channelCapability === undefined ? {} : { channelCapability: ports.channelCapability }),
     getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
     // 读者核对的事实：这条通道最近一次真实投递的结局（不是「有没有配好」）。
     lastDelivery: (channelId: string) => ports.channels.lastDelivery?.(channelId) ?? null,

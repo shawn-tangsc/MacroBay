@@ -81,6 +81,19 @@ describe('daily briefing notifier', () => {
     }, NOW)
     expect(withPoster.editionPoster).toEqual({ contentHash: 'abcdef0123456789' })
     expect(JSON.stringify(withPoster.dedupeVars)).not.toMatch(/abcdef0123456789/)
+    // 海报行（#46）跟着提交走，也同样不进键；`null`（没有行）与「没传」（不知道）是两件事。
+    const rows = buildBriefingNoticeRequest({
+      kind: 'ready', date: DATE, periodId: 'period_x', editionId: `${DATE}:en-US:period_x`, locale: 'en-US',
+      editionPosterRow: { status: 'timeout', contentHash: null, failureCode: 'poster-render-timeout' }
+    }, NOW)
+    expect(rows.editionPosterRow).toEqual({ status: 'timeout', contentHash: null, failureCode: 'poster-render-timeout' })
+    expect(buildBriefingNoticeRequest({
+      kind: 'ready', date: DATE, periodId: 'period_x', editionId: `${DATE}:en-US:period_x`, locale: 'en-US',
+      editionPosterRow: null
+    }, NOW).editionPosterRow).toBeNull()
+    expect(buildBriefingNoticeRequest({
+      kind: 'ready', date: DATE, periodId: 'period_x', editionId: `${DATE}:en-US:period_x`, locale: 'en-US'
+    }, NOW)).not.toHaveProperty('editionPosterRow')
   })
 
   it('accepts a completion submission and keeps one row a day, so a same-day regeneration does not repeat it', async () => {

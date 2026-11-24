@@ -1,5 +1,6 @@
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type {
+  EditionPosterRow,
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
@@ -50,6 +51,14 @@ export type DailyBriefingNotice =
      * 所以推送只按记录里的 hash 取图，不会出现「正文旧、海报新」。出图失败/超时就不带。
      */
     editionPoster?: { contentHash: string }
+    /**
+     * 这一刻海报表里这一版的行（#46）：详情页读它，**不按 editionId 回查**——回查在同一期
+     * 重生成后会猜错行，保留期删行后还会把「失败过」读成「没有图」。
+     *
+     * 三档：出图成了带 hash；失败/超时带原因码；`null` ＝ 查过、表里没有行（这一版没有图，
+     * 不是失败）。**整项不传才是「不知道」**（没装出图那一路），详情页据整项缺席整行不显示。
+     */
+    editionPosterRow?: EditionPosterRow | null
   }>
 
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
@@ -200,6 +209,7 @@ export function buildBriefingNoticeRequest(
       edition: { editionId: notice.editionId, locale: notice.locale },
       // 海报只带 hash：推送那一刻不读当前版次，补图与「发最新版」都不在这条路上。
       ...(notice.editionPoster === undefined ? {} : { editionPoster: { contentHash: notice.editionPoster.contentHash } }),
+      ...(notice.editionPosterRow === undefined ? {} : { editionPosterRow: notice.editionPosterRow }),
       // 正文说的是**哪一期**，不说"今天"：日期 + 时刻 + 这一期的语言；导读接在同一段后面。
       // 只交这一期自己的语言一份——平台按 `edition.locale` 挑，英文界面也整条中文。
       rendered: readyCopy({

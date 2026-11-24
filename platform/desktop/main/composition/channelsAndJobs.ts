@@ -479,6 +479,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     channelInboundExecutionRunner,
     channelDeliveryService,
     channelImageSend,
+    channelCapability: channelImageSend.capability,
     channelDeliveryMaintenance,
     deliverTaskResultToChannels,
     taskAutomationMaintenance,

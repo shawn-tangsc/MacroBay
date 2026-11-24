@@ -106,9 +106,11 @@ describe('the automatic publish notice', () => {
       date: '2026-11-07', periodId: 'default', locale: 'zh-CN', deliver: true
     } as never)
 
-    const notice = (notifyDailyBriefing.mock.calls as unknown as { 1: { kind: string; editionPoster?: { contentHash: string } } }[])
+    const notice = (notifyDailyBriefing.mock.calls as unknown as { 1: { kind: string; editionPoster?: { contentHash: string }; editionPosterRow?: unknown } }[])
       .map((call) => call[1]).filter((entry) => entry.kind === 'ready').at(-1)
     expect(notice?.editionPoster).toEqual({ contentHash: 'abcdef0123456789' })
+    // 同一份事实也冻结到记录上（#46）：详情页读它，不按 editionId 回查。
+    expect(notice?.editionPosterRow).toEqual({ status: 'ready', contentHash: 'abcdef0123456789', failureCode: null })
   })
 
   it('still submits the notice without a poster when rendering failed', async () => {
@@ -125,10 +127,12 @@ describe('the automatic publish notice', () => {
       date: '2026-11-07', periodId: 'default', locale: 'zh-CN', deliver: true
     } as never)
 
-    const ready = (notifyDailyBriefing.mock.calls as unknown as { 1: { kind: string; editionPoster?: unknown } }[])
+    const ready = (notifyDailyBriefing.mock.calls as unknown as { 1: { kind: string; editionPoster?: unknown; editionPosterRow?: unknown } }[])
       .map((call) => call[1]).filter((entry) => entry.kind === 'ready')
     expect(ready).toHaveLength(1)
     expect(ready[0]?.editionPoster).toBeUndefined()
+    // 出图失败/超时要落一行（带原因码）：只靠「没带 hash」判，详情页会把失败显示成「没有」。
+    expect(ready[0]?.editionPosterRow).toEqual({ status: 'timeout', contentHash: null, failureCode: 'poster-render-timeout' })
   })
 
   it('submits exactly one failed notice when the editorial never landed', async () => {
