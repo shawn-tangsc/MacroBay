@@ -186,6 +186,12 @@ export function localDate(asOf: string, timeZone: string): string | undefined {
   }
 }
 
+/** 日期（`YYYY-MM-DD`）往前/后挪几天；只做日期算术，不碰时刻与时区。 */
+export function addDays(date: string, days: number): string {
+  const parsed = Date.parse(`${date}T00:00:00.000Z`)
+  return Number.isFinite(parsed) ? new Date(parsed + days * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10) : date
+}
+
 function isValidTimeZone(value: string): boolean {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: value })

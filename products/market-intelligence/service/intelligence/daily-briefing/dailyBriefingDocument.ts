@@ -19,6 +19,7 @@ import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefin
 import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlocks'
 import { proseLanguageBreach } from './dailyBriefingProseLanguage'
 import { macroEmptyCode, macroEmptyHours, newsEmptyCode, nextEmptyCode } from './dailyBriefingEmptyCodes'
+import { briefingEventInNextWindow } from './dailyBriefingCalendarWindow'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import {
   highImpactEventsInWindow,
@@ -302,8 +303,6 @@ function hasEnglishName(event: Pick<DailyBriefingCalendarEvent, 'title' | 'title
 
 function selectNextCandidates(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([] as const)
-  const today = localDate(packet.windowEnd, packet.timeZone)
-  const horizon = addDays(today, 7)
   const candidates = packet.calendar.events
     // 一级事件按**身份**进候选，不按重要性：narwhal 那批行重要性是空的，而它们恰是 CPI/非农/
     // 纪要这类最该出现的事件；重要性缺失是我们没有这个字段，不是「它不重要」。
@@ -314,17 +313,10 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
     // 英文版次只列**有英文名**的事件（`02` `A0.9`）：源里只有中文名的（如央行讲话那条源）不列，
     // 不许把中文名塞进英文版。少列几条是允许的，不报缺口——那是源的能力限制，不是这次读失败。
     .filter((event) => packet.locale !== 'en-US' || hasEnglishName(event))
-    .filter((event) => {
-      // 时刻没公布的事件只有日期：按**日期**分栏，不拿日期位当瞬时（它的零点可能早于截止时刻）。
-      // 今天还没发生的那一场归这里；同日已发生/已取消的归「过去 24 小时」，两栏不重叠。
-      if (event.releaseTimeNotPublished) {
-        const day = event.releaseDate
-        return day !== undefined && day >= today && day <= horizon
-      }
-      const at = Date.parse(event.scheduledAt)
-      const day = localDate(event.scheduledAt, packet.timeZone)
-      return Number.isFinite(at) && at > Date.parse(packet.windowEnd) && day <= horizon
-    })
+    // 时刻没公布的事件只有日期：按**日期**分栏，不拿日期位当瞬时（它的零点可能早于截止时刻）。
+    // 今天还没发生的那一场归这里；同日已发生/已取消的归「过去 24 小时」，两栏不重叠。
+    // 窗口只定义一次（`briefingEventInNextWindow`）：空态那一栏要用同一套边界。
+    .filter((event) => briefingEventInNextWindow(event, { end: packet.windowEnd, timeZone: packet.timeZone }))
     .flatMap((event): readonly BriefingNextItem[] => {
       // 没有角色的事件不占席位：候选是给编辑模型读的，放进去等于让它替一个猜测排序。
       const relevance = scoreBriefingNextRelevance(event)
@@ -538,21 +530,6 @@ export function combineDailyBriefingReadingStates(
   if (states.some((state) => state === 'available')) return 'available'
   if (states.some((state) => state === 'stale')) return 'stale'
   return 'unavailable'
-}
-
-function localDate(instant: string, timeZone: string): string {
-  const parsed = Date.parse(instant)
-  if (!Number.isFinite(parsed)) return ''
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(parsed))
-  } catch {
-    return new Date(parsed).toISOString().slice(0, 10)
-  }
-}
-
-function addDays(date: string, days: number): string {
-  const parsed = Date.parse(`${date}T00:00:00.000Z`)
-  return Number.isFinite(parsed) ? new Date(parsed + days * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10) : date
 }
 
 function normalizeTitle(value: string): string {
