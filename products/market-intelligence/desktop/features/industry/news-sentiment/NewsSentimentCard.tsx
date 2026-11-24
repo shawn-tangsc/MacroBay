@@ -55,10 +55,10 @@ function veilAction(
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
 
 /**
- * 一次露出多少条舆情（用户 2026-11-15 定 15）：首屏与每次「加载更多」用同一个步长。
- * 筛完不足 15 就显示实际条数——不补空位。
+ * 一次露出多少条舆情（用户 2026-11-24 定 30）：首屏一页与每次「加载更多」用同一个步长。
+ * 筛完不足 30 就显示实际条数——不补空位。
  */
-export const NEWS_SENTIMENT_VISIBLE_STEP = 15
+export const NEWS_SENTIMENT_VISIBLE_STEP = 30
 
 export function NewsSentimentCard(props: {
   text: NewsSentimentText
@@ -82,9 +82,9 @@ export function NewsSentimentCard(props: {
   const formatTime = useShellTimeFormat()
   const available = view?.state === 'available'
   /**
-   * 列表默认露出多少条、每次「滚到底」再放多少条（用户 2026-11-15：默认 15）。
+   * 列表默认露出多少条、每次「滚到底」再放多少条（用户 2026-11-24：默认 30）。
    * 这是**初始可见条数**，不是上限：总数照旧能翻到底。
-   * 步长取同一个 15——和首屏一致，读者滚一次看到的是「再来一屏」，不是零碎的 8。
+   * 步长取同一个 30——和首屏一致，读者滚一次看到的是「再来一屏」，不是零碎的 8。
    */
   const [visibleCount, setVisibleCount] = useState(NEWS_SENTIMENT_VISIBLE_STEP)
   const includeNeutral = props.includeNeutral ?? true
