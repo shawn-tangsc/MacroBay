@@ -6,6 +6,7 @@ import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalen
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
 import { isCalendarNumericJson, numericJsonWithoutParse } from './marketCalendarNumericParse'
 import { sourceIdOnWrite, sourceIdOverwritePayload, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
+import { gradeCalendarEvent } from './calendarEventImportance'
 import { normalizeValuesJsonForWrite } from './marketCalendarValueEncoding'
 import { resolveSameSourceIdentityTarget, sourceLabelsForWrite } from './marketCalendarSameIdentityWrite'
 
@@ -241,6 +242,14 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
    * 第一段相同。只删不堵的话，下一次采集就把刚合掉的那行插回来——所以写入端在这里改指到
    * 已存在的那一行，并把英文原文名存进 `source_label_en`（显示名仍用中文）。
    */
+  /**
+   * **档由写入口自己算，忽略调用方传的任何档**（R44 S1）：`row.importance` 是**源给的**，
+   * 只作为证据写进旧 `importance` 列；我们的档一律按身份查表。这样「某条采集路径忘了判」
+   * 在结构上不可能发生——没有第二个入口能写这一列。
+   */
+  const importanceGrade = gradeCalendarEvent({ countryCode, metricKey: row.metricKey,
+    eventKey: row.metricKey.startsWith('evt.') || row.metricKey.startsWith('US.FOMC.')
+      ? row.metricKey : undefined })?.tier ?? null
   const sameIdentity = resolveSameSourceIdentityTarget(database, {
     countryCode, sourceProviderId: row.sourceProviderId, metricKey: row.metricKey, periodKey: row.periodKey
   })
@@ -270,8 +279,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      status, identity_kind, source_label, source_label_en, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
-     first_published_actual, first_published_previous, data_observed_at, event_type, source_release_id, numeric_json)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     first_published_actual, first_published_previous, data_observed_at, event_type, source_release_id, numeric_json,
+     importance_grade)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -348,7 +358,8 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.eventType ?? null,
       // 补写：旧行该列为 NULL 时填上（同一发布按原日期重发的那一次），已有一律不覆盖。
       row.sourceReleaseId ?? null,
-      numericJson)
+      numericJson,
+      importanceGrade)
   // 真正写进去的身份（可能是认回的那一行，不是这一笔带来的 id）：调用方记台账要用它，
   // 否则台账会指向一行不存在的身份，`孤儿` 判据当场变红。
   return { countryCode, metricKey, periodKey, firstScheduledDate,

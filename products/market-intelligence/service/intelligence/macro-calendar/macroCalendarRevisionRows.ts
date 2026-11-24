@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { MACRO_CALENDAR_SCHEMA_VERSION, type MacroCalendarRevision, type MacroCalendarValue } from './macroCalendarContracts'
 import type { NarwhalReleaseRow, NarwhalReleaseValue } from './narwhalReleaseContracts'
 import { isValidIsoTime } from '../public-query/asOfVisibility'
+import { gradeCalendarEvent } from './calendarEventImportance'
 
 /**
  * 修订行的**读写编解码**：行 ↔ 记录、快照哈希、有效行挑选。从仓库里拆出来，逻辑原样搬过来。
@@ -49,7 +50,24 @@ export function macroCalendarCurrentHash(revision: MacroCalendarRevision): strin
     replacesRevisionId: _replacesRevisionId,
     ...content
   } = revision
-  return createHash('sha256').update(JSON.stringify(content)).digest('hex')
+  /**
+   * **按键排序后再序列化**：这个哈希只用于「运行时判断两版内容是否相同」，从不落库。
+   * 不排序时，`fromRow` 读回来的字段顺序与构造时不同（新字段插在中间还是末尾），
+   * 同一份内容会算出两个哈希——去重当场失效（R44 加 `importanceGrade` 时实测踩到）。
+   */
+  return createHash('sha256').update(stableJson(content)).digest('hex')
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    // `undefined` 的字段整键略过（与 JSON.stringify 一致）：`fromRow` 会把缺失的列显式写成
+    // `undefined`，构造出来的对象则干脆没有这个键——两者必须算同一份内容。
+    return `{${Object.keys(record).filter((key) => record[key] !== undefined).sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
 }
 
 export function isAutomaticBlsRecord(revision: MacroCalendarRevision): boolean {
@@ -84,15 +102,23 @@ export function currentRecordPriority(revision: MacroCalendarRevision): number {
   return 1
 }
 
+/**
+ * **写修订行前先算我们的档**（R44 S1）：`appendIfNew` / `appendManyIfNew` 两条写路都经过这里，
+ * 所以「某条采集路径没判档」结构上不可能发生。`importance`（旧列，源给的）保持原样写入不动。
+ */
 export function prepareRevision(revision: MacroCalendarRevision): MacroCalendarRevision {
   if (persistedEpochTime(revision.detectedAt) === undefined) throw new Error('invalid detectedAt')
-  return { ...revision, snapshotHash: macroCalendarSnapshotHash(revision) }
+  const importanceGrade = gradeCalendarEvent({ countryCode: revision.countryCode,
+    eventKey: revision.eventKey, eventFamily: revision.eventFamily })?.tier
+  return { ...revision, ...(importanceGrade === undefined ? {} : { importanceGrade }),
+    snapshotHash: macroCalendarSnapshotHash(revision) }
 }
 
 export function values(revision: MacroCalendarRevision): Array<string | number | null> {
   const detectedAtMs = persistedEpochTime(revision.detectedAt)
   if (detectedAtMs === undefined) throw new Error('invalid detectedAt')
-  return [revision.revisionId, revision.eventKey, revision.releaseGroupKey, revision.eventFamily, revision.eventNameKey, revision.countryCode, revision.importance ?? null, revision.periodKey, revision.lifecycleState, revision.revisionKind, revision.scheduledDate, revision.scheduledAt ?? null, revision.publishedAt ?? null, revision.detectedAt, detectedAtMs, revision.recordedAt, json(revision.actual), json(revision.previous), json(revision.consensus), revision.providerId, revision.descriptorId, revision.sourceUrl, revision.rawRecordId ?? null, revision.evidenceHash, JSON.stringify(revision.evidenceRefs), revision.snapshotHash, revision.replacesRevisionId ?? null, revision.parserVersion, JSON.stringify(revision.caveats), MACRO_CALENDAR_SCHEMA_VERSION]
+  return [revision.revisionId, revision.eventKey, revision.releaseGroupKey, revision.eventFamily, revision.eventNameKey, revision.countryCode, revision.importance ?? null, revision.periodKey, revision.lifecycleState, revision.revisionKind, revision.scheduledDate, revision.scheduledAt ?? null, revision.publishedAt ?? null, revision.detectedAt, detectedAtMs, revision.recordedAt, json(revision.actual), json(revision.previous), json(revision.consensus), revision.providerId, revision.descriptorId, revision.sourceUrl, revision.rawRecordId ?? null, revision.evidenceHash, JSON.stringify(revision.evidenceRefs), revision.snapshotHash, revision.replacesRevisionId ?? null, revision.parserVersion, JSON.stringify(revision.caveats), MACRO_CALENDAR_SCHEMA_VERSION,
+    revision.importanceGrade ?? null]
 }
 
 export function effective(rows: Row[]): MacroCalendarRevision[] {
@@ -102,7 +128,9 @@ export function effective(rows: Row[]): MacroCalendarRevision[] {
 
 export function fromRow(row: Row): MacroCalendarRevision {
   const importance = readImportance(row.importance)
-  return { revisionId: required(row, 'revision_id'), eventKey: required(row, 'event_key'), releaseGroupKey: required(row, 'release_group_key'), eventFamily: required(row, 'event_family') as MacroCalendarRevision['eventFamily'], eventNameKey: required(row, 'event_name_key'), countryCode: 'US', ...(importance === undefined ? {} : { importance }), periodKey: required(row, 'period_key'), lifecycleState: required(row, 'lifecycle_state') as MacroCalendarRevision['lifecycleState'], revisionKind: required(row, 'revision_kind') as MacroCalendarRevision['revisionKind'], scheduledDate: required(row, 'scheduled_date'), scheduledAt: row.scheduled_at ?? undefined, publishedAt: row.published_at ?? undefined, detectedAt: required(row, 'detected_at'), recordedAt: required(row, 'recorded_at'), actual: parseValue(row.actual_json), previous: parseValue(row.previous_json), consensus: parseValue(row.consensus_json), providerId: required(row, 'provider_id') as MacroCalendarRevision['providerId'], descriptorId: required(row, 'descriptor_id'), sourceUrl: required(row, 'source_url'), rawRecordId: row.raw_record_id ?? undefined, evidenceHash: required(row, 'evidence_hash'), evidenceRefs: JSON.parse(required(row, 'evidence_refs_json')), snapshotHash: required(row, 'snapshot_hash'), replacesRevisionId: row.replaces_revision_id ?? undefined, parserVersion: required(row, 'parser_version'), caveats: JSON.parse(required(row, 'caveats_json')) }
+  return { revisionId: required(row, 'revision_id'), eventKey: required(row, 'event_key'), releaseGroupKey: required(row, 'release_group_key'), eventFamily: required(row, 'event_family') as MacroCalendarRevision['eventFamily'], eventNameKey: required(row, 'event_name_key'), countryCode: 'US', ...(importance === undefined ? {} : { importance }), periodKey: required(row, 'period_key'), lifecycleState: required(row, 'lifecycle_state') as MacroCalendarRevision['lifecycleState'], revisionKind: required(row, 'revision_kind') as MacroCalendarRevision['revisionKind'], scheduledDate: required(row, 'scheduled_date'), scheduledAt: row.scheduled_at ?? undefined, publishedAt: row.published_at ?? undefined, detectedAt: required(row, 'detected_at'), recordedAt: required(row, 'recorded_at'), actual: parseValue(row.actual_json), previous: parseValue(row.previous_json), consensus: parseValue(row.consensus_json), providerId: required(row, 'provider_id') as MacroCalendarRevision['providerId'], descriptorId: required(row, 'descriptor_id'), sourceUrl: required(row, 'source_url'), rawRecordId: row.raw_record_id ?? undefined, evidenceHash: required(row, 'evidence_hash'), evidenceRefs: JSON.parse(required(row, 'evidence_refs_json')), snapshotHash: required(row, 'snapshot_hash'), replacesRevisionId: row.replaces_revision_id ?? undefined,
+    ...(row.importance_grade === undefined || row.importance_grade === null
+      ? {} : { importanceGrade: row.importance_grade as MacroCalendarRevision['importanceGrade'] }), parserVersion: required(row, 'parser_version'), caveats: JSON.parse(required(row, 'caveats_json')) }
 }
 
 function required(row: Row, name: string): string { return row[name] ?? '' }

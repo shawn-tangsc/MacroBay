@@ -43,6 +43,11 @@ export type MacroCalendarRevision = {
    * 不拿某一档顶上（详情那一行会写「未提供」）。
    */
   importance?: MacroEconomicCalendarImportance
+  /**
+   * **我们判的档**（R44 S1）：按 `(辖区, 族)` 查表得出，可空；缺省＝未分级。
+   * 与 `importance`（源给的，只作证据）是两件事，读侧只用这一列。
+   */
+  importanceGrade?: MacroEconomicCalendarImportance
   periodKey: string
   lifecycleState: MacroCalendarLifecycleState
   revisionKind: MacroCalendarRevisionKind
