@@ -1345,6 +1345,11 @@ export type PlatformText = {
       /** 详情「送达」组的组名，以及组里「文字」那一行的行名；海报那行用下面的 `poster.label`。 */
       group: string
       text: string
+      /**
+       * 「文字」「海报」两行**共用**的三个状态词（只有 `noImage` 属于海报那一行，留在
+       * `poster.state`）。挂在海报名下，将来改海报的措辞会悄悄改掉文字行——所以提到这一层。
+       */
+      state: { sent: string; unconfirmed: string; failed: string }
       poster: {
         label: string
         state: { sent: string; unconfirmed: string; failed: string; noImage: string }
@@ -2809,6 +2814,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         entry: '详情',
         group: '送达',
         text: '文字',
+        state: {
+          sent: '已发送',
+          unconfirmed: '等回执',
+          failed: '未发送',
+        },
         poster: {
           label: '海报',
           state: {
@@ -4266,6 +4276,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         entry: 'Details',
         group: 'Delivery',
         text: 'Text',
+        state: {
+          sent: 'Sent',
+          unconfirmed: 'Awaiting receipt',
+          failed: 'Not sent',
+        },
         poster: {
           label: 'Poster',
           state: {
