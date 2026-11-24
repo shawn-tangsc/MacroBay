@@ -3,9 +3,32 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { WINDOW_ANTD_COLOR_TOKENS } from '../theme/windowTheme'
+
 const ROOT = join(__dirname, '../../..')
 const css = readFileSync(join(__dirname, 'tokens.css'), 'utf8')
 const [dark, light = ''] = css.split(':root[data-theme="light"]')
+
+/** WCAG 2 相对亮度与对比度：本文件里两处需要判「这色够不够」，共用这一份实现。 */
+const luminance = (hex: string): number => {
+  const value = hex.replace('#', '')
+  const channel = (offset: number): number => {
+    const raw = parseInt(value.slice(offset, offset + 2), 16) / 255
+    return raw <= 0.03928 ? raw / 12.92 : ((raw + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+}
+
+const contrast = (a: string, b: string): number => {
+  const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]
+  return (high + 0.05) / (low + 0.05)
+}
+
+const hexOf = (block: string, name: string): string => {
+  const match = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(block)
+  if (match?.[1] === undefined) throw new Error(`missing --${name}`)
+  return match[1]
+}
 
 describe('UI token file', () => {
   it('defines --caution with the one agreed value in both theme blocks', () => {
@@ -87,24 +110,6 @@ describe('UI token file', () => {
    *    只判 ① 会放过「更暗但对比更高」的值——那是同一个 bug 换个方向。
    */
   it('keeps --surface-raised lighter than its container in both themes, by more than the alias it replaced', () => {
-    const luminance = (hex: string): number => {
-      const value = hex.replace('#', '')
-      const channel = (offset: number): number => {
-        const raw = parseInt(value.slice(offset, offset + 2), 16) / 255
-        return raw <= 0.03928 ? raw / 12.92 : ((raw + 0.055) / 1.055) ** 2.4
-      }
-      return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
-    }
-    const contrast = (a: string, b: string): number => {
-      const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]
-      return (high + 0.05) / (low + 0.05)
-    }
-    const hexOf = (block: string, name: string): string => {
-      const match = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(block)
-      if (match?.[1] === undefined) throw new Error(`missing --${name}`)
-      return match[1]
-    }
-
     // 容器的两个值住在壳层的 `styles.css` 里，不在这个文件——**这本身是一处该收拢的债**：
     // 判断 `--surface-raised` 够不够，必须同时读两个层。所以这里跨过去读，并把这件事写下来，
     // 而不是在测试里硬编码两个色值——硬编码的色值会在下一次调色时悄悄过期。
@@ -125,6 +130,24 @@ describe('UI token file', () => {
       // ② 方向必须朝亮，而且比原来那个别名更好——否则就是「更暗但更有对比」的同一个 bug。
       expect(luminance(raised)).toBeGreaterThan(luminance(container))
       expect(contrast(raised, container)).toBeGreaterThan(contrast(replaced, container))
+    }
+  })
+
+  /**
+   * `--caution` 做 11px 文字压在设计稿说的浮层底上，两套主题都必须过 4.5:1。
+   *
+   * 这条不是形式主义：时钟环的名字浮层里，**预期值就是 `--caution` 的橘色**（2026-11 用户定，
+   * 数字单独一层、整行不染）。浅色主题实测只有 4.59——比阈值高 0.09，谁把橘色调浅一点，
+   * 第一眼坏在浅色上。浮层底取 antd 的 `colorBgElevated`（`WINDOW_ANTD_COLOR_TOKENS`），
+   * 不在这里写第二个色值：主题改色时这条会跟着一起量。
+   */
+  it('keeps --caution readable as expectation text on the elevated surface', () => {
+    for (const variant of ['dark', 'light'] as const) {
+      const block = variant === 'dark' ? dark : light
+      const expectText = hexOf(block, 'caution')
+      const surface = WINDOW_ANTD_COLOR_TOKENS[variant].colorBgElevated
+      expect(contrast(expectText, surface), `${variant}：${expectText} 压在 ${surface} 上`)
+        .toBeGreaterThanOrEqual(4.5)
     }
   })
 })
