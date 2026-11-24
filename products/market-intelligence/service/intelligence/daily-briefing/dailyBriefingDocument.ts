@@ -441,6 +441,8 @@ class CitationCollector {
   private readonly indexes = new Map<string, number>()
   private readonly evidence: ReadonlyMap<string, Readonly<{ sourceLabel?: string; observedAt?: string; itemId?: string }>>
   private readonly statements = new Map<string, string>()
+  /** 已经挂出去的句子：一句话只留在第一条引用上，别在证据清单里数三遍。 */
+  private readonly claimed = new Set<string>()
 
   constructor(evidenceRefs: readonly Readonly<{ evidenceRefId: string; sourceLabel: string; itemId: string | null; occurredAt: string | null; publishedAt: string | null; visibleAt: string }>[]) {
     this.evidence = new Map(evidenceRefs.map((ref) => [ref.evidenceRefId, {
@@ -452,9 +454,16 @@ class CitationCollector {
 
   cite(refs: readonly string[], statement?: string): readonly number[] {
     const numbers: number[] = []
+    // 一条理由引用三条证据时，读者在「证据」里会看到同一句重复三遍——那不是三条证据，
+    // 是一句话被数了三遍（用户 2026-11-24）。句子留在第一条引用上，其余条目只给来源。
+    let assigned = statement === undefined || this.claimed.has(statement)
     for (const ref of refs) {
       if (!ref) continue
-      if (statement && !this.statements.has(ref)) this.statements.set(ref, statement)
+      if (statement !== undefined && !assigned && !this.statements.has(ref)) {
+        this.statements.set(ref, statement)
+        this.claimed.add(statement)
+        assigned = true
+      }
       let index = this.indexes.get(ref)
       if (index === undefined) {
         index = this.indexes.size + 1

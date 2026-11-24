@@ -257,6 +257,34 @@ describe('daily briefing document', () => {
     expect(document.citations.some((entry) => entry.statement === 'ETF 资金流印证。')).toBe(true)
   })
 
+  it('prints a claim once, even when it cites several evidence items', () => {
+    // 用户 2026-11-24：同一句理由挂三条证据时，读者在「证据」里看到同一句重复三遍——那不是三条
+    // 证据，是一句话被数了三遍。句子只留在第一条引用上，其余条目只给来源。
+    const base = packet()
+    const document = buildDailyBriefingDocument({
+      packet: {
+        ...base,
+        conclusion: {
+          ...base.conclusion!,
+          summary: {
+            ...summary,
+            directions: summary.directions.map((entry) => entry.horizon === 'medium'
+              ? { ...entry, evidenceRefIds: ['ev-2', 'ev-3'] }
+              : entry)
+          }
+        }
+      },
+      date: '2026-10-30'
+    })
+
+    expect(document.conclusion?.topSignal?.rationale).toBe('ETF 资金流印证。')
+    expect(document.conclusion?.topSignal?.citations).toEqual([1, 2])
+    const statements = document.citations.flatMap((entry) => (entry.statement === undefined ? [] : [entry.statement]))
+    expect(statements.filter((statement) => statement === 'ETF 资金流印证。')).toHaveLength(1)
+    // 通用不变量：证据清单里任何一句话都不许出现第二次。
+    expect(new Set(statements).size).toBe(statements.length)
+  })
+
   it('lists only events that have a name in the edition’s language (A0.9)', () => {
     // 真机：英文版次的「接下来」印着中文讲话名。源里只有中文名的（央行讲话那条源）在英文版**不列**，
     // 少列几条是允许的，不当数据缺口；中文版次照列。
