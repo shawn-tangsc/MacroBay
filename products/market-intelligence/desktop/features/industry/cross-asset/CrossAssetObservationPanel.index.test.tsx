@@ -530,14 +530,12 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
       macroReading: { atMs: refusedAt, sourceFailure: 'symbol-not-supported' }
     })
     try {
-      // 默认开：这一行根本不出现（用户 2026-11-16 第二版口径）。
-      expect(page.host.querySelector('[data-status-row="dxy"]')).toBeNull()
+      // 隐藏开关撤了（用户 2026-11-25）：这一行照实遮住，不再默认消失。
+      expect(page.host.querySelector('[role="switch"]')).toBeNull()
       // 图例里这条线也不出现。
       expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="dxy"]')).toBeNull()
       expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
-      // 关掉开关：整行遮住，只剩一句状态，没有数字、窗口、日期句。
-      const toggle = page.host.querySelector<HTMLElement>('[role="switch"]')!
-      await act(async () => toggle.click())
+      // 整行遮住，只剩一句状态，没有数字、窗口、日期句。
       const row = page.host.querySelector('[data-status-row="dxy"]')!
       expect(row.getAttribute('data-source-state')).toBe('unreadable')
       expect(row.textContent).toContain(text.sourceRefused)

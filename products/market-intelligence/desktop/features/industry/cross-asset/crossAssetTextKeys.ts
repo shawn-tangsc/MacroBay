@@ -26,7 +26,6 @@ export const crossAssetTextKeys = Object.freeze({
   /** 供应商永久不提供这个品种：整行遮住，只留这一句状态。 */
   sourceRefused: 'pages.intelligence.portal.dashboard.crossAsset.sourceRefused',
   /** 标题右上的勾：不显示这类行（勾上＝隐藏）。 */
-  hideUnavailableRows: 'pages.intelligence.portal.dashboard.crossAsset.hideUnavailableRows',
   /** 品种被供应商永久拒绝时 ⓘ 的那一行（有更多只被拒时用 `…More` 合并成一句，仍只占一行）。 */
   planNotServedReason: 'pages.intelligence.portal.dashboard.crossAsset.planNotServedReason',
   planNotServedReasonMore: 'pages.intelligence.portal.dashboard.crossAsset.planNotServedReasonMore',

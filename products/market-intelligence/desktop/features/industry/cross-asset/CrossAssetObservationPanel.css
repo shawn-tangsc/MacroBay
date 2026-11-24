@@ -57,7 +57,6 @@
 .mi-cross-asset__chart { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 /* 标题右角：一个勾 + 那张卡唯一的按钮；`margin-left:auto` 把它们一起推到最右。 */
 .mi-cross-asset__heading-actions { margin-left: auto; display: inline-flex; align-items: center; gap: var(--mi-cross-asset-gap-small); }
-.mi-cross-asset__heading-actions .ant-switch { margin: 0; }
 .mi-cross-asset__chart-actions, .mi-cross-asset__quote-heading, .mi-cross-asset__status { display: flex; align-items: center; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
 /*
  * 行的顺序：**行按自己的内边距与行高排，图吃剩下的**（用户 2026-11-23）。
