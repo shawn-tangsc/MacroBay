@@ -532,8 +532,6 @@ mi: miText['zh-CN'],
               staleAsOf: '偏旧 · 截至 {time}',
               /* 供应商永久不提供这个品种：整行遮住只留这一句（用户 2026-11-16：说清楚，来源未提供）。 */
               sourceRefused: '来源未提供',
-              /* 表标题右上的勾：勾上就不显示这类行，取消就照旧显示（读者自己选，不替他决定）。 */
-              hideUnavailableRows: '不显示来源不可用的行',
               /* 原因收进 ⓘ：先给最近收盘最新的一条，其余合并成一句；整块仍受 4 行上限约束。 */
               planNotServedReason: '{name}：供应商当前套餐不提供这个品种，最近一次收盘 {time}。',
               planNotServedReasonMore: '{name}：供应商当前套餐不提供这个品种，最近一次收盘 {time}；另有 {count} 个品种同样不提供。',
@@ -2352,7 +2350,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               // Sits beside the row name, in the same slot as the live badge; `{time}` is formatted once.
               staleAsOf: 'Out of date · as of {time}',
               sourceRefused: 'source not provided',
-              hideUnavailableRows: 'Hide rows whose source is unavailable',
               planNotServedReason: '{name}: the provider does not offer this instrument on the current plan; last close {time}.',
               planNotServedReasonMore: '{name}: the provider does not offer this instrument on the current plan; last close {time}; {count} more are also unavailable.',
               staleRead: 'The refresh failed; the readings below are from the last successful read.',
