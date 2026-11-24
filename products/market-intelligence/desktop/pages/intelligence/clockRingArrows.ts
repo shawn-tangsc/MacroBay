@@ -37,9 +37,12 @@ export const clockArrowGeometry = Object.freeze({
   nameGap: 2,
   /** 名字盒离卡缘的最小内距（判据：≥4px）。 */
   nameEdgeMargin: 4,
-  /** 相撞时每步沿环推开的像素与上限步数。 */
-  nudgeStep: 8,
-  nudgeMaxSteps: 6,
+  /**
+   * 相撞时沿环推开的步长与上限：**取最小一步**（用户 2026-11），所以步长取 2px、上限 12 步
+   * （共 24px，够今天 120°/128° 那对要的 17.2px）。8px 一步会推出 24px，多推 7px。
+   */
+  nudgeStep: 2,
+  nudgeMaxSteps: 12,
   /** 两个名字盒之间要留的缝（界面设计 2026-11：推开到 ≥4px）。 */
   nameNudgeGapPx: 4
 })
