@@ -59,6 +59,11 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   const verdictKey = result && wholeCardState === undefined ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
   const loading = state.state === 'loading'
+  // 档位词在头栏中轨（用户 2026-11-24）：条件与仪表画指针那一处一致——真有读数、这一格没被关掉。
+  // 旧了就照旧显示档位词（读数还是那个读数，陈旧由左半的「偏旧」标），读不到或没有就整块不渲染。
+  const gaugeReading = cellOff === undefined && fearGreed?.state === 'available'
+    ? { score: fearGreed.score, bucket: fearGreed.bucket }
+    : undefined
 
   return <section className="mi-defensive-premium" aria-labelledby={TITLE_ID} data-testid="defensive-premium-card">
     {/* 头栏与内容第一行合并（用户 2026-11-23）：不再单独占一行——卡名、卡级 ⓘ、窗口、两个格名与卡级动作
@@ -95,6 +100,14 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
               : null}
           </div>
         </> : null}
+      </div>
+      {/* 中轨：档位词居中，11/650，五档语义色（界面 2026-11-24）。盘里那个分数是画布内容，
+          读屏只能靠这一句带分数的名字。没有读数、这一格被关掉时整块不渲染。 */}
+      <div className="mi-defensive-premium__topbar-mid">
+        {gaugeReading === undefined ? null
+          : <p className="mi-defensive-premium__gauge-bucket" data-gauge-reading
+            data-gauge-bucket-text={gaugeReading.bucket}
+            aria-label={`${gaugeReading.score} ${text.fearGreed.buckets[gaugeReading.bucket]}`}>{text.fearGreed.buckets[gaugeReading.bucket]}</p>}
       </div>
       <div className="mi-defensive-premium__topbar-tail">
         {wholeCardState === undefined ? <div className="mi-defensive-premium__half-head" data-half-head="skew">
@@ -173,7 +186,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           </div>
 
           {/* 中间那一列：仪表只回答「落在哪一档」，日期与状态词在各自那一格的读数行上（定稿 §4.4 / §4.5）。 */}
-          <SentimentGauge state={toGaugeState(fearGreed)} buckets={text.fearGreed.buckets} titleId={FEAR_GREED_HEADING_ID}
+          <SentimentGauge state={toGaugeState(fearGreed)} titleId={FEAR_GREED_HEADING_ID}
             {...(cellOff === undefined ? {} : { cellOff })} />
 
           <div className="mi-defensive-premium__col" data-half="skew">

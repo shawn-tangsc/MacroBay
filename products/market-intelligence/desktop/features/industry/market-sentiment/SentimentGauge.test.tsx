@@ -15,9 +15,10 @@ import { CHART_HEIGHT, GAUGE_CHART_HEIGHT } from './DefensivePremiumCharts'
 /**
  * 仪表那一列：只回答「落在哪一档」。
  *
- * 读数里的分数在盘里（画布内容），档位词是**文字**，落在整个仪表下面那一行（图位底部）；
- * 图是 ECharts 画的装饰（aria-hidden），所以档位词那一行自带读屏名「22 极度恐惧」。
- * 日期、状态词、三个区间标签都不在这里——日期与状态词归恐惧贪婪格的读数行。
+ * 读数里的分数在盘里（画布内容）；档位词**不再在这一列**——用户 2026-11-24 把它抬到头栏中轨
+ * （卡片 `__topbar-mid`，用例在 cryptoDashboard.test 那边），这一列只剩图，所以画布能占满 168、
+ * 与两侧走势图等高居中。图本身是装饰（aria-hidden）。
+ * 日期、状态词、三个区间标签都不在这里——日期归恐惧贪婪格。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard
 const buckets = text.fearGreed.buckets
@@ -37,7 +38,7 @@ async function render(state: DashboardFearGreedState, cellOff?: typeof openSourc
   document.body.append(container)
   root = createRoot(container)
   await act(async () => root?.render(createElement(SentimentGauge, {
-    state, buckets, titleId: 'mi-defensive-premium-fear-greed-heading',
+    state, titleId: 'mi-defensive-premium-fear-greed-heading',
     ...(cellOff ? { cellOff } : {})
   })))
   await act(async () => { await Promise.resolve() })
@@ -45,19 +46,17 @@ async function render(state: DashboardFearGreedState, cellOff?: typeof openSourc
 }
 
 describe('the gauge column', () => {
-  it('puts the bucket word under the whole gauge, with the score carried by its accessible name', async () => {
+  it('carries no words at all: the bucket word moved to the card’s topbar (user 2026-11-24)', async () => {
     const gauge = await render(available)
-    const reading = gauge.querySelector('[data-gauge-reading]')!
-    // 视觉只有档位词；分数在盘里（画布），读屏名把两段合成一句。
-    expect(reading.textContent).toBe(buckets['extreme-fear'])
-    expect(reading.getAttribute('aria-label')).toBe(`22 ${buckets['extreme-fear']}`)
-    expect(reading.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
-    // 位置：档位词在图位里（图位带 position:relative，词按 inset-inline/bottom 绝对定位在图下方）。
-    expect(reading.closest('.mi-defensive-premium__chart-slot')).not.toBeNull()
-    expect(reading.parentElement?.querySelector('[data-chart="gauge"]')).not.toBeNull()
-    // 这一列没有读数行（用户 2026-11-22 删掉整条读数行）：DOM 里不留空节点。
+    // 档位词抬到头栏中轨之后，这一列里一个文字节点都不该剩——剩了就是又占了图位、把仪表挤小。
+    expect(gauge.querySelector('[data-gauge-reading]')).toBeNull()
+    expect(gauge.querySelector('[data-gauge-bucket-text]')).toBeNull()
+    expect(gauge.querySelector('.mi-defensive-premium__gauge-bucket')).toBeNull()
+    // 剩下能念的字只有画布里的分数（ECharts 用 SVG 画刻度与分数），没有一句界面文案。
+    expect(gauge.textContent).toBe('22')
+    // 这一列也没有读数行（用户 2026-11-22 删掉整条读数行）：DOM 里不留空节点。
     expect(gauge.querySelector('.mi-defensive-premium__reading')).toBeNull()
-    // 图是装饰：读屏念的是档位词那一行的名字，不是画布。
+    // 图是装饰：读屏念的是头栏那一句，不是画布。
     const chart = gauge.querySelector('[data-chart="gauge"]')!
     expect(chart.getAttribute('aria-hidden')).toBe('true')
     expect(chart.hasAttribute('role')).toBe(false)
@@ -102,19 +101,24 @@ describe('the gauge column', () => {
     expect(gauge.querySelector('[aria-live]')).toBeNull()
   })
 
-  it('keeps the arc above the bucket word: 127-high canvas, center 92%, radius formula untouched', () => {
-    // 168 的图位里给档位词留 41（词高 18 + 词底距 23，词与两侧日期同一条底线），所以弧只画在上面 127 里：
-    // 圆心 92% → y = 116.8，弧下沿就在这条线上、描边到约 121.8；词的盒顶在 127，中间留 5。
-    // 圆心再往下压（92 → 95）锚点就会压到词上；词与弧太挤则往上抬（92 → 90）。
-    expect(GAUGE_CHART_HEIGHT).toBe(CHART_HEIGHT - 41)
+  it('fills the whole cell: 168-high canvas, center 88%, radius formula untouched (user 2026-11-24)', () => {
+    // 档位词搬走后图里没有字要留位置，画布回满 168，与两侧走势图等高。
+    // 圆心 88% → y = 147.8；半径 min(w/2 − 10, h − 22)：240 列下 110、184 列下 82。
+    // 弧弦 147.8、描边到约 152.8，比两侧轴底（168 − 24 = 144）低 3.8——判据是「差 ≤4」。
+    expect(GAUGE_CHART_HEIGHT).toBe(CHART_HEIGHT)
     for (const width of [184, 240]) {
       const option = gaugeChartOption({ score: 22, width, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
       const series = (option.series as Array<{ center: [string, string]; radius: number }>)[0]!
-      expect(series.center).toEqual(['50%', '92%'])
-      const centerY = 0.92 * GAUGE_CHART_HEIGHT
-      expect(centerY + 5).toBeLessThan(GAUGE_CHART_HEIGHT)
+      expect(series.center).toEqual(['50%', '88%'])
+      const centerY = 0.88 * GAUGE_CHART_HEIGHT
+      // 弧弦仍在画布之内（描边半径 5 不越界），与两侧轴底（168 − 24 = 144）相差 3.8 ≤ 4。
+      expect(centerY + 5).toBeLessThanOrEqual(GAUGE_CHART_HEIGHT)
+      expect(Math.abs(centerY - (GAUGE_CHART_HEIGHT - 24))).toBeLessThanOrEqual(4)
       expect(series.radius).toBe(Math.max(24, Math.min(width / 2 - 10, GAUGE_CHART_HEIGHT - 22)))
     }
+    // 240 列下圆心 y = 147.84、半径 110：把这两个数钉住，改圆心或半径都得先改这条用例。
+    const wide = gaugeChartOption({ score: 22, width: 240, height: GAUGE_CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    expect((wide.series as Array<{ radius: number }>)[0]!.radius).toBe(110)
   })
 
   it('gives the needle a value only when there is a score', () => {
