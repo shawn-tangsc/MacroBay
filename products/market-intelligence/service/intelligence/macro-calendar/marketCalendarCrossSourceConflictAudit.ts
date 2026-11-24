@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
 import { compareCalendarNumeric, readCalendarNumeric } from './marketCalendarNumericReading'
+import { periodsComparableAcrossSources } from './marketCalendarPeriodProvenance'
 import {
   calendarValueRevisionPolicy, crossSourceConflictDecision, ensureCalendarValueRevisionTable,
   hashIncomingValues, recordCalendarValueRevision, type CalendarValueField
@@ -200,6 +201,9 @@ export function crossSourceConflictCounts(database: DatabaseSync): readonly Read
  * - `groups`：记了冲突的「身份 × 字段」组数（含数值判定与展示串判定两种）；
  * - `displayCompared`：其中按展示串判出来的组数（未经数值校验）；
  * - `incomparable`：有值的一侧少于来源数（某一家这一格根本没给）→ 不比、不记，单独计数；
+ * - `periodIncomparable`：这一组里有一行的来源**没有给统计期**（今天就是 0xrouter，或来源未登记）
+ *   → 不比、不记，单独计数。它和 `incomparable` 是两件事：前者是「不知道是不是同一期」，
+ *   后者是「是同一期，但某家这一格没给值」；
  * - `sameValueDifferentText`：数值相同、只有写法不同（假阳性，已不记）。
  *
  * 只扫 `row_kind='release'` 且 `values_json` 合法的行（数组身份那批非法 JSON 不参与，
@@ -215,6 +219,11 @@ export function markCrossSourceConflicts(database: DatabaseSync): Readonly<{
   incomparable: number
   /** 数值相同、只有写法不同（`4.1` vs `4.10`）的组数：假阳性，已不再记冲突。 */
   sameValueDifferentText: number
+  /**
+   * 来源没有给出统计期的组数（任一行来自 0xrouter，或来源未登记）：
+   * **不比、不记**，与「某家这一格没给」分开计数——「拿不到期次」不许写成「没有冲突」。
+   */
+  periodIncomparable: number
   /** 其中**按展示串**判出来、记了冲突的组数（未经数值校验）。 */
   displayCompared: number
 }> {
@@ -233,6 +242,7 @@ export function markCrossSourceConflicts(database: DatabaseSync): Readonly<{
   let incomparable = 0
   let sameValueDifferentText = 0
   let displayCompared = 0
+  let periodIncomparable = 0
   const rowsOf = database.prepare(`select source_provider_id, source_event_id, first_scheduled_date,
       values_json, numeric_json, observed_at, data_observed_at
     from ${table} where country_code = ? and metric_key = ? and period_key = ?
@@ -242,6 +252,15 @@ export function markCrossSourceConflicts(database: DatabaseSync): Readonly<{
       source_provider_id: string; source_event_id: string; first_scheduled_date: string
       values_json: string; numeric_json: string | null; observed_at: string; data_observed_at: string | null
     }>
+    /**
+     * **期次先过一道闸**（Chief 2026-11-24）：任一行来自「期次是推出来的」或「未登记」的来源，
+     * 这一组就不比、不记，计 `periodIncomparable`。放在字段循环之前：这是**组**的性质，
+     * 不是某一格缺值——拿推出来的期次去判「两家数不一样」，等于替源断言同期。
+     */
+    if (!periodsComparableAcrossSources(rows.map((row) => row.source_provider_id))) {
+      periodIncomparable += 1
+      continue
+    }
     for (const field of ['actual', 'previous', 'consensus'] as const) {
       const sides = rows.flatMap((row): Array<CrossSourceConflictSide & { numericJson: string | null }> => {
         let parsed: Record<string, unknown>
@@ -310,5 +329,5 @@ export function markCrossSourceConflicts(database: DatabaseSync): Readonly<{
       })
     }
   }
-  return { groups: conflictGroups, recorded, incomparable, sameValueDifferentText, displayCompared }
+  return { groups: conflictGroups, recorded, incomparable, sameValueDifferentText, displayCompared, periodIncomparable }
 }
