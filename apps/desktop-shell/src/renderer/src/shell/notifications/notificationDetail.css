@@ -8,7 +8,11 @@
   gap: 10px;
 }
 
-/* 返回键在正文顶部的左端：平台抽屉头没有「标题前的槽」（见组件注释）。 */
+/*
+ * 返回键在正文顶部的左端：平台抽屉头没有「标题前的槽」（见组件注释）。
+ * 左移 4px 是**光学对齐**：`IconButton size="md"` 是 24px 的盒子、图标本身 16px（居中），
+ * 左缘因此有 4px 空隙。不挪这一下，箭头会比下面的「时间」「正文」「送达」整体缩进一格。
+ */
 .notification-detail__leads {
   display: flex;
   align-items: center;
@@ -34,10 +38,9 @@
 }
 
 .notification-detail__group {
-  margin: 0 0 2px;
+  margin: 0;
   color: var(--muted);
   font-size: var(--font-meta);
-  letter-spacing: 0.06em;
 }
 
 .notification-detail__rows {
