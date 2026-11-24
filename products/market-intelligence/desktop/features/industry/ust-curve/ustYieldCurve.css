@@ -66,10 +66,6 @@
 .mi-ust__table tbody td[data-unavailable="true"] { color: var(--muted); }
 /* 价差与分解两段各起一条实线：它们不是曲线上的一条，读起来得先分开。 */
 .mi-ust__table tbody tr[data-block="true"] > * { border-top: 1px solid var(--border); }
-.mi-ust__row-as-of {
-  display: block; color: var(--muted); font-size: var(--font-meta);
-  font-weight: 400; line-height: var(--line-meta);
-}
 /* 整行读不到/未接入：一行小字横跨数据列，左对齐到「最新」列，不画一个假的 0。 */
 .mi-ust__row-state {
   text-align: left !important; color: var(--muted) !important;

@@ -139,11 +139,10 @@ describe('国债收益率卡', () => {
     unmount()
   })
 
-  it('marks only the row that differs from the table day, not the yields that share the normal day', () => {
+  it('keeps the as-of out of every row: the footer is the only place that states the days', () => {
     // 真实库 2026-11-22 的样子（`macro_market_points` 逐条查过）：16 条收益率都在 11-19，
     // 三条通胀预期（T5YIE / T10YIE / T5YIFR）在 11-20——它们本来就晚一天发布。
-    // 所以「全表观测日」是大多数行共有的 11-19：只有通胀补偿那一行带 as-of，其余九行不带。
-    // 原来拿「最新的一天」当基准，八行被贴上「截至 11-19」，整张卡就是被这八行小字撑高的。
+    // 行内那行「截至 …」已经删掉（用户 2026-11-24：它把别的内容挤掉；新鲜度在卡片底部那行说就够了）。
     const at = (seriesId: string, days: readonly [string, string], values: readonly [number, number]) =>
       reading(seriesId, [{ period: days[0], value: values[0] }, { period: days[1], value: values[1] }])
     const { host, unmount } = mount({
@@ -159,26 +158,26 @@ describe('国债收益率卡', () => {
         ]
       })
     })
-    const marked = cells(host, '.mi-ust__row-as-of')
-    expect(marked).toHaveLength(1)
-    expect(marked[0]?.textContent).toBe(t('templates.asOf').replace('{date}', '11-20'))
-    const row = marked[0]?.closest('tr')
-    expect(text(row?.querySelector('th'))).toContain(t('rows.breakeven'))
-    // 页脚照旧写区间：两个观测日都真实存在，只是常态那一天不该被逐行标注。
+    // 行内不再有任何 as-of：既没有那个元素，也没有那句话。
+    expect(cells(host, '.mi-ust__row-as-of')).toHaveLength(0)
+    const stem = t('templates.asOf').slice(0, t('templates.asOf').indexOf('{date}'))
+    expect(stem).not.toBe('')
+    expect(text(host.querySelector('tbody'))).not.toContain(stem)
+    // 页脚照旧写区间：两个观测日都真实存在。
     expect(text(host.querySelector('.mi-ust__foot'))).toContain(
       t('templates.footRange').replace('{from}', '2026-11-19').replace('{to}', '11-20'))
     unmount()
   })
 
-  it('marks a row whose observation date is older, and writes the range in the footer', () => {
+  it('writes the observation range in the footer only, never beside a row name', () => {
     const slow = reading(series.breakeven10y, window(3, () => 2.4, '2026-02-02'))
     const base = fullSnapshot() as AvailableView
     const { host, unmount } = mount({
       snapshot: fullSnapshot({ readings: base.readings.filter((entry) => entry.seriesId !== series.breakeven10y).concat([slow]) })
     })
-    const body = text(host)
-    expect(body).toContain(t('templates.asOf').replace('{date}', slow.period.slice(5)))
-    expect(body).toContain(t('templates.footRange').replace('{from}', '').slice(0, 3))
+    // 慢一天的那一行也不写「截至 …」；底部那行照旧给出区间。
+    expect(text(host.querySelector('tbody'))).not.toContain(t('templates.asOf').replace('{date}', slow.period.slice(5)))
+    expect(text(host.querySelector('.mi-ust__foot'))).toContain(t('templates.footRange').replace('{from}', '').slice(0, 3))
     unmount()
   })
 

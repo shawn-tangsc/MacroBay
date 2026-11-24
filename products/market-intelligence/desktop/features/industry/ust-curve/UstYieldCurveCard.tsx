@@ -14,7 +14,7 @@ import type { MacroRatesSnapshotView } from '../../../../contracts/macro/macroRa
 import { UstCurveChart } from './UstCurveChart'
 import {
   buildUstCurve, buildUstRows, ustChangeWindows, ustCurveRanges, ustHasAnyReading, ustHasCurveLines,
-  ustObservationDates, ustTablePeriod, ustTenors,
+  ustObservationDates, ustTenors,
   type UstChangeWindow, type UstCurveBaseline, type UstCurveMode, type UstCurveRange, type UstRow
 } from './ustCurveModel'
 import './ustYieldCurve.css'
@@ -149,8 +149,7 @@ export function UstYieldCurveCard({
 }
 
 function UstTable({ rows, copy }: Readonly<{ rows: readonly UstRow[]; copy: (key: string) => string }>): ReactElement {
-  // 基准是「大多数行共有的一天」，不是最新的一天：通胀那几条序列天然晚一天（见 `ustTablePeriod`）。
-  const tablePeriod = ustTablePeriod(rows)
+  // 行内不再写「截至 …」（用户 2026-11-24：那行小字把别的内容挤掉，新鲜度在卡片底部那行说就够了）。
   return <table className="mi-ust__table" aria-label={copy('tableAria')}>
     <colgroup>
       <col className="mi-ust__col-name" /><col className="mi-ust__col-latest" />
@@ -169,9 +168,6 @@ function UstTable({ rows, copy }: Readonly<{ rows: readonly UstRow[]; copy: (key
       {rows.map((row) => <tr key={row.id} {...(row.block ? { 'data-block': 'true' } : {})}>
         <th scope="row">
           {copy(row.labelKey)}
-          {row.availability.state === 'values' && row.availability.lastPeriod !== tablePeriod
-            ? <span className="mi-ust__row-as-of">{copy('templates.asOf').replace('{date}', row.availability.lastPeriod.slice(5))}</span>
-            : null}
         </th>
         {row.availability.state === 'values'
           ? <>

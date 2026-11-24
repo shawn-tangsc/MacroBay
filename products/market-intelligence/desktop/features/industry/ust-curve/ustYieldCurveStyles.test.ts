@@ -83,6 +83,8 @@ describe('国债收益率卡的样式边界', () => {
   it('keeps every length inside the spacing scale and leaves no dead selector', () => {
     // 2px 不在 4/6/8/10/12/16 档里；行高 1.5 已经把两行分开了，4px 是档内最小值。
     expect(css).toMatch(/\.mi-ust__tooltip span \{[^}]*padding-block: 4px;/)
+    // 行内「截至 …」已删（用户 2026-11-24）：那条样式若还留着，就是只删了渲染没删样式。
+    expect(css).not.toContain('.mi-ust__row-as-of')
     // 浮层是条件渲染的，永远不会带 `hidden`；加载态走平台 `LoadingState`，没有自己的类。
     expect(css).not.toContain('[hidden]')
     expect(css).not.toContain('.mi-ust__loading')
