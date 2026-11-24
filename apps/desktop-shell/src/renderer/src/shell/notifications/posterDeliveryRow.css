@@ -1,0 +1,55 @@
+/*
+ * 「海报」这一行（#46）：送达组里的一条事实。
+ *
+ * 两条让「不折成两行」成立的声明都在这里：标签列固定 40（两字），值 `nowrap` + `min-width: 0`。
+ * 窄屏（360 宽面板）下最长组合「未发送 1/2 · 通道未收下」值区可用 276，实测无横向溢出；
+ * 真机若折行，先核原因文案有没有超过 8 个汉字，**不要**改这两个数或压字号
+ * （界面设计 2026-11-25 v1.2 §6）。
+ *
+ * 行内上下 5px、标签与值之间 10px、值内 6px：前两个数来自已签字的原型与真机量测，
+ * 不是随手取的。
+ */
+.notification-poster-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  padding: 5px 0;
+}
+
+.notification-poster-row > dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-meta);
+}
+
+.notification-poster-row > dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* 数字弱化：扫一眼先看状态，再看数量。 */
+.notification-poster-row__counts {
+  color: var(--muted);
+  font-size: var(--font-meta);
+}
+
+/* 原因用正文色：它是「为什么」，比数字更要紧。 */
+.notification-poster-row__reason {
+  color: var(--text);
+  font-size: var(--font-section);
+}
+
+/*
+ * 原因前面那个分隔点：有数字没数字都只有一个（数字与原因是两个节点、两种字号，
+ * 所以不用 `value.withReason` 拼成一句）。单通道时值读作「未发送 · 通道未收下」，
+ * 多通道时读作「未发送 1/2 · 通道未收下」。
+ */
+.notification-poster-row__reason::before {
+  content: '· ';
+  color: var(--muted);
+}
