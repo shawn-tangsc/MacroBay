@@ -126,7 +126,78 @@ export const calendarImportanceRows: readonly CalendarImportanceRow[] = Object.f
   { country: 'US', family: 'USED_CAR_PRICES', tier: 'low', basis: 'PRD §2：二手车价格，单月噪声大、无直接传导' },
   { country: 'US', family: 'VEHICLE_SALES', tier: 'low', basis: 'PRD §2：新车销量，单月噪声大、无直接传导' },
   { country: 'rest', family: 'FX_RESERVES', tier: 'low', basis: 'PRD §2：外汇储备，任何辖区都是低（显式决策行）' },
-  { country: 'rest', family: 'MONEY_SUPPLY', tier: 'low', basis: 'PRD §2：货币供应，任何辖区都是低（显式决策行）' }
+  { country: 'rest', family: 'MONEY_SUPPLY', tier: 'low', basis: 'PRD §2：货币供应，任何辖区都是低（显式决策行）' },
+  // —— PRD §10 附录（2026-11-24 产品逐族定档）：真库 69 个「美国、有码、§2 没列」的族 ——
+  // 68 族补在这里；`FEDERAL_FUNDS_BENCHMARK` 归并进 FOMC 族（见 calendarFamilyAliases），不另立高族。
+  // 规则：R1 子族跟父族、R2 周度高频一律低、R3 房产不整批判低（房价变体中、开工/许可/销量/支出低）。
+  { country: 'US', family: 'CORE_PERSONAL_CONSUMPTION_EXPENDITURE_PRICE', tier: 'high', basis: 'PRD §10 R1 子族跟父族：与 PCE 同一份发布（父族：PCE / 核心 PCE，高）' },
+  { country: 'US', family: 'PERSONAL_CONSUMPTION_EXPENDITURE_PRICE', tier: 'high', basis: 'PRD §10 R1 子族跟父族：与 PCE 同一份发布（父族：PCE / 核心 PCE，高）' },
+  { country: 'US', family: 'PERSONAL_CONSUMPTION_EXPENDITURE', tier: 'high', basis: 'PRD §10 R1 子族跟父族：与 PCE 同一份发布（父族：PCE / 核心 PCE，高）' },
+  { country: 'US', family: 'PERSONAL_INCOME', tier: 'high', basis: 'PRD §10 R1 子族跟父族：与 PCE 同一份发布（父族：PCE / 核心 PCE，高）' },
+  { country: 'US', family: 'PERSONAL_SPENDING', tier: 'high', basis: 'PRD §10 R1 子族跟父族：与 PCE 同一份发布（父族：PCE / 核心 PCE，高）' },
+  { country: 'US', family: 'ACTUAL_PERSONAL_CONSUMPTION_EXPENDITURE', tier: 'high', basis: 'PRD §10 R1 子族跟父族：与 PCE 同一份发布（父族：PCE / 核心 PCE，高）' },
+  { country: 'US', family: 'REAL_GDP', tier: 'high', basis: 'PRD §10 R1 子族跟父族：与美国季度 GDP 同一份发布（父族：GDP，高）' },
+  { country: 'US', family: 'ANNUM_REAL_GDP', tier: 'high', basis: 'PRD §10 R1 子族跟父族：与美国季度 GDP 同一份发布（父族：GDP，高）' },
+  { country: 'US', family: 'CHALLENGER_JOB_CUTS', tier: 'medium', basis: 'PRD §10 单列：就业类先行指标：领先非农，但本身不是官方就业报告，中' },
+  { country: 'US', family: 'ISM_MANUFACTURING_NEW_ORDERS', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'SP_COMPOSITE_PMI', tier: 'medium', basis: 'PRD §10 单列：PMI 一类：与 ISM 同一判据（景气、传导要两步），但不同发布方，单独列，不并进 ISM' },
+  { country: 'US', family: 'CORE_CAPEX_ORDERS', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与耐用品订单同一份发布（父族：耐用品，中）' },
+  { country: 'US', family: 'ISM_SERVICES_NEW_ORDERS', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'SP_MANUFACTURING_PMI', tier: 'medium', basis: 'PRD §10 单列：PMI 一类：与 ISM 同一判据（景气、传导要两步），但不同发布方，单独列，不并进 ISM' },
+  { country: 'US', family: 'ISM_MANUFACTURING_EMPLOYMENT', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'ISM_MANUFACTURING_PRODUCTION', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'ISM_MANUFACTURING_INVENTORIES', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'ISM_MANUFACTURING_PRICES', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'SP_SERVICES_PMI', tier: 'medium', basis: 'PRD §10 单列：PMI 一类：与 ISM 同一判据（景气、传导要两步），但不同发布方，单独列，不并进 ISM' },
+  { country: 'US', family: 'ISM_SERVICES_PRICES', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'ISM_SERVICES_SUPPLIER_DELIVERIES', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'ISM_SERVICES_INVENTORIES', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'ISM_SERVICES_EMPLOYMENT', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与 ISM 同一份发布（父族：ISM 制造/服务，中）' },
+  { country: 'US', family: 'NFIB_OPTIMISM', tier: 'medium', basis: 'PRD §10 单列：小企业信心：与密歇根 / CB 同类（景气调查），中' },
+  { country: 'US', family: 'DEDUCT_AIRCRAFT_DEFENSE_CAPITAL_DURABLE_GOODS_ORDERS', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与耐用品订单同一份发布（父族：耐用品，中）' },
+  { country: 'US', family: 'DURABLE_GOODS_ORDERS_EXCLUDING_NATIONAL_DEFENSE', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与耐用品订单同一份发布（父族：耐用品，中）' },
+  { country: 'US', family: 'DURABLE_GOODS_ORDERS_EXCLUDING_TRANSPORTATION', tier: 'medium', basis: 'PRD §10 R1 子族跟父族：与耐用品订单同一份发布（父族：耐用品，中）' },
+  { country: 'US', family: 'UNSEASONALLY_HOUSE_PRICE_20_MAJOR_CITIES_S_P_CS', tier: 'medium', basis: 'PRD §10 R3 房产：跟已列族：PRD §2 中档已列「房价（Case-Shiller 一类）」，这几个是同族的分项与未季调变体' },
+  { country: 'US', family: 'S_P_CS_HOUSE_PRICE_10_MAJOR_CITIES', tier: 'medium', basis: 'PRD §10 R3 房产：跟已列族：PRD §2 中档已列「房价（Case-Shiller 一类）」，这几个是同族的分项与未季调变体' },
+  { country: 'US', family: 'S_P_CS_UNSEASONALLY_HOUSE_PRICE_10_MAJOR_CITIES', tier: 'medium', basis: 'PRD §10 R3 房产：跟已列族：PRD §2 中档已列「房价（Case-Shiller 一类）」，这几个是同族的分项与未季调变体' },
+  { country: 'US', family: 'ADP', tier: 'medium', basis: 'PRD §10 单列：私营部门就业：二步传导，且与非农同日前后发布、可能互相打架，中' },
+  { country: 'US', family: 'UNIT_LABOR_COSTS', tier: 'medium', basis: 'PRD §10 单列：生产率与成本同一份发布：影响通胀路径的第二层证据，中' },
+  { country: 'US', family: 'PRODUCTIVITY', tier: 'medium', basis: 'PRD §10 单列：生产率与成本同一份发布：影响通胀路径的第二层证据，中' },
+  { country: 'US', family: 'BAKER_HUGHES_OIL_RIGS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'BAKER_HUGHES_GAS_RIGS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'BAKER_HUGHES_TOTAL_RIGS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'REDBOOK_RETAIL_SALES', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'API_CUSHING_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'MBA_APPLICATIONS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'MBA_PURCHASE_INDEX', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'MBA_RATE_30Y', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'MBA_REFINANCE_INDEX', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'EIA_NATURAL_GAS_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'API_CRUDE_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'API_DISTILLATE_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'API_GASOLINE_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'EIA_CRUDE_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'EIA_REFINERY_UTILIZATION', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'EIA_DISTILLATE_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'EIA_GASOLINE_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'EIA_CUSHING_STOCKS', tier: 'low', basis: 'PRD §10 R2 周度高频：周度库存/申请/钻机类流量：单周噪声大，与 BTC/ETH 无一阶传导' },
+  { country: 'US', family: 'EXISTING_HOME_SALES', tier: 'low', basis: 'PRD §10 R3 房产：单月噪声：房产销量与建筑支出：月度、单月噪声大，到加密要三步以上传导' },
+  { country: 'US', family: 'CONSTRUCTION_SPENDING', tier: 'low', basis: 'PRD §10 R3 房产：单月噪声：房产销量与建筑支出：月度、单月噪声大，到加密要三步以上传导' },
+  { country: 'US', family: 'CONSUMER_CREDIT', tier: 'low', basis: 'PRD §10 单列：消费信贷：月度余额、与风险偏好无一阶传导，低' },
+  { country: 'US', family: 'FACTORY_ORDERS', tier: 'low', basis: 'PRD §10 单列：工厂订单复述已公布的耐用品，增量只有非耐用品' },
+  { country: 'US', family: 'EXPORTS', tier: 'low', basis: 'PRD §10 R1 子族跟父族：与贸易帐同一份发布（父族：贸易帐，低）' },
+  { country: 'US', family: 'IMPORTS', tier: 'low', basis: 'PRD §10 R1 子族跟父族：与贸易帐同一份发布（父族：贸易帐，低）' },
+  { country: 'US', family: 'FEDERAL_BUDGET', tier: 'low', basis: 'PRD §10 单列：月度财政收支：流量大但可预期，低' },
+  { country: 'US', family: 'NET_LONG_TERM_CAPITAL_INFLOWS', tier: 'low', basis: 'PRD §10 单列：国际资本流动（同一份 TIC 发布）：两月滞后、与加密无直接传导，低' },
+  { country: 'US', family: 'NET_FOREIGN_PURCHASES_GOVERNMENT_BONDS', tier: 'low', basis: 'PRD §10 单列：国际资本流动（同一份 TIC 发布）：两月滞后、与加密无直接传导，低' },
+  { country: 'US', family: 'NET_INTERNATIONAL_CAPITAL_INFLOW', tier: 'low', basis: 'PRD §10 单列：国际资本流动（同一份 TIC 发布）：两月滞后、与加密无直接传导，低' },
+  { country: 'US', family: 'NEW_HOME_SALES_ANNUALIZED', tier: 'low', basis: 'PRD §10 R3 房产：单月噪声：房产销量与建筑支出：月度、单月噪声大，到加密要三步以上传导' },
+  { country: 'US', family: 'NEW_HOME_STARTS_ANNUALIZED', tier: 'low', basis: 'PRD §10 R3 房产：跟已列族：PRD §2 低档已列「新屋开工 / 建筑许可」，这几族是它们的变体' },
+  { country: 'US', family: 'GSCPI', tier: 'low', basis: 'PRD §10 单列：全球供应链压力指数：月度、指数化、传导链长，低' },
+  { country: 'US', family: 'TOTAL_NUMBER_CONSTRUCTION_PERMITS', tier: 'low', basis: 'PRD §10 R3 房产：跟已列族：PRD §2 低档已列「新屋开工 / 建筑许可」，这几族是它们的变体' },
+  { country: 'US', family: 'COINCIDENT_INDEX', tier: 'low', basis: 'PRD §10 单列：CB 同步 / 滞后指标：回头看，无时效性，低' },
+  { country: 'US', family: 'CONFERENCE_BOARD_LAG_METRIC', tier: 'low', basis: 'PRD §10 单列：CB 同步 / 滞后指标：回头看，无时效性，低' },
+  { country: 'US', family: 'WHOLESALE_INVENTORY', tier: 'low', basis: 'PRD §10 R3 跟已列族：PRD §2 低档已列「批发库存」的变体' },
 ])
 
 /**
@@ -174,6 +245,19 @@ export const officialEventFamilyToFamily: Readonly<Record<string, string>> = Obj
   'core-pce': 'CORE_PCE',
   gdp: 'GDP',
   'employment-situation': 'NONFARM'
+})
+
+/**
+ * **族名归一**（只归家族名，不归身份）：同一个发布族在源侧有两个写法时，用一个别名指向规范族名。
+ *
+ * 今天只有一行——`FEDERAL_FUNDS_BENCHMARK` 就是 FOMC 决议那一场发布的**结果值**
+ * （2026-10-28 18:00Z，值与官方 FOMC actual 同值；核查见 S4 报告）。产品 2026-11-24 定：
+ * **归并进 FOMC 族，不另立第二个高族**。所以这里只把族名指向 `FOMC`，档仍由 FOMC 那一行给。
+ *
+ * 等这条的身份真正并进 `US.FOMC.*`（0xrouter 观测挂到官方发布名下）之后，**删这一行**。
+ */
+export const calendarFamilyAliases: Readonly<Record<string, string>> = Object.freeze({
+  FEDERAL_FUNDS_BENCHMARK: 'FOMC'
 })
 
 export type CalendarImportanceIdentity = Readonly<{
@@ -231,8 +315,10 @@ export function gradeCalendarEvent(
     ?? (identity.titleKey === undefined ? undefined : titleFamilyByKey[identity.titleKey])
     ?? (identity.eventFamily === undefined ? undefined : officialEventFamilyToFamily[identity.eventFamily])
   if (family === undefined) return undefined
-  const row = rows.find((entry) => entry.country === jurisdiction && entry.family === family)
-    ?? rows.find((entry) => entry.country === 'rest' && entry.family === family)
+  // 族名归一（别名只换名字，不换身份）；规范族不重复查两次。
+  const canonicalFamily = calendarFamilyAliases[family] ?? family
+  const row = rows.find((entry) => entry.country === jurisdiction && entry.family === canonicalFamily)
+    ?? rows.find((entry) => entry.country === 'rest' && entry.family === canonicalFamily)
   return row === undefined ? undefined : { tier: row.tier, family: row.family, basis: row.basis }
 }
 /**

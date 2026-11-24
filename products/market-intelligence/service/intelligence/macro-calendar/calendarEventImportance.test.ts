@@ -64,7 +64,8 @@ describe('§8.2 纽约联储制造业 → 中；改成高就变高', () => {
 describe('§8.3 未登记身份 → 未分级（不是低）', () => {
   it('表里没有的组合、认不出的身份都返回 undefined', () => {
     expect(gradeCalendarEvent({ countryCode: 'BR', metricKey: 'BR.INDUSTRIAL_PRODUCTION.NONE.MOM' })).toBeUndefined()
-    expect(gradeCalendarEvent({ countryCode: 'US', metricKey: 'US.ADP.SA.CHANGE' })).toBeUndefined()
+    // 这一族今天确实不在表里（PRD §10 定的是真库存在的族；没登记的就是没登记）。
+    expect(gradeCalendarEvent({ countryCode: 'US', metricKey: 'US.NOT_A_FAMILY.SA.LEVEL' })).toBeUndefined()
     expect(gradeCalendarEvent({ countryCode: 'US' })).toBeUndefined()
   })
 
@@ -137,7 +138,7 @@ describe('§8.6 写入口自己算档、忽略源给的档（标准行）', () =
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
     upsertCalendarStandardRow(database, {
-      countryCode: 'US', metricKey: 'US.ADP.SA.CHANGE', periodKey: '2026-10',
+      countryCode: 'US', metricKey: 'US.NOT_A_FAMILY.SA.LEVEL', periodKey: '2026-10',
       scheduledDate: '2026-11-05', timePrecision: 'date', valuesJson: JSON.stringify({ actual: '1' }),
       valueState: 'present', importance: 'high',
       sourceProviderId: 'narwhal', sourceEventId: 'n-2', parserVersion: 'v1',
@@ -225,5 +226,114 @@ describe('linked 对：标准行的档优先，官方行只做回退', () => {
 
   it('两边都有档 → 取标准行那个（它是按身份判的，官方那条是同一份发布的另一行）', () => {
     expect(linkedCalendarImportance('medium', 'high')).toBe('medium')
+  })
+})
+
+/**
+ * **PRD §10 附录**：真库 69 个「美国、有码、PRD §2 没列这一族」的逐族定档（产品 2026-11-24 拍）。
+ *
+ * 68 族补表行；`FEDERAL_FUNDS_BENCHMARK` 核出就是 FOMC 决议那一场（核查见 S4 报告 §6），
+ * **归并进 FOMC 族**——不另立第二个高族。三条规则：R1 子族跟父族、R2 周度高频一律低、
+ * R3 房产不整批判低（Case-Shiller 变体中、开工/许可/销量/支出低）。
+ *
+ * 这张清单是**决定的副本**：删掉表里任一行，对应那条就红（`toBe(expected)` 收 undefined）。
+ */
+describe('PRD §10：69 族逐族定档', () => {
+  it.each([
+    ['CORE_PERSONAL_CONSUMPTION_EXPENDITURE_PRICE', 'high'],
+    ['PERSONAL_CONSUMPTION_EXPENDITURE_PRICE', 'high'],
+    ['PERSONAL_CONSUMPTION_EXPENDITURE', 'high'],
+    ['PERSONAL_INCOME', 'high'],
+    ['PERSONAL_SPENDING', 'high'],
+    ['ACTUAL_PERSONAL_CONSUMPTION_EXPENDITURE', 'high'],
+    ['REAL_GDP', 'high'],
+    ['ANNUM_REAL_GDP', 'high'],
+    ['CHALLENGER_JOB_CUTS', 'medium'],
+    ['ISM_MANUFACTURING_NEW_ORDERS', 'medium'],
+    ['SP_COMPOSITE_PMI', 'medium'],
+    ['CORE_CAPEX_ORDERS', 'medium'],
+    ['ISM_SERVICES_NEW_ORDERS', 'medium'],
+    ['SP_MANUFACTURING_PMI', 'medium'],
+    ['ISM_MANUFACTURING_EMPLOYMENT', 'medium'],
+    ['ISM_MANUFACTURING_PRODUCTION', 'medium'],
+    ['ISM_MANUFACTURING_INVENTORIES', 'medium'],
+    ['ISM_MANUFACTURING_PRICES', 'medium'],
+    ['SP_SERVICES_PMI', 'medium'],
+    ['ISM_SERVICES_PRICES', 'medium'],
+    ['ISM_SERVICES_SUPPLIER_DELIVERIES', 'medium'],
+    ['ISM_SERVICES_INVENTORIES', 'medium'],
+    ['ISM_SERVICES_EMPLOYMENT', 'medium'],
+    ['NFIB_OPTIMISM', 'medium'],
+    ['DEDUCT_AIRCRAFT_DEFENSE_CAPITAL_DURABLE_GOODS_ORDERS', 'medium'],
+    ['DURABLE_GOODS_ORDERS_EXCLUDING_NATIONAL_DEFENSE', 'medium'],
+    ['DURABLE_GOODS_ORDERS_EXCLUDING_TRANSPORTATION', 'medium'],
+    ['UNSEASONALLY_HOUSE_PRICE_20_MAJOR_CITIES_S_P_CS', 'medium'],
+    ['S_P_CS_HOUSE_PRICE_10_MAJOR_CITIES', 'medium'],
+    ['S_P_CS_UNSEASONALLY_HOUSE_PRICE_10_MAJOR_CITIES', 'medium'],
+    ['ADP', 'medium'],
+    ['UNIT_LABOR_COSTS', 'medium'],
+    ['PRODUCTIVITY', 'medium'],
+    ['BAKER_HUGHES_OIL_RIGS', 'low'],
+    ['BAKER_HUGHES_GAS_RIGS', 'low'],
+    ['BAKER_HUGHES_TOTAL_RIGS', 'low'],
+    ['REDBOOK_RETAIL_SALES', 'low'],
+    ['API_CUSHING_STOCKS', 'low'],
+    ['MBA_APPLICATIONS', 'low'],
+    ['MBA_PURCHASE_INDEX', 'low'],
+    ['MBA_RATE_30Y', 'low'],
+    ['MBA_REFINANCE_INDEX', 'low'],
+    ['EIA_NATURAL_GAS_STOCKS', 'low'],
+    ['API_CRUDE_STOCKS', 'low'],
+    ['API_DISTILLATE_STOCKS', 'low'],
+    ['API_GASOLINE_STOCKS', 'low'],
+    ['EIA_CRUDE_STOCKS', 'low'],
+    ['EIA_REFINERY_UTILIZATION', 'low'],
+    ['EIA_DISTILLATE_STOCKS', 'low'],
+    ['EIA_GASOLINE_STOCKS', 'low'],
+    ['EIA_CUSHING_STOCKS', 'low'],
+    ['EXISTING_HOME_SALES', 'low'],
+    ['CONSTRUCTION_SPENDING', 'low'],
+    ['CONSUMER_CREDIT', 'low'],
+    ['FACTORY_ORDERS', 'low'],
+    ['EXPORTS', 'low'],
+    ['IMPORTS', 'low'],
+    ['FEDERAL_BUDGET', 'low'],
+    ['NET_LONG_TERM_CAPITAL_INFLOWS', 'low'],
+    ['NET_FOREIGN_PURCHASES_GOVERNMENT_BONDS', 'low'],
+    ['NET_INTERNATIONAL_CAPITAL_INFLOW', 'low'],
+    ['NEW_HOME_SALES_ANNUALIZED', 'low'],
+    ['NEW_HOME_STARTS_ANNUALIZED', 'low'],
+    ['GSCPI', 'low'],
+    ['TOTAL_NUMBER_CONSTRUCTION_PERMITS', 'low'],
+    ['COINCIDENT_INDEX', 'low'],
+    ['CONFERENCE_BOARD_LAG_METRIC', 'low'],
+    ['WHOLESALE_INVENTORY', 'low'],
+  ] as const)('US.%s → %s（族取自码第二段）', (family, tier) => {
+    expect(gradeCalendarEvent({ countryCode: 'US', metricKey: `US.${family}.SA.LEVEL` })?.tier).toBe(tier)
+  })
+
+  it('FEDERAL_FUNDS_BENCHMARK 归并进 FOMC 族：高，族名是 FOMC，不是第二个高族', () => {
+    const verdict = gradeCalendarEvent({ countryCode: 'US', metricKey: 'US.FEDERAL_FUNDS_BENCHMARK.NONE.RATE' })
+    expect(verdict?.tier).toBe('high')
+    expect(verdict?.family).toBe('FOMC')
+  })
+
+  it('房产三档都对：Case-Shiller 变体是中，开工/许可/销量/支出是低', () => {
+    for (const family of ['UNSEASONALLY_HOUSE_PRICE_20_MAJOR_CITIES_S_P_CS',
+      'S_P_CS_HOUSE_PRICE_10_MAJOR_CITIES', 'S_P_CS_UNSEASONALLY_HOUSE_PRICE_10_MAJOR_CITIES']) {
+      expect(gradeCalendarEvent({ countryCode: 'US', metricKey: `US.${family}.SA.LEVEL` })?.tier).toBe('medium')
+    }
+    for (const family of ['EXISTING_HOME_SALES', 'NEW_HOME_SALES_ANNUALIZED', 'CONSTRUCTION_SPENDING',
+      'NEW_HOME_STARTS_ANNUALIZED', 'TOTAL_NUMBER_CONSTRUCTION_PERMITS', 'WHOLESALE_INVENTORY']) {
+      expect(gradeCalendarEvent({ countryCode: 'US', metricKey: `US.${family}.SA.LEVEL` })?.tier).toBe('low')
+    }
+  })
+
+  it('SP_* 三个 PMI 中、且不并进 ISM（族名仍是自己的）', () => {
+    for (const family of ['SP_COMPOSITE_PMI', 'SP_MANUFACTURING_PMI', 'SP_SERVICES_PMI']) {
+      const verdict = gradeCalendarEvent({ countryCode: 'US', metricKey: `US.${family}.SA.LEVEL` })
+      expect(verdict?.tier).toBe('medium')
+      expect(verdict?.family).toBe(family)
+    }
   })
 })
