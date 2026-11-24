@@ -6,6 +6,7 @@ import { marketCalendarCountrySourceMappings } from './marketCalendarCountrySour
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
 import { classifyReleaseDay, type PublishWindow } from './marketCalendarPublishWindow'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
+import type { UsMetricCode } from './marketCalendarCodeNames'
 
 /**
  * 跨源规范身份：源内码 → `metric_key` 的对照表。Narwhal 那张纯数据表搬到了
@@ -44,7 +45,8 @@ export type ZeroXRouterPeriodRule = 'month' | 'current_month' | 'week_end' | 'qu
  */
 export type PeriodRuleReview = 'pending-product'
 export type ZeroXRouterIdentityEntry = Readonly<{
-  metricKey: string
+  /** 码本体只认名称表（裁定 2026-11-25）：写一个名称表里没有的码就编译红。 */
+  metricKey: UsMetricCode
   periodRule: ZeroXRouterPeriodRule
   periodRuleReview?: PeriodRuleReview
 }>

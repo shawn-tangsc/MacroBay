@@ -1,4 +1,5 @@
 import { isValidIsoTime } from '../public-query/asOfVisibility'
+import type { UsMetricCode } from './marketCalendarCodeNames'
 
 /**
  * CPI 年率的官方读数：**只用 FRED 直接给出的同比**（`units=pc1`），绝不拿指数相除。
@@ -28,6 +29,9 @@ export const fredIndicatorYoYPolicy = Object.freeze({
    * `.SA.MOM` 用季调指数取 `pch`，`.NSA.YOY` 用未季调指数取 `pc1`；
    * 没有确证对应口径的码**不登记**（例如 `US.PCE.NSA.YOY`：FRED 月度只有季调指数），
    * 由 `coreIndicatorValueSources` 的例外清单记明原因，不拿季调顶未季调。
+   *
+   * 键是**码本体**：`satisfies Partial<Record<UsMetricCode, …>>` 让写错的码编译红（裁定 2026-11-25）。
+   * `Partial` 是故意的——不是每个码都有 FRED 腿。
    */
   seriesByMetricKey: Object.freeze({
     // 同比（未季调序列，与 BLS 公布口径一致）
@@ -44,7 +48,7 @@ export const fredIndicatorYoYPolicy = Object.freeze({
     'US.PCE.SA.MOM': { seriesId: 'PCEPI', units: 'pch' },
     'US.CORE_PCE.SA.MOM': { seriesId: 'PCEPILFE', units: 'pch' },
     'US.AHE.SA.MOM': { seriesId: 'CES0500000003', units: 'pch' }
-  } as const)
+  } as const satisfies Readonly<Partial<Record<UsMetricCode, FredSeriesPolicy>>>)
 } as const)
 
 export type FredYoYReading =

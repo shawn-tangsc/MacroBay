@@ -35,14 +35,17 @@ export const familyNameByFamily: Readonly<Record<string, Readonly<{
   zhFull: string; zhShort: string; enFull: string; enShort: string
 }>>> = Object.freeze({})
 
-/** 已上线 / 人工定过的码名：逐字冻结，生成器不许覆盖。 */
-/** 全部在用码的展示名：**来自产品经理过审的 23 号表（160 行）**，按 `metric_key` 键控。
- * 38 条已上线锁死，122 条是她生成的候选（已过四列唯一性检查）。 */
-export const nameByMetricKey: Readonly<Record<string, Readonly<{
+/** 一行的形状：四列可见名 + 是否冻结 + 可选短码。 */
+type MetricNameRow = Readonly<{
   zhFull: string; zhShort: string; enFull: string; enShort: string; locked: boolean
   /** 21 号别名表给出的短码（`cpi` 这套）；还没有短码的行不带这个字段。 */
   code?: string
-}>>> = Object.freeze({
+}>
+
+/** 已上线 / 人工定过的码名：逐字冻结，生成器不许覆盖。 */
+/** 全部在用码的展示名：**来自产品经理过审的 23 号表（160 行）**，按 `metric_key` 键控。
+ * 38 条已上线锁死，122 条是她生成的候选（已过四列唯一性检查）。 */
+const nameRows = {
   'US.CURRENT_ACCOUNT.NONE.DIFF': { zhFull: '经常帐', zhShort: '经常帐', enFull: 'Current Account Balance', enShort: 'Current Account', locked: false, code: 'current-account' },
   'US.DALLAS_FED_SERVICES.SA.LEVEL': { zhFull: '达拉斯联储服务业活动指数', zhShort: '达拉斯联储服务业', enFull: 'Dallas Fed Services Index', enShort: 'Dallas Fed Svcs', locked: false, code: 'dallas-fed-services' },
   'US.DALLAS_FED_SERVICES_REVENUES.SA.LEVEL': { zhFull: '达拉斯联储服务业收入指数', zhShort: '达拉斯联储服务业收入', enFull: 'Dallas Fed Services Revenue Index', enShort: 'Dallas Fed Svcs Revenue', locked: false, code: 'dallas-fed-services-revenues' },
@@ -236,7 +239,20 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.VEHICLE_SALES.SA.COUNT': { zhFull: '汽车销量（年化）', zhShort: '汽车销量', enFull: 'Vehicle Sales, Annualized', enShort: 'Vehicle Sales', code: 'vehicle-sales', locked: true },
   'US.WHOLESALE_INVENTORIES.SA.MOM': { zhFull: '批发库存月率', zhShort: '批发库存', enFull: 'Wholesale Inventories, MoM', enShort: 'Wholesale Inventories', code: 'wholesale-inventories', locked: true },
   'US.WHOLESALE_SALES.SA.MOM': { zhFull: '批发销售', zhShort: '批发销售', enFull: 'Wholesale Sales', enShort: 'Wholesale Sales', locked: false },
-})
+} satisfies Readonly<Record<string, MetricNameRow>>
+
+/**
+ * **US 标准码本体**：名称表的这 189 个键就是码的唯一清单（裁定 `0.4.5-指标码单源`，2026-11-25）。
+ * 其他带码的表把值标成它——写一个不存在的码就编译红。**不要为它另立一份码清单**，
+ * 也不要拿「重要性族表」派生码（那是族名，不是身份）。
+ */
+export type UsMetricCode = keyof typeof nameRows
+
+/**
+ * 按码取名的查询表。对外按 `string` 索引：调用方手里是动态串，键的闭集由 `UsMetricCode` 管；
+ * 表体本身（`nameRows`）保留字面量键，否则联合类型会退化成 `string`，守卫就空了。
+ */
+export const nameByMetricKey: Readonly<Record<string, MetricNameRow>> = Object.freeze(nameRows)
 
 /** 这 38 条是**码级名**（族名里已含测度），所以它们不参与「族名+测度」的拼接，直接冻结。 */
 const MEASURE_WORDS = ['年率', '月率', '季率', '水平', '变化', '人数', '指数']
