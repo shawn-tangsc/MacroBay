@@ -20,6 +20,7 @@ import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlo
 import { proseLanguageBreach } from './dailyBriefingProseLanguage'
 import { macroEmptyCode, macroEmptyHours, newsEmptyCode, nextEmptyCode } from './dailyBriefingEmptyCodes'
 import { briefingEventInNextWindow } from './dailyBriefingCalendarWindow'
+import { selectTier1UpcomingReleases } from './dailyBriefingTier1Upcoming'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import {
   highImpactEventsInWindow,
@@ -32,7 +33,6 @@ import {
 
 // 选取口径原本就在这个文件里、被外部 import：搬家不改调用方。
 export { maximumBriefingMacroItems, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocumentMacro'
-import { briefingFirstTierFamily } from './briefingFirstTierEvents'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 /**
@@ -76,6 +76,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
   }
   const nextCandidates = selectNextCandidates(packet)
   const next = selectNext(packet, nextCandidates)
+  const tier1Upcoming = tier1UpcomingForUnratedWeek(packet)
   const built = buildConclusion(packet)
   const policyBlock = buildPolicyPathBlock(packet, input.previous)
   const policyPathData = policyBlock.policyPath
@@ -152,7 +153,10 @@ export function buildDailyBriefingDocument(input: Readonly<{
       items: next.items,
       ...(next.focus ? { focus: next.focus } : {}),
       ...(nextCandidates.length > 0 ? { candidates: nextCandidates } : {}),
-      ...(next.items.length > 0 || next.focus ? {} : { note: nextEmptyCode(packet) })
+      ...(next.items.length > 0 || next.focus ? {} : { note: nextEmptyCode(packet) }),
+      // 「整周有事件、但一条已分级的都没有」时，除了那句「我们还没分级」，还要给读者真实排期
+      // （R44 §6.2）。排期是我们自己的一级清单，不是「高影响事件」——两者不混。
+      ...(tier1Upcoming.length > 0 ? { tier1Upcoming } : {})
     }),
     citations: built.citations,
     provenance: Object.freeze({
@@ -301,15 +305,30 @@ function hasEnglishName(event: Pick<DailyBriefingCalendarEvent, 'title' | 'title
   return !/[\u3400-\u9fff]/.test(name)
 }
 
+/**
+ * 整周有事件、却一条已分级的都没有时的真实排期（R44 §6.2）。
+ *
+ * 判据与空态理由同一份：窗口里**有事件**（未取消）、且**一条已分级的都没有**。
+ * 只要有一场定了档，这一栏就不是「我们还没判」，排期也不该顶替那句「没有高影响事件」。
+ * 未分级＝`importance` 缺省（R44：列可空三值，不引入第四档）。
+ */
+function tier1UpcomingForUnratedWeek(packet: DailyBriefingFactPacket): readonly ReturnType<typeof selectTier1UpcomingReleases>[number][] {
+  if (packet.calendar.state !== 'available') return Object.freeze([] as const)
+  const window = { end: packet.windowEnd, timeZone: packet.timeZone }
+  const upcoming = packet.calendar.events
+    .filter((event) => event.lifecycleState !== 'cancelled' && briefingEventInNextWindow(event, window))
+  if (upcoming.length === 0 || !upcoming.every((event) => event.importance === undefined)) return Object.freeze([] as const)
+  return selectTier1UpcomingReleases(upcoming, packet.windowEnd)
+}
+
 function selectNextCandidates(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([] as const)
   const candidates = packet.calendar.events
-    // 一级事件按**身份**进候选，不按重要性：narwhal 那批行重要性是空的，而它们恰是 CPI/非农/
-    // 纪要这类最该出现的事件；重要性缺失是我们没有这个字段，不是「它不重要」。
-    .filter((event) => event.lifecycleState === 'scheduled'
-      && (event.importance === 'high' || briefingFirstTierFamily({
-        eventKey: event.eventKey, title: event.title, titleKey: event.titleKey, metricKey: event.metricKey
-      }) !== undefined))
+    // 只认**档**（R44 S3）：`importance` 读的就是日历侧判出来的 `importance_grade`，高才进候选。
+    // 以前这里还按身份放行 FOMC/CPI/非农（源没给重要性的那批），那是第二套「谁该出现」，
+    // 会和档打架——未分级的事件被抬进来，读者看到的是一场我们还没判过的事件排在「高影响」里。
+    // 未分级（`undefined`）不兜底成低、也不冒充高：它不进这一栏，由空态那句说「我们还没分级」。
+    .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
     // 英文版次只列**有英文名**的事件（`02` `A0.9`）：源里只有中文名的（如央行讲话那条源）不列，
     // 不许把中文名塞进英文版。少列几条是允许的，不报缺口——那是源的能力限制，不是这次读失败。
     .filter((event) => packet.locale !== 'en-US' || hasEnglishName(event))

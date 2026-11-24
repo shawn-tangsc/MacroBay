@@ -316,14 +316,21 @@ describe('daily brief agent turn copy', () => {
   })
 
   // 选材可以少列，但不许把一级事件筛没（Chief 2026-11-16）：模型只选了 PMI 时，CPI 仍要出现。
-  it('keeps a first-tier candidate the editor did not select', async () => {
+  it('keeps every high-grade candidate the editor did not select, and never a candidate without a grade', async () => {
+    // R44：必须出现＝**候选里档为高的全部**。以前按身份认（FOMC / CPI / 非农），
+    // 于是同族的未分级事件也会被抬回来——两个判据打架。现在只认档。
     const base = withNextCandidates()
     const cpi = {
       eventKey: 'US.CPI.NSA.YOY.2026-10', title: 'CPI year over year', at: '2026-11-03T13:30:00.000Z',
       importance: 'high' as const, category: 'economic-indicator' as const,
       relevance: { score: 94, role: 'inflation' as const, reasonCode: 'inflation-discount-rate' }
     }
-    const document = { ...base, next: { ...base.next, candidates: [...(base.next.candidates ?? []), cpi] } }
+    const ungradedLabor = {
+      eventKey: 'US.NFP.2026-11', title: 'Nonfarm payrolls', at: '2026-11-06T12:30:00.000Z',
+      category: 'economic-indicator' as const,
+      relevance: { score: 90, role: 'labor' as const, reasonCode: 'labor-market' }
+    }
+    const document = { ...base, next: { ...base.next, candidates: [...(base.next.candidates ?? []), cpi, ungradedLabor] } }
     const selection = { stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: ['CN.NBS_PMI'] }
     const { runner } = scriptedRunner(selection, editorial(
       'US.FOMC',
@@ -337,7 +344,9 @@ describe('daily brief agent turn copy', () => {
     const keys = result.document.next.items.map((item) => item.eventKey)
     expect(keys).toContain('US.CPI.NSA.YOY.2026-10')
     expect(keys).toContain('CN.NBS_PMI')
-    // 一级事件排在前面；上限仍然遵守。
+    // 同族但没档的那条不再被「必须出现」抬回来。
+    expect(keys).not.toContain('US.NFP.2026-11')
+    // 高影响排在前面；上限仍然遵守。
     expect(keys[0]).toBe('US.CPI.NSA.YOY.2026-10')
     expect(keys.length).toBeLessThanOrEqual(3)
   })

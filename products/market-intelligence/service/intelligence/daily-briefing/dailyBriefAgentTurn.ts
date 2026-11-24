@@ -9,7 +9,7 @@ import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { stoppedOutcome } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
-import { briefingFirstTierFamily, mergeFirstTierNext } from './briefingFirstTierEvents'
+import { mergeFirstTierNext } from './briefingFirstTierEvents'
 import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import { applyBackfillFacts, type BackfillOutcome } from './dailyBriefBackfillFacts'
 import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
@@ -386,10 +386,10 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const orderedNext = [...selectedNext].sort(compareBriefingNextRelevance)
   // Deterministic floor: when the editor hid every other event, the next most relevant one stays
   // visible. `maximumNextItems` excludes the focus, so the rendered list is focus + 3 = 4.
-  // 一级事件**必须出现**（用户/Chief 2026-11-16）：模型可以少列，但不许把 FOMC 纪要、CPI、非农
-  // 这类筛没。一级事件排在前面，其余保持编辑的选择顺序，总条数仍受同一个上限约束。
+  // 档为高的事件**必须出现**（R44 S3）：模型可以少列，但不许把档判成高的那几场筛没。
+  // 以前按身份（FOMC / CPI / 非农）判，是第二套判据，会把未分级的事件抬回来；现在只认档。
   const firstTierNext = relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey
-    && briefingFirstTierFamily({ eventKey: item.eventKey, title: item.title, titleKey: item.titleKey }) !== undefined)
+    && item.importance === 'high')
   const selectedForItems = orderedNext.length > 0
     ? orderedNext
     : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey).slice(0, 1)

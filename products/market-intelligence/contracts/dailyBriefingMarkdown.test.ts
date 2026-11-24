@@ -574,20 +574,38 @@ describe('the copied text carries the same two blocks as the page', () => {
     const text = dailyBriefingToMarkdown(withWindow, options as never)
     expect(text).toContain('7')
     expect(text).toContain('4')
-    // 用户 2026-11-15：判不了重要性也不印占位句，空态整块不解释；排期是我们自己的清单，照印。
-    expect(text).not.toContain('无法判定')
-    expect(text).toContain('一级指标排期')
+    // R44 改了这一档：整周有事件、一条已分级的都没有时，那句话就是正文（用户 2026-11-15 的
+    // 「空态整块不解释」只管**零事件**那两档）——句子在排期之前，排期仍是我们自己的清单，照印。
+    expect(text).toContain(labels.nextImportanceUnknown.sentence)
+    expect(text).toContain(labels.nextImportanceUnknown.scheduleTitle)
     expect(text).toContain('2026-12-10')
   })
 
   it('prints no next block at all, not even its heading, when no event qualifies', () => {
-    for (const note of ['next-7d-no-high-impact-event', 'next-7d-importance-unknown']) {
-      const empty = { ...document(), next: { items: [], note } } as never
-      const text = dailyBriefingToMarkdown(empty, options as never)
-      expect(text, note).not.toContain(`## ${labels.sections.next}`)
-      for (const placeholder of ['无法判定', '暂无', '0 个', '没有高影响事件']) {
-        expect(text, `${note}: ${placeholder}`).not.toContain(placeholder)
-      }
+    // R44 改了「未分级」那一档的去向：它现在**有话说**（见下一条用例）。零事件那档仍是整块消失。
+    const empty = { ...document(), next: { items: [], note: 'next-7d-no-high-impact-event' } } as never
+    const text = dailyBriefingToMarkdown(empty, options as never)
+    expect(text).not.toContain(`## ${labels.sections.next}`)
+    for (const placeholder of ['无法判定', '暂无', '0 个', '没有高影响事件']) {
+      expect(text, placeholder).not.toContain(placeholder)
     }
+  })
+
+  it('says the week is not rated yet, above the schedule it can still print', () => {
+    // R44 §6.2：整周有事件、一条已分级的都没有——这句话就是那一栏唯一的正文，排在排期之前。
+    const unrated = {
+      ...document(),
+      next: {
+        items: [],
+        note: 'next-7d-importance-unknown',
+        tier1Upcoming: [{ metricKey: 'US.CPI.NSA.YOY', title: 'CPI 年率', scheduledAt: '2026-11-03T13:30:00.000Z', releaseDate: '2026-11-03' }]
+      }
+    } as never
+    const text = dailyBriefingToMarkdown(unrated, options as never)
+    expect(text).toContain(`## ${labels.sections.next}`)
+    expect(text).toContain(labels.nextImportanceUnknown.sentence)
+    // 句子在小标题下、排期清单之前。
+    expect(text.indexOf(labels.nextImportanceUnknown.sentence)).toBeLessThan(text.indexOf(labels.nextImportanceUnknown.scheduleTitle))
+    expect(text).toContain('2026-11-03')
   })
 })
