@@ -6,15 +6,15 @@
  * 真机若折行，先核原因文案有没有超过 8 个汉字，**不要**改这两个数或压字号
  * （界面设计 2026-11-25 v1.2 §6）。
  *
- * 行内上下 5px、标签与值之间 10px、值内 6px：前两个数来自已签字的原型与真机量测，
- * 不是随手取的。
+ * 行内上下 6px（间距主档；行高 34，带 ⓘ 时 35）、标签与值之间 10px、值内 6px。
+ * 这两行（「文字」「海报」）同一尺度：不带 ⓘ 的行也是 6。
  */
 .notification-poster-row {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
   column-gap: 10px;
-  padding: 5px 0;
+  padding: 6px 0;
 }
 
 .notification-poster-row > dt {

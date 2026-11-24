@@ -162,6 +162,19 @@ describe('海报行：ⓘ 只有两种出现条件', () => {
     expect(model).toEqual({ state: 'failed', counts: '2 条通道', reason: '通道未收下', hints: [] })
   })
 
+  it('counts every failed channel when deciding 多个原因, and only names the ones it can', () => {
+    const model = posterRowModel(poster({
+      enabledImageChannelCount: 2,
+      channels: [
+        channel('a', { channelName: '甲', state: 'failed', reasonKind: 'channel-refused' }),
+        channel('b', { channelName: undefined, state: 'failed', reasonKind: 'image-unavailable' })
+      ]
+    }), text)
+    // 名字只决定 ⓘ 那一行画不画，不该把「两种原因」压成一种（契约保证失败行有名字）。
+    expect(model?.reason).toBe('多个原因')
+    expect(model?.hints).toEqual(['甲：通道未收下'])
+  })
+
   it('explains the channels that cannot take an image at all', () => {
     const model = posterRowModel(poster({
       enabledImageChannelCount: 1,

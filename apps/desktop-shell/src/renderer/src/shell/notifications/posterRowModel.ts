@@ -89,10 +89,12 @@ export function posterRowModel(
     // 其余一律「未发送」：有失败，或启用着的图片通道这一次没被试过。
     const notSent = failed.length + notAttempted
     const counts = countsOf(notSent, total, text)
+    // 原因档的集合从**所有**失败行取（名字只决定 ⓘ 那一行画不画）：名字缺失不该把
+    // 「两种原因」压成一种。契约保证失败行有显示名，缺名只发生在通道被删之后。
+    const kinds = [...new Set(failed.flatMap((channel) => (channel.reasonKind === null ? [] : [channel.reasonKind])))]
     const named = failed.flatMap((channel) => (channel.reasonKind === null || channel.channelName === undefined
       ? []
       : [{ channel, kind: channel.reasonKind }]))
-    const kinds = [...new Set(named.map((entry) => entry.kind))]
 
     let reason: string | undefined
     if (kinds.length >= 2) {
