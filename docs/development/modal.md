@@ -21,7 +21,7 @@ sentence: see [Closing a container that holds unsaved input](unsaved-changes.md)
 | `Modal` | One dialog: title or screen-reader name, a footer slot, children. |
 | `ModalProps` | The props type. |
 | `MODAL_WIDTHS` | The closed set: `['compact', 'standard', 'expanded', 'maximum', 'full']`. |
-| `ModalWidth` | The same four words. |
+| `ModalWidth` | The same five words. |
 | `MODAL_CLOSE_KEY` | `ui.modal.close` — the platform name of the close control. |
 
 ```tsx
@@ -49,6 +49,30 @@ second one.
 | `layer` | `'base' \| 'over-drawer'` | no, default `base` | The dialog sits in the normal layer or above a drawer. The z-index numbers live inside the component. |
 | `destroyOnHidden` | `boolean` | no | Unmount the body after close. Passed through to antd only when given; no call site writes its own `{open && …}` equivalent. |
 | `resolveText` | `(key: string) => string` | yes | Your resolver. Unknown keys return an empty string by convention; the component never falls back to the key name. |
+
+### Wide tables
+
+A table that does not fit asks one question before anything else: **does `full` hold the content's
+own width budget?** Compute it; do not eyeball it, because three numbers are easy to get wrong:
+
+- **the tier's real width** in the target window. `full` is 1280, but antd caps the dialog at
+  `calc(100vw - 32px)`, so a 1280-wide window gives **1248** — a true 1280 needs a window ≥1312;
+- **what the content needs**: column widths (declared once as constants) plus cell padding;
+- **what is left**: the tier's width − 48 (dialog padding) − 16 (vertical scrollbar).
+
+If it fits, use `full` and let the content scroll itself: a table wider than the dialog scrolls
+**inside** its own wrapper (`overflow: auto` on the table container), never by widening the dialog.
+Nine columns of long indicator codes and whole URLs fit today: 960 + 144 = 1104 against 1184
+available.
+
+If it does not fit at `full`, that is a **spec change**: a new tier changes the closed set,
+`docs/ui-rules` and the pixel table together, in one commit. Reaching the width any other way is a
+contract violation, not a workaround:
+
+- product and shell CSS may not set `width` on `.ant-modal` — `scripts/migration-debt/modal-width.json`
+  is the only place a known exception may sit, and that list only shrinks;
+- `max-width` with a theme token is fine: it narrows the dialog, it never widens the tier;
+- `!important` on a tier width is exactly the override that created that debt row.
 
 ### What the component decides, so call sites do not
 

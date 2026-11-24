@@ -20,6 +20,7 @@
 | 分段 / 单选 | `Segmented` / `Select`（闭集） | 一行混两种控件 | **人看** |
 | 开关 | antd `Switch` | 手写 `role="switch"` | **人看** |
 | 抽屉 / 弹窗头动作 | 头的 `actions` 槽（距关闭键 12，一头一个） | 用产品 CSS 撑开标题行 | **人看**（有组件用例，无全仓守卫） |
+| 弹窗宽度 | 档位闭集（`Modal` 的 `width`）；宽表用 `full`，横滚在内容自己的容器里 | 产品/壳层 CSS 给 `.ant-modal` 写 `width`；调用点写像素数 | `modalWidthGuard` |
 | 按钮五档 | 主 / 次 / 图标 / 行内文字 / 危险，一个动作一档 | 自绘胶囊、28px 图标钮、危险只悬停变红 | **人看** |
 | 行内文字动作（句子里、提示条里、状态条里的「重试 / 改短导读 / 展开明细」） | `<Button type="text" size="small" className="text-action">` | `type="link"`（走 antd `colorLink`，不在 token 里，会冒出第二个交互色）；手写 `<button>`；在调用点按 antd 默认值写 `height/padding/font-size` | **人看**：`type="link"` 只减不增（2026-11-12 基线 **12 处 / 8 个文件**，待清）；清到 0 之后「出现即退回」 |
 | 说明性文字 | 该行/该组标题旁的 ⓘ（`IconButton` + `Popover`），默认收起 | 写成正文的一句、半句、括号补充、破折号补充 | `check:body-prose` |

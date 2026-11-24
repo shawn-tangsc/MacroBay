@@ -20,6 +20,7 @@
 | Single choice | `Segmented` / `Select` (closed set) | two control types in one row | **human review** |
 | On / off | antd `Switch` | hand-written `role="switch"` | **human review** |
 | Drawer / modal header action | the header's `actions` slot (12px from close, one action) | stretching the title row with product CSS | **human review** (component test only) |
+| Dialog width | the closed tier set (`Modal` `width`); a wide table uses `full` and scrolls inside its own wrapper | product/shell CSS writing `width` on `.ant-modal`; a pixel number at the call site | `modalWidthGuard` |
 | Buttons | primary / secondary / icon / inline text / destructive — one tier per action | a hand-drawn pill, a 28px icon button, red only on hover | **human review** |
 | Inline text action (a "retry / shorten the lede / show details" inside a sentence, a notice bar, or a status line) | `<Button type="text" size="small" className="text-action">` | `type="link"` (antd `colorLink` is not a token — it introduces a second interaction colour); a hand-written `<button>`; per-call-site antd default overrides (`height` / `padding` / `font-size`) | **human review**: `type="link"` may only go down (baseline 2026-11-12: **12 sites in 8 files**, to be cleared); once it reaches 0, any new one is rejected |
 | Explanatory prose | the `ⓘ` beside that row's or group's title (`IconButton` + `Popover`), collapsed by default | a sentence, half-sentence, parenthetical or em-dash supplement in the body | `check:body-prose` |
