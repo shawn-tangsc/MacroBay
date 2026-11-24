@@ -6,18 +6,22 @@ import type { PositioningPanelText } from './positioningText'
  *
  * 牌带留两排（`markerTop` 3 到 `markerRow` 29，每排 13 高）：一张牌只代表一次命中，
  * 横轴放不下同一排就把牌**错到第二排**，不横向挪位（界面设计 2026-11-24 的硬规则）。
- * 上面那条名义车道 66 个单位不动——不是拿压扁图换牌高；空态骨架用同一份 `VIEW`，卡高不跳。
+ *
+ * 画布高度 **240**（用户 2026-11-24 拍板）：svg 是宽度驱动（`width:100%; height:auto`），
+ * 图高 = 列宽 × 240/1000。按 199 时 1020 视口（图列约 698）只有 139px，两条车道各压到四十来像素；
+ * 240 在同一列宽下是 168px。牌带、牌高与字号都没动——多出来的高度全给两条车道和刻度带。
+ * 空态骨架用同一份 `VIEW`，卡高不跳。
  */
 export const POSITIONING_CHART_VIEW = Object.freeze({
   width: 1000,
-  height: 199,
+  height: 240,
   left: 32,
   right: 992,
   markerTop: 3,
   markerRow: 29,
-  upperTop: 39,
-  upperBottom: 105,
-  zero: 155
+  upperTop: 47,
+  upperBottom: 127,
+  zero: 187
 })
 
 /** 一枚牌：13 高、圆角 4、同一排内间隔 6px；牌带两排，先出现的贴下半排，溢出的往上排。 */

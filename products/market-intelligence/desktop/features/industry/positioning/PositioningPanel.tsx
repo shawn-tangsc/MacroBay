@@ -85,8 +85,8 @@ export type PositioningPanelProps = Readonly<{
 
 // A strip above the plot belongs to the liquidation marks: a label drawn over the curves hid the
 // very movement it was pointing at.
-// The viewBox is drawn at roughly the width the card is, so the svg scales ~1:1: text keeps its
-// nominal size and the drawing is 186 units tall instead of being blown up with the container.
+// The viewBox is width-driven: the drawing keeps its 1000×240 aspect and scales with the card, so text
+// keeps its nominal size and the card does not blow up with the window.
 /** 牌子那一行：方向进词，符号进数——两条规则各写各的，正号配“空头”而不是配“强平”。 */
 function chipLabel(text: PositioningPanelText, chip: Extract<DashboardSignalChip, { state: 'alert' }>): string {
   const move = chip.pricePct !== undefined ? formatDashboardChange(chip.pricePct) : formatDashboardChange(chip.dropPct)

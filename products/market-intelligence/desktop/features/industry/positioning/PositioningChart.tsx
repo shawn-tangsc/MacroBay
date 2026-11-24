@@ -102,7 +102,9 @@ export function PositioningChart({ positioning, funding, text, marks }: Readonly
     slots.set(settlesAt, slot)
   }
   const maximumRate = Math.max(...[...slots.values()].flatMap(slot => [slot.btc, slot.eth]).map(value => Math.abs(value ?? 0)), 0.001)
-  const barCentre = Math.min(30, VIEW.zero - VIEW.upperBottom - 10)
+  // 柱子最多占到费率车道的一半多一点：车道 60 单位（`zero − upperBottom`），30 是 199 那版
+  // （车道 50）的比例，抬高画布后按同一比例给到 36，柱子不是被画小的那一方。
+  const barCentre = Math.min(36, VIEW.zero - VIEW.upperBottom - 10)
   const rateY = (value: number) => VIEW.zero - (value / maximumRate) * barCentre
   const band = Math.max(2, (8 * 3_600_000 / span) * (VIEW.right - VIEW.left))
   // Two bars share one 8-hour band, one per asset. Drawn on the same centre they painted over
