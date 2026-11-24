@@ -40,9 +40,11 @@
 }
 
 .mi-clock__viewport { position: relative; width: 100%; min-width: 0; }
-/* 层叠上下文只在这张卡内部成立：牌是 `position:absolute` + 层级（`--mi-clock-z`，抬起时行内置顶），卡若不自建上下文，
-   牌的层级会跳到外层，和「分析详情」那种 `z-index:3` 的就地抽屉比大小——牌就压到抽屉上面去了
-   （用户 2026-11-15 的截图）。`isolation: isolate` 只建上下文、不改任何尺寸与颜色，符合「卡内部不动」。 */
+/* 层叠上下文只在这张卡内部成立：卡内层级都是本文件里的固定值（中心圆 2、四类名字 4、
+   说明行/状态行与右上角那颗按钮 100 = `--mi-clock-overlay-z`）。卡若不自建上下文，这些数字就会跑到外层，
+   去和「分析详情」那种 `z-index:3` 的就地抽屉比大小——名字就压到抽屉上面去了（用户 2026-11-15 的截图）。
+   悬停展开的那一层由 `Popover` 自己承载，不参与卡内这套层级。
+   `isolation: isolate` 只建上下文、不改任何尺寸与颜色，符合「卡内部不动」。 */
 .mi-clock { isolation: isolate; position: relative; width: 252px; height: 248px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
 .mi-clock__svg { position: absolute; left: 9px; top: 9px; width: 234px; height: 230px; pointer-events: none; color: var(--muted); }
 .mi-clock__svg .mi-clock__ring { fill: none; stroke: var(--border-strong); }
