@@ -53,3 +53,43 @@ it('explains a serialized calendar value exactly once, where the briefing reads 
   expect(macro[0]?.previous).toBe('4.7%')
   expect(() => assertNoSerializedValueObjects({ news: { macro } })).not.toThrow()
 })
+
+/**
+ * linked 对取档（R44 技术方案 §4.1 末条）：标准行有码、判据更硬，所以它的档先；
+ * 标准行未分级才回退官方那条；两边都没有 → 未分级（字段不出现，不兜低也不兜高）。
+ */
+it('同一次发布的两条记录：档取标准行，标准行没判才回退官方', async () => {
+  const official = {
+    eventKey: 'off-cpi', titleKey: 'cpi', countryCode: 'US',
+    scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z',
+    lifecycleState: 'scheduled', actual: null, previous: null, consensus: null
+  }
+  const linkedMarket = {
+    ...marketEvent, eventKey: 'mkt-cpi', countryCode: 'US', scheduledAt: '2026-11-10T13:30:00.000Z',
+    importance: 'high',
+    officialLink: { officialEventKey: 'off-cpi', officialPeriodKey: '2026-10',
+      officialScheduledDate: '2026-11-10', officialScheduledAt: '2026-11-10T13:30:00.000Z',
+      officialDetectedAt: '2026-11-01T00:00:00.000Z', timeDisplaySource: 'official-scheduled',
+      displayScheduledAt: '2026-11-10T13:30:00.000Z' }
+  }
+  const linkedDeps = {
+    publicQuery: {
+      queryMacroEconomicCalendarMonth: async () => ({ state: 'available' as const, events: [official] }),
+      queryMarketCalendarMonth: () => ({ state: 'available' as const, events: [linkedMarket] })
+    }
+  } as unknown as DailyBriefingSourceDeps
+  const calendar = await readCalendar(linkedDeps, '2026-11-09T00:00:00.000Z', 'zh-CN', true)
+  expect(calendar.events).toHaveLength(1)
+  expect(calendar.events[0]!.importance).toBe('high')
+
+  // 标准行没判（不写这个键）→ 回退官方那条的中档。
+  const fallbackDeps = {
+    publicQuery: {
+      queryMacroEconomicCalendarMonth: async () => ({ state: 'available' as const, events: [{ ...official, importance: 'medium' }] }),
+      queryMarketCalendarMonth: () => ({ state: 'available' as const,
+        events: [{ ...linkedMarket, importance: undefined }] })
+    }
+  } as unknown as DailyBriefingSourceDeps
+  const fallback = await readCalendar(fallbackDeps, '2026-11-09T00:00:00.000Z', 'zh-CN', true)
+  expect(fallback.events[0]!.importance).toBe('medium')
+})

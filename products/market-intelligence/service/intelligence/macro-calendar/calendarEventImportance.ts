@@ -235,3 +235,17 @@ export function gradeCalendarEvent(
     ?? rows.find((entry) => entry.country === 'rest' && entry.family === family)
   return row === undefined ? undefined : { tier: row.tier, family: row.family, basis: row.basis }
 }
+/**
+ * **linked 对取哪一档**（技术方案 §4.1 末条）：同一次发布在库里是两条物理记录——标准行（有指标码）
+ * 与官方修订行（有 `eventFamily`）。标准行的判据更硬（码是身份、可查表），所以它的档先；
+ * 标准行未分级才回退官方那条；两边都没有 → 未分级。
+ *
+ * **一个函数，简报与日历两个读取端共用**：各自写一遍就会出现「同一次发布在日历上是高、
+ * 在简报上是未分级」。它只做选择，不做判定——判定仍然只有 `gradeCalendarEvent` 一份。
+ */
+export function linkedCalendarImportance(
+  standard: MacroEconomicCalendarImportance | undefined,
+  official: MacroEconomicCalendarImportance | undefined
+): MacroEconomicCalendarImportance | undefined {
+  return standard ?? official
+}

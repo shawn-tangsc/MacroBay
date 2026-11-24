@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createMacroCalendarRepository } from './macroCalendarRepository'
 import { prepareRevision } from './macroCalendarRevisionRows'
 import {
-  calendarImportanceRows, gradeCalendarEvent, jurisdictionOf,
+  calendarImportanceRows, gradeCalendarEvent, jurisdictionOf, linkedCalendarImportance,
   type CalendarImportanceRow
 } from './calendarEventImportance'
 import { ensureCalendarStandardTables } from './marketCalendarStandardSchema'
@@ -201,5 +201,29 @@ describe('§8.7 迁移：两表各加一列、幂等、不回填', () => {
     expect(appended.revision.importanceGrade).toBe('high')
     expect(repository.getEffectiveEventAsOf({ eventKey: 'US.CPI.RELEASE.2026-M10',
       asOf: '2026-11-11T00:00:00.000Z' })?.importanceGrade).toBe('high')
+  })
+})
+/**
+ * **linked 对的档**（R44 技术方案 §4.1 末条）：标准行与官方修订行是同一次发布的两条物理记录。
+ * 标准行有码、判据更硬，所以它的档先；标准行未分级才回退官方那条；两边都没有 → 未分级。
+ *
+ * 一个函数，两个读取端共用（简报的合并、日历的日模型）——各自写一遍就会出现
+ * 「同一次发布在日历上是高、在简报上是未分级」。
+ */
+describe('linked 对：标准行的档优先，官方行只做回退', () => {
+  it('标准行判高、官方那条没判 → 高（标准行的判据更硬）', () => {
+    expect(linkedCalendarImportance('high', undefined)).toBe('high')
+  })
+
+  it('标准行没判、官方判中 → 中（回退，不是当高也不是当低）', () => {
+    expect(linkedCalendarImportance(undefined, 'medium')).toBe('medium')
+  })
+
+  it('两边都没判 → 未分级（undefined），不兜成低', () => {
+    expect(linkedCalendarImportance(undefined, undefined)).toBeUndefined()
+  })
+
+  it('两边都有档 → 取标准行那个（它是按身份判的，官方那条是同一份发布的另一行）', () => {
+    expect(linkedCalendarImportance('medium', 'high')).toBe('medium')
   })
 })

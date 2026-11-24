@@ -52,6 +52,17 @@ describe('calendar reminder scan', () => {
     expect(selection.skipped).toEqual({ 'importance-not-selected': 2 })
   })
 
+  it('未分级的事件不进候选：缺省不当高，计「importance-not-selected」', () => {
+    // R44 §4.4 ③：没有档就不在任何已勾档位里——**不拿某一档顶上去**。
+    // 把缺省当高（或当 low）→ 这条红：默认只勾高时它会响，或勾了低时它会响。
+    const ungraded = event({ eventKey: 'ungraded', importance: undefined })
+    const high = selectCalendarReminderCandidates({ events: [ungraded], settings: settings(), now: NOW })
+    expect(high.candidates).toEqual([])
+    expect(high.skipped).toEqual({ 'importance-not-selected': 1 })
+    const lowTicked = selectCalendarReminderCandidates({ events: [ungraded], settings: settings({ importance: ['low'] }), now: NOW })
+    expect(lowTicked.candidates).toEqual([])
+  })
+
   it('skips events with no instant instead of guessing one from the date', () => {
     const selection = selectCalendarReminderCandidates({
       events: [event({ scheduledAt: undefined }), event({ eventKey: 'bad', scheduledAt: 'not-an-instant' })],

@@ -232,6 +232,24 @@ describe('daily briefing document', () => {
     expect(document.lede.text).toBe('')
   })
 
+  it('未分级的事件不进「过去 24 小时宏观」：缺省不许当高', () => {
+    // R44 §4.4 ①：未分级（字段不出现）的事件即使窗口内、已发布，也不进高影响列表。
+    // 把筛子改成「没有档就当高」→ 这条立刻红（列表里多出这条）。
+    const base = packet()
+    const ungraded = {
+      eventKey: 'US.UNRATED.2026-M10', title: '未分级指标', metricKey: 'US.UNRATED.SA.LEVEL',
+      scheduledAt: '2026-10-29T12:30:00.000Z', lifecycleState: 'released' as const,
+      category: 'economic-indicator' as const, actual: '1.2', consensus: '1.0',
+      surprise: { direction: 'beat' as const, value: 0.2, unit: 'pp' as const }
+    }
+    const document = buildDailyBriefingDocument({
+      packet: { ...base, calendar: { state: 'available', events: [ungraded] } },
+      date: '2026-10-30'
+    })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual([])
+    expect(document.news.notes.macroHighImpactCount).toBeUndefined()
+  })
+
   it('says the week is not rated yet when no event carries a grade, and prints the real schedule', () => {
     // R44 §6.2：整周有事件、但一条已分级的都没有 → 属于「我们还没分级」，并列出真实排期。
     const base = packet()
