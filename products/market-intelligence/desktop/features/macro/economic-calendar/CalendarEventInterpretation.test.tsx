@@ -6,7 +6,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { StrictMode } from 'react'
+import { ConfigProvider } from 'antd'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 import { formatShellInstant } from '@platform/ui/time/shellTimeFormat'
 import { productText } from '../../../shared/i18n/productText'
 import { CalendarEventInterpretation, type CalendarInterpretationClient } from './CalendarEventInterpretation'
@@ -16,12 +18,20 @@ import { CalendarEventInterpretation, type CalendarInterpretationClient } from '
  *
  * 这些用例钉的是**成本与形态**，不是措辞：
  * - 先读、只有「没有这一份数据的解读」才请求，且**只请求一次**；
- * - 有正文时标题/正文/生成时刻/依据范围四样都在；
- * - 失败只给一句原因 + 重试键，**不再自动请求**（自动重试会在后台反复烧调用）；
+ * - 有正文时标题/正文/生成时刻/依据范围四样都在（空依据只留时刻）；
+ * - 失败只给一句原因 + **一个**按钮，**不再自动请求**（自动重试会在后台反复烧调用）；
+ *   读失败与生成失败是两件事：前者「暂时读不到这条解读」+「重试」（重读，不花钱），
+ *   后者「模型这次没有回答」+「重新生成」；
  * - 这一档不生成（`not-applicable`）或还没生成（`absent` 且请求也没结果）时**整块不渲染**。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.calendar
-const scoped = (node: React.ReactElement): React.ReactElement => <ShellTimeZoneProvider timeZone="UTC">{node}</ShellTimeZoneProvider>
+// 真机里窗口的 ConfigProvider 统一关掉「两个汉字之间插空格」；测试沿用同一份配置，否则两字按钮
+// 的可见文案会读成「重 试」，与产品给的「重试」对不上。
+const scoped = (node: React.ReactElement): React.ReactElement => (
+  <ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}>
+    <ShellTimeZoneProvider timeZone="UTC">{node}</ShellTimeZoneProvider>
+  </ConfigProvider>
+)
 const generatedAt = '2026-11-13T14:00:00.000Z'
 
 type Ready = { state: 'ready'; text: string; generatedAt: string; evidenceScope: readonly string[] }
@@ -88,7 +98,7 @@ it('② 有正文：标题、正文、生成时刻、依据范围四样都在，
   expect(block?.getAttribute('aria-live')).toBe('off')
 })
 
-it('⑤ 依据范围：不认识的项丢掉；三项全认不出写兜底句；空数组整行不显示', async () => {
+it('⑤ 依据范围：不认识的项丢掉；三项全认不出写兜底句；空数组只留时刻、不画「依据」', async () => {
   const oneUnknown = await render(client({ read: () => ({ ...readyView, evidenceScope: ['event', 'something-new'] }) }).client)
   const meta = oneUnknown.querySelector('[data-interpretation-meta]')?.textContent ?? ''
   expect(meta).not.toContain('something-new')
@@ -104,11 +114,15 @@ it('⑤ 依据范围：不认识的项丢掉；三项全认不出写兜底句；
   await act(async () => root?.unmount())
   root = null
   const noScope = await render(client({ read: () => ({ ...readyView, evidenceScope: [] }) }).client)
-  // 空数组＝「没有依据可说」，不是「读不懂」：不拿兜底句顶上，整行不画。
-  expect(noScope.querySelector('[data-interpretation-meta]')).toBeNull()
+  // 空数组＝「没有依据可说」，不是「读不懂」：不拿兜底句顶上；但**时刻要留**——
+  // 读者靠它判断这段新旧、区分模型文字与固定说明，所以换 metaTime 那一行，不是整行不画。
+  const noScopeMeta = noScope.querySelector('[data-interpretation-meta]')?.textContent ?? ''
+  expect(noScopeMeta).toContain(formatShellInstant(generatedAt, { timeZone: 'UTC', locale: 'zh-CN', precision: 'minute' }))
+  expect(noScopeMeta).not.toContain('依据')
+  expect(noScopeMeta).not.toContain(text.interpretation.basisFallback)
 })
 
-it('⑥ 单飞：第一条的请求还没回来就关掉再打开（StrictMode / 快速重开同一种），只请求一次', async () => {
+it('⑥ 单飞：第一条请求在飞时重开（与 StrictMode 第二次 effect 同一条路径）只请求一次', async () => {
   let release: ((view: View) => void) | undefined
   const read = vi.fn(async () => ({ state: 'absent' as const }))
   const request = vi.fn(() => new Promise<View>((resolve) => { release = resolve }))
@@ -118,7 +132,8 @@ it('⑥ 单飞：第一条的请求还没回来就关掉再打开（StrictMode /
   root = createRoot(host)
   const element = scoped(<CalendarEventInterpretation eventKey="US.CPI.RELEASE.2026-M10" text={text} client={client} />)
   await act(async () => root!.render(<StrictMode>{element}</StrictMode>))
-  // 请求在飞时卸载再挂载：没有按事件去重的话，这里会发出第二次模型调用。
+  // 重开（卸载再挂载）与 StrictMode 的第二次 effect 走的是同一条路径：第二次挂载命中在飞表，
+  // 不会发出第二次模型调用。StrictMode 的双调用是 React dev 构建的行为，与 DOM 实现无关（happy-dom 一样）。
   await act(async () => root!.unmount())
   root = createRoot(host)
   await act(async () => root!.render(<StrictMode>{element}</StrictMode>))
@@ -127,7 +142,7 @@ it('⑥ 单飞：第一条的请求还没回来就关掉再打开（StrictMode /
   expect(host.querySelector('[data-calendar-interpretation]')).not.toBeNull()
 })
 
-it('③ 失败：一句原因（未知码落到通用句）+ 重试键，且不再自动请求；点重试才请求一次', async () => {
+it('③ 生成失败：一句模型侧原因 + 只出「重新生成」，不再自动请求；点它才请求一次', async () => {
   const fake = client({ read: () => ({ state: 'failed', failureCode: 'some-new-code' }) })
   const host = await render(fake.client)
   expect(fake.request).not.toHaveBeenCalled()
@@ -137,12 +152,32 @@ it('③ 失败：一句原因（未知码落到通用句）+ 重试键，且不�
   expect(failed?.classList.contains('mi-calendar-interpretation__failed')).toBe(true)
   const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css'), 'utf8')
   expect(css).toMatch(/\.mi-calendar-interpretation__failed\s*\{[^}]*display:\s*grid[^}]*gap:\s*6px/)
+  // grid 子项默认 stretch，会把 antd 的按钮拉满整行（界面设计量过 420 宽容器 → 按钮 420）。
+  expect(css).toMatch(/\.mi-calendar-interpretation__failed\s*\{[^}]*justify-items:\s*start/)
   // 失败句替代的是正文那一槽：字号不许掉到 --font-meta。
   expect(css).toMatch(/\.mi-calendar-interpretation__failure\s*\{[^}]*font-size:\s*var\(--font-body\)[^}]*line-height:\s*var\(--line-body\)/)
-  const retryButton = [...host.querySelectorAll('button')].find((button) => button.textContent === text.interpretation.retry)
-  expect(retryButton).toBeDefined()
-  await act(async () => { retryButton!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 0)) })
+  // 一个档位只出一个按钮：生成失败是「重新生成」，不许和读失败的「重试」并排。
+  const buttons = [...host.querySelectorAll('button')].map((button) => button.textContent)
+  expect(buttons).toEqual([text.interpretation.retry])
+  await act(async () => { [...host.querySelectorAll('button')][0]!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 0)) })
   expect(fake.request).toHaveBeenCalledTimes(1)
+})
+
+it('③b 读失败：不说成「模型没回答」，只出「重试」，点了也只是重读、不再问模型', async () => {
+  const read = vi.fn(async (): Promise<View> => { throw new Error('ipc read failed') })
+  const request = vi.fn(async () => readyView)
+  const host = await render({ readEventInterpretation: read, requestEventInterpretation: request } as CalendarInterpretationClient)
+  const failed = host.querySelector('[data-calendar-interpretation-failed]')
+  // 本地读失败：句子是「暂时读不到这条解读」，不是「模型这次没有回答」——我们根本没问过模型。
+  expect(failed?.textContent).toContain(text.interpretation.failure['read-failed'])
+  expect(failed?.textContent).not.toContain(text.interpretation.failure['provider-error'])
+  const buttons = [...host.querySelectorAll('button')].map((button) => button.textContent)
+  expect(buttons).toEqual([text.interpretation.retryRead])
+  expect(request).not.toHaveBeenCalled()
+  // 「重试」= 重读一次，不花钱：再点也只增加读次数，不产生模型调用。
+  await act(async () => { [...host.querySelectorAll('button')][0]!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(read).toHaveBeenCalledTimes(2)
+  expect(request).not.toHaveBeenCalled()
 })
 
 it('④ not-applicable 与 absent（请求也没结果）：整块不渲染', async () => {

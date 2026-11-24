@@ -1314,9 +1314,13 @@ mi: miText['zh-CN'],
               loading: '正在加载解读',
               unavailable: '这次没能生成解读。',
               retry: '重新生成',
+              /* 读失败那一档的动作是**重读**（本地读取，不花钱），所以不叫「重新生成」。 */
+              retryRead: '重试',
               failure: {
                 'model-unavailable': '模型服务还没就绪，配置好之后再试。',
                 'provider-error': '模型服务这次没有回答，可以重试。',
+                /* 读失败不是「模型没回答」：我们根本没问过模型，两句话不能混成一句。 */
+                'read-failed': '暂时读不到这条解读',
                 timeout: '模型这次超时了，可以重试。',
                 'invalid-output': '生成的文字没有通过校验，可以重试。',
                 'fact-mismatch': '生成的文字引用了数据里没有的数，已丢弃，可以重试。'
@@ -3071,9 +3075,11 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               loading: 'Loading the interpretation',
               unavailable: 'No read could be generated this time.',
               retry: 'Generate again',
+              retryRead: 'Retry',
               failure: {
                 'model-unavailable': 'The model service is not ready yet; try again once it is configured.',
                 'provider-error': 'The model did not answer this time; you can retry.',
+                'read-failed': 'This interpretation cannot be read right now',
                 timeout: 'The model timed out this time; you can retry.',
                 'invalid-output': 'The generated text failed validation; you can retry.',
                 'fact-mismatch': 'The generated text cited a number the data does not carry, so it was discarded; you can retry.'
