@@ -200,12 +200,30 @@ export async function attemptChannelPush(input: {
           at
         }
       })
-      const posterAggregate = aggregatePushDelivery(posterOutcomes)
+      // **成功过的那一条不许被后来的失败抹掉**（2026-11-25，与手动补发同一条口径）：
+      // 手机上那张图确实到过，一次升级重推里某条通道失败就把它改写成「未发送」，
+      // 详情页那一行会从「已发送」跳成「未发送」。手动那条路（`channelImageWiring`）本来
+      // 就保留先前的 `sent-accepted` 行；两条路语义不一致，读者看到的事实就取决于谁最后写的。
+      const acceptedBefore = new Map(
+        (delivery.pushImage?.channels ?? [])
+          .filter((row) => row.state === 'sent-accepted')
+          .map((row) => [row.channelId, row])
+      )
+      // 这次自己也受理了就取这次（回执号与时刻更新）；这次不是受理态、而先前受理过，
+      // 就保留先前那一行——「图到过」这个事实比「最近一次没拿到回执」更值得记住。
+      const mergedPoster = posterOutcomes.map((row) =>
+        row.state === 'sent-accepted' ? row : acceptedBefore.get(row.channelId) ?? row)
+      // 这次没被点名、但先前受理过的通道也留着（它仍是事实，不能因为这一轮没发就消失）。
+      const untouched = [...acceptedBefore.values()].filter(
+        (row) => !posterOutcomes.some((outcome) => outcome.channelId === row.channelId)
+      )
+      const posterChannels = [...mergedPoster, ...untouched]
+      const posterAggregate = aggregatePushDelivery(posterChannels)
       delivery.pushImage = {
         state: posterAggregate.state,
         ...(posterAggregate.reason === undefined ? {} : { reason: posterAggregate.reason }),
         at,
-        channels: posterOutcomes
+        channels: posterChannels
       }
     }
   }
