@@ -747,7 +747,9 @@
 .mi-crypto-dashboard__macro-row > .mk-dash-expectation { flex: 1 1 auto; min-width: 0; }
 
 /* 期望图那一格：与钟表同高（248，由 `clockCardGeometry.cardHeight` 传来，本文件不存第二份），
-   卡片外观与抽屉里那块同族（边框/圆角/底色用同一批 token）。 */
+   卡片外观与抽屉里那块同族（边框/圆角/底色用同一批 token）。
+   内距只各给一次：左边 12 在这里、y 轴标签那 52 在图里（`ExpectationChart` 的 `L`）；右边给 0，
+   图的 `RM` 12 就是卡片内的右留白。左右各重复过一层，图在卡里两头留白，用户 2026-11 报过。 */
 .mk-dash-expectation { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px 0 12px 12px; box-sizing: border-box;
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
 .mk-dash-expectation__head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
