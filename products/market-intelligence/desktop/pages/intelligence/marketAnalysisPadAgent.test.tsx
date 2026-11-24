@@ -150,8 +150,16 @@ it('窄档底部是一颗居中胶囊，不是右下圆形钮', async () => {
   expect(rule).toContain('border-radius: 999px')
   // 与两个面一样压在 antd 1000 之下，否则从图标栏打开设置抽屉会被它盖住。
   expect(rule).toContain('z-index: 990')
-  // 窄档看板整个滚动容器留 56 底部内距：任何卡滚到底都不被胶囊压住。
-  expect(css).toContain('.mi-analysis-dashboard-layout[data-compact] .mi-analysis-dashboard-layout__dashboard { padding-bottom: 56px; }')
+  // 底部留白是**滚动内容末尾的透明占位**，不是容器 padding：padding 会跟着滚动容器的背景
+  // 一起画，和卡片画布色不同时就是一条横贯色带（用户 2026-11-24 的截图）。
+  expect(css).not.toContain('.mi-analysis-dashboard-layout__dashboard { padding-bottom: 56px; }')
+  const spacer = css.slice(
+    css.indexOf('.mi-analysis-dashboard-layout[data-compact] .mi-analysis-dashboard-layout__dashboard::after'),
+    css.indexOf('\n}', css.indexOf('.mi-analysis-dashboard-layout[data-compact] .mi-analysis-dashboard-layout__dashboard::after')) + 2
+  )
+  expect(spacer).toContain('height: 56px')
+  // 占位**没有背景**：有背景就是第二条色带。
+  expect(spacer).not.toContain('background')
 })
 
 it('首帧就落窄档：没有 ResizeObserver 也不按宽档画一帧', async () => {
