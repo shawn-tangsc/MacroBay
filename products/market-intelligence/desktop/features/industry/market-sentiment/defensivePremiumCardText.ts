@@ -30,7 +30,9 @@ export type DefensivePremiumCardText = {
     unit: string
     /** 轴说明整句（名字 + 带括号的单位）：组件不自己拼括号。 */
     axis: string
-    direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
+    /** 只有**读数行**用的四个词（「走阔 · 近 5 天」那一处）。方向未知的三句原因不在这里：
+        用户 2026-11-24 把它并进结论键、界面不再渲染；留着类型就是「配了、看不见」。 */
+    direction: { window: string; steeper: string; flatter: string; flat: string }
     history: { remaining: string }
     unavailable: { connection: string; source: string; read: string }
   }
@@ -62,7 +64,7 @@ type Source = {
       unit: string
       axis: string
       info: { definition: string; relative: string; since: string }
-      direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
+      direction: { window: string; steeper: string; flatter: string; flat: string }
       unavailable: { connection: string; source: string; read: string }
     }
     history: { remaining: string }
