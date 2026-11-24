@@ -117,6 +117,10 @@
 .mi-clock__category-detail > strong { font-weight: 650; }
 .mi-clock__category-detail > ul { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; }
 .mi-clock__category-detail li { white-space: nowrap; }
+/* 预期值单独上色（用户 2026-11）：只染数字那一层，整行仍是 `--text`；
+   「未提供」与政策那行的概率都不带这个类，保持原来的颜色。
+   色值取现成的 `--caution`（两套主题各一份），不新造。 */
+.mi-clock__category-value { color: var(--caution); font-variant-numeric: tabular-nums; }
 
 /* 卡的数据形状不合（宿主没跟上）时显示这一句，不白屏。 */
 .mi-clock__shape-unreadable { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;

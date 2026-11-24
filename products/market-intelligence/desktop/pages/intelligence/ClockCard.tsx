@@ -327,10 +327,22 @@ function ClockCategoryDetail({ arrow, text }: Readonly<{ arrow: ClockRingArrow; 
         if (entry.value === undefined) {
           return <li key={entry.metricKey}>{text.categoryEntryNoValue.replace('{name}', name).replace('{when}', when)}</li>
         }
-        return <li key={entry.metricKey}>{text.categoryEntry.replace('{name}', name).replace('{value}', entry.value).replace('{when}', when)}</li>
+        return <li key={entry.metricKey}>{entryWithValue(text.categoryEntry, name, entry.value, when)}</li>
       })}
     </ul>
   </div>
+}
+
+/**
+ * 有预期值的那一行：**只把数字包成独立节点**，好让它单独上色（用户 2026-11：预期值标橘黄）。
+ *
+ * 句子本身仍是文案表里那一条（`{name} {value} · {when}`），这里只负责把 `{value}` 从句子中间
+ * 切出来——不另写第二份句式，翻译改了，着色位置也跟着改。概率行与「未提供」行不走这里。
+ */
+function entryWithValue(template: string, name: string, value: string, when: string): React.ReactElement {
+  const [head = '', tail = ''] = template.split('{value}')
+  const fill = (part: string): string => part.replace('{name}', name).replace('{when}', when)
+  return <>{fill(head)}<span className="mi-clock__category-value">{value}</span>{fill(tail)}</>
 }
 
 function ClockFace({ center, text, policyState, notice }: Readonly<{

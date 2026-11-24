@@ -183,3 +183,45 @@ it('removed the plaque layer entirely', () => {
   expect(css).not.toContain('.mi-clock__node')
   expect(css).not.toContain('--mi-clock-plaque-max-width')
 })
+
+/**
+ * 浮层里**有预期值的那几个数字标橘黄**（用户 2026-11），没预期的行与概率行都不上色。
+ * 断言落在「数字那一层」上：整行染黄、把「未提供」也染黄、或把政策那行的概率染黄，都算红。
+ */
+it('colours only the expected numbers in the hover detail', async () => {
+  const { host } = await render()
+  // 打开 PCE 那张：这一类的两条读数一条有预期（核心 PCE 年率）、一条没有。
+  const pce = host.querySelector<HTMLButtonElement>('button.mi-clock__category-name[aria-expanded]')!
+  const pceButton = [...host.querySelectorAll<HTMLButtonElement>('button.mi-clock__category-name')]
+    .find((button) => button.textContent === 'PCE')!
+  expect(pce).not.toBeNull()
+  await act(async () => pceButton.click())
+  const rows = [...document.querySelectorAll('.mi-clock__category-detail li')].map((row) => row.textContent)
+  expect(rows).toContain('核心 PCE 年率（季调） 3.12% · 11–25 · 1 天后')
+  const values = [...document.querySelectorAll('.mi-clock__category-value')].map((node) => node.textContent)
+  expect(values).toEqual(['3.12%'])
+  // 整行不是橘色：只有数字那层带类，「未提供」那行一个都没有。
+  for (const row of document.querySelectorAll('.mi-clock__category-detail li')) {
+    if ((row.textContent ?? '').includes('未提供')) expect(row.querySelector('.mi-clock__category-value')).toBeNull()
+  }
+})
+
+/** 政策那行是盘口概率，不是预期：不带橘色那一层。 */
+it('leaves the policy probability uncoloured', async () => {
+  const { host } = await render()
+  const rate = [...host.querySelectorAll<HTMLButtonElement>('button.mi-clock__category-name')]
+    .find((button) => button.textContent === '利率')!
+  await act(async () => rate.click())
+  const detail = document.querySelector<HTMLElement>('.mi-clock__category-detail')!
+  const detailText = detail.textContent ?? ''
+  expect(detailText).toContain('92.9%')
+  expect(detail.querySelector('.mi-clock__category-value')).toBeNull()
+})
+
+/** 橘色只从 `--caution` 来，不新造色值、不写死 hex。 */
+it('takes the expected-value colour from the caution token', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const rule = /\.mi-clock__category-value \{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(rule).toContain('color: var(--caution)')
+  expect(rule).not.toMatch(/#[0-9a-f]{3,8}/iu)
+})
