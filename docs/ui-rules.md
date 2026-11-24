@@ -89,11 +89,14 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | `--accent` | the single interaction colour | **warnings, errors, "important"** |
 | `--danger` | destructive and failure text | decoration, emphasis |
 | `--warning` | caution that is not a failure | errors |
+| `--caution` | stale / degraded (first meaning), and the **expected value** in the clock ring's category popover (second meaning, registered 2026-11-24) | a general "important"; being the only carrier of "this is an expectation" | **human review**: strip the colour and the sentence still says `预期` / `expected`; both themes ≥ 4.5:1 against the popover surface |
 | `--success` | confirmed / healthy | "no data" |
 | `--info` | **Direction**: "below expectation" border/ink; on the light theme it outlines rather than fills | Any good/bad verdict — a high CPI is not "good" |
 | `--mi-dashboard-*` | dashboard semantic colours | borrowing across modules |
 
 **Small text that must be read never uses `--muted` (2026-11-21; the clock plaque measured 3.82:1).** `--muted` is for meta the reader may skip. A number or word the reader must catch keeps `--text` or `--text-secondary`, and hierarchy comes from weight or position rather than from dimming it. Criterion: the contrast between the small text and **the surface it actually sits on** (plaque fill, card fill) is ≥ 4.5:1, computed from the real values of that surface — measuring, not eyeballing. Counterexample: the clock plaque's "4 days away" sat on `#293958` in `--muted`, **3.82:1**; raising it to `--text` 650 gives **9.50:1**, with the value stepping back to `--text-secondary` 500 at **6.29:1**.
+
+**`--caution` carries two meanings; the second one is registered (2026-11-24).** First meaning: "stale or degraded — look at this". Second: the **expected value** in the clock ring's category popover, where the chart already marks the same expectation in the same orange, so the two agree inside that card. Three conditions stop it from drifting into a third meaning: (1) **colour is reinforcement, never the label** — the sentence itself says `预期` / `expected` (`{name} 预期 {value} · {when}`), so a greyscale screenshot, a colour-blind reader and a screen reader all still get it; (2) it never stands in for `--danger` or `--warning` on a failure; (3) contrast is measured per theme against the popover's own surface (`colorBgElevated`) — **5.64:1 dark, 4.59:1 light** — with a ratchet in `tokens.test.ts` that fails when `--caution` is lightened. Do not "fix" it to a deeper orange: the chart's expectation marker is the same token, and a second orange would break that pairing.
 
 Three gates, each with one hole:
 
