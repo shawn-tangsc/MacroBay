@@ -319,3 +319,38 @@ describe('pad 竖屏 v3：左抽屉 + 底部聊天框', () => {
     expect(grip(container).getAttribute('data-edge')).toBe('right')
   })
 })
+
+/**
+ * 宿主开的模态层要能把「圆钮不渲染」传下来（v3 复核第 ② 条）。
+ *
+ * 圆钮 z=1100，antd 抽屉 1000：不传就是压在模态层上的第二层入口。状态由**开抽屉的人**报上来，
+ * 布局不猜 DOM 里有没有 `.ant-drawer`。
+ */
+describe('宿主模态层与圆钮', () => {
+  it('看板报「我开着模态抽屉」，圆钮就撤掉', async () => {
+    stubPlatform()
+    // 窄档才有「圆钮压模态层」这回事：宽档的浮窗面板不是模态，圆钮照旧常驻。
+    stubWidth(908)
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    // 用最小子组件扮演看板：它知道自己的抽屉开没开，把状态报上来。
+    function ModalChild({ onModalLayerChange }: { onModalLayerChange?: (open: boolean) => void }) {
+      return createElement('button', { 'data-open-modal': '', onClick: () => onModalLayerChange?.(true) }, 'open')
+    }
+    await act(async () => { root?.render(createElement(MarketAnalysisDashboardLayout, { text: portal, children: createElement(ModalChild) })) })
+    expect(container.querySelector('[data-agent-floating-button]')).not.toBeNull()
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-open-modal]')!.click())
+    expect(container.querySelector('[data-agent-floating-button]')).toBeNull()
+  })
+
+  it('看板把「设置 / 关键指标 / 政策详情」三层并起来报，不去 DOM 里猜', async () => {
+    // 为什么用源码断言：把真实设置抽屉打开会连带挂载四屏设置面板（各自要真实读口），
+    // 这条要钉的是「三层状态并成一个、报给宿主」这个结构事实，不是那四屏怎么画。
+    const source = readFileSync(join(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/CryptoIntelligenceDashboard.tsx'), 'utf8')
+    expect(source).toContain('const dashboardModalOpen = settingsDrawerOpen || indicatorDrawerOpen || policyDrawer.open')
+    expect(source).toContain('onModalLayerChange?.(dashboardModalOpen)')
+    // 不许改成「看 DOM 里有没有 .ant-drawer」：那是猜，抽屉还没挂上来时就漏。
+    expect(source).not.toContain("querySelector('.ant-drawer")
+  })
+})

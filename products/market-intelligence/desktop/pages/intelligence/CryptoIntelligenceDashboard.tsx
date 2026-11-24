@@ -86,7 +86,7 @@ type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEn
   /** 「接下来要看的」那块（layout 用同一次 cardData 构造后注入），透传给抽屉。 */
   calendarBlock?: React.ReactNode }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, sentimentOptionsClient, now, onConfigureSources, onManageSource, openIndicatorDrawerRequest, calendarBlock, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readCalendarMonth, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo, onOpenProcessingSettings }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, sentimentOptionsClient, now, onConfigureSources, onManageSource, openIndicatorDrawerRequest, calendarBlock, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readCalendarMonth, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo, onOpenProcessingSettings, onModalLayerChange }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -120,6 +120,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   initialDrawerSection?: Readonly<{ menu: ConfigDrawerMenu; section: string }>
   initialSourceFilter?: SourceFilter
   openSettingsRequest?: number
+  /** 本层开的模态抽屉（设置 / 关键指标 / 政策详情）开着没有，报给布局：圆钮 z 比它们高，不报就是第二层入口。 */
+  onModalLayerChange?: (open: boolean) => void
 }): React.ReactElement {
   const resolveProductKey = useProductTextKey()
   const formatTime = useShellTimeFormat()
@@ -302,6 +304,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   useEffect(() => {
     if ((openIndicatorDrawerRequest?.seq ?? 0) > 0) setIndicatorDrawerOpen(true)
   }, [openIndicatorDrawerRequest])
+  // 这三层是本层开的：任一开着就报给布局（圆钮压在上面就是第二层入口）。
+  const dashboardModalOpen = settingsDrawerOpen || indicatorDrawerOpen || policyDrawer.open
+  useEffect(() => { onModalLayerChange?.(dashboardModalOpen) }, [dashboardModalOpen, onModalLayerChange])
   // 抽屉的「现在」在**每次打开时**取一次：每渲染都取会让按月的读跟着重读同一份快照。
   const drawerNow = useMemo(() => now().toISOString(), [now, indicatorDrawerOpen])
   // 曲线事件标注的输入：只用页面原有的那个日历读（按月、按 asOf），不新开取数通道。

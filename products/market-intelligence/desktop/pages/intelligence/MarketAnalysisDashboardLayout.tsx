@@ -77,6 +77,13 @@ export type MarketAnalysisDashboardInjection = Readonly<{
   readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
+  /**
+   * 看板自己那一层开了模态抽屉没有（设置 / 关键指标 / 政策详情）。
+   *
+   * 这几层由看板自己开，布局看不见它们——而圆钮 z=1100 压在那几层（1000）上面，就是「第二层入口」。
+   * 所以由**开抽屉的人**把状态报上来，布局再并进 `suppressed`；不在布局里猜 DOM 里有没有 `.ant-drawer`。
+   */
+  onModalLayerChange?: (open: boolean) => void
 }>
 
 /**
@@ -159,6 +166,8 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
   const [chatSheetOpen, setChatSheetOpen] = useState(false)
   // 左抽屉（最新 AI 结论 + 重点舆情）开着没有。两个面互斥：开一个关另一个。
   const [analysisDrawerOpen, setAnalysisDrawerOpen] = useState(false)
+  /** 看板自己那一层有没有模态抽屉开着（它开它自己知道，布局不猜 DOM）。 */
+  const [dashboardModalOpen, setDashboardModalOpen] = useState(false)
   // 舆情块由 workspace 构造（它拥有选中舆情那份状态），portal 进抽屉里的挂点——不是复制一份。
   const [newsHost, setNewsHost] = useState<HTMLDivElement | null>(null)
   const grip = useRef<HTMLButtonElement>(null)
@@ -297,8 +306,9 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
   // 另有模态层开着时圆钮不渲染：它的 z（1100）比那些层（1000/1150/1200）高，压上去就是第二层入口。
   // 抽屉开着时同样不渲染——它在右缘，圆钮正好压在抽屉的右下角，会变成压在同一块面上的第二颗入口
   // （整幅档是模态；并排档两者重叠，也不留两颗）。
+  // `dashboardModalOpen` 是看板报上来的（设置 / 关键指标 / 政策详情），布局不猜。
   const agentSuppressed = timelineOpen || analysisSettingsOpen || openEntry !== undefined || eventDetail !== undefined
-    || (compact && analysisDrawerOpen)
+    || (compact && analysisDrawerOpen) || dashboardModalOpen
   return <div className="mi-analysis-dashboard-layout" data-compact={compact || undefined} ref={setLayoutNode}>
     {/* 遮蔽整层用 `inert`：键盘 Tab 走不进去、点不动（遮罩只管指针与视觉，那是另一件事）。
         底部聊天框是全宽模态；左抽屉只有整幅档才是模态，并排档看板必须仍可读。 */}
@@ -317,6 +327,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           conclusionSlot,
           policySlot: policyHost,
           onSelectChartEvent: selectChartEvent,
+          onModalLayerChange: setDashboardModalOpen,
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
           ...(readCalendarMonth ? { readCalendarMonth } : {})
         })}
