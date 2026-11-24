@@ -90,7 +90,12 @@ export function analysisPromptSchemaExample(): Record<string, unknown> {
       confidence: policy.directionConfidences.join(' 或 '),
       evidenceRefIds: ['支撑该理由的 evidenceRef 原文']
     }],
-    nextCatalysts: [{ statement: '<有证据的后续催化剂>', evidenceRefIds: ['输入中的 evidenceRef 原文'] }],
+    nextCatalysts: [{
+      statement: '<有证据的后续催化剂>',
+      evidenceRefIds: ['输入中的 evidenceRef 原文'],
+      // 可选：指向日历上某一场时才写，值必须与输入 facts 里那条日历事实的 calendarEventKey 逐字相等。
+      calendarEventKey: '<可选：输入里那条日历事实的 calendarEventKey 原文；不指向具体某一场就删掉这个键>'
+    }],
     dataCaveats: ['<输入标注的数据限制>'],
     evidenceRefs: ['本次实际引用的 evidenceRef 原文，至少一个'],
     // 可选块：只有"不同意卡片"的那几对才写；整块可以不要。

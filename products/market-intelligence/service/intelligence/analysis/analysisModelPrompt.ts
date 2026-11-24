@@ -6,6 +6,7 @@ import { isMarketReactionFact, marketAnalysisValidationPolicy } from './analysis
 import { buildAnalysisReferenceMap, type AnalysisReferenceMap } from './analysisReferenceHandles'
 import { analysisModelVocabulary } from './analysisModelVocabulary'
 import { analysisProseDirective, analysisPromptSchemaExample } from './analysisOutputLanguage'
+import { eventKeyOfEvidenceRef } from './macroEvidenceRef'
 import { describeSignificanceSignals } from './significanceSignalText'
 import type { SignificanceSignal } from './significanceChangeMatcher'
 import { describeSnapshotChange } from './snapshotChange'
@@ -64,6 +65,7 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     '引用必须逐字一致：knownFacts 的每条 evidenceRefIds 只能写该事实自己那一个 evidenceRef 句柄，不得追加第二项；marketReaction 的每条 evidenceRefIds 必须恰好是被引用 factIds 各自事实的 evidenceRef 句柄集合。校验器要求两边完全相等，多写一个也会被整份拒绝。',
     '输入里每条事实的 factRef 与 evidenceRef、以及 evidenceRefs 段里的 evidenceRef，都是服务端可解析的短句柄。输出里的 factId / evidenceRefIds 只能填这些句柄原文（例如 f12、e7），不得改写、拼接或自行编造；服务端会把它们还原成内部标识。填入其它字符串会导致整份输出被拒绝。不要输出真实内部标识，它们很长且容易写错。',
     'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs（可比且新鲜的行情事实句柄）；输入没有该字段、或它是空数组时，marketReaction 必须为 []，不得改用其它 factRef 充当行情。',
+    'nextCatalysts 每条若指向日历上某一场事件，必须写 calendarEventKey，且逐字照抄输入 facts 里那条日历事实的 calendarEventKey（形如 US.CPI.RELEASE.2026-M08）；对不上会被整份拒绝。不指向具体某一场的催化剂不要写这个键——空着是允许的，编一个不是。',
     // 持仓与费率是一对：只在真的有持仓事实时才出现，免得模型对没有数据的杠杆状态发表意见。
     ...((snapshot.facts ?? []).some(fact => fact.metric === 'positioning-state') ? [
       '输入里 metric 为「持仓与费率组合态」的事实，是按固定阈值给出的档位，不是因果判断：引用它时必须同时给出「持仓名义额」与「资金费率」两个数，不得只写档位名称，也不得把它当作结论的原因。持仓数据只代表 Binance USDT-M 永续单一交易所，禁止写成「全网」「全市场」；持仓下降 + 费率回落才是去杠杆，持仓上升 + 费率转负才是空头拥挤，两者不得混用。'
@@ -181,19 +183,27 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
  * the model to transcribe them is what rejected whole analyses as `unknown-reference`.
  */
 function modelFacts(facts: readonly AgentFact[], map: AnalysisReferenceMap, language: AppLanguage): readonly Record<string, unknown>[] {
-  return facts.map(fact => ({
-    factRef: map.factHandleById.get(fact.factId) ?? fact.factId,
-    domain: readableAnalysisName(analysisModelVocabulary, 'domain', fact.domain),
-    ...(fact.subject ? { subject: readableAnalysisName(analysisModelVocabulary, 'subject', fact.subject) } : {}),
-    metric: readableAnalysisName(analysisModelVocabulary, 'metric', fact.metric),
-    value: readableAnalysisFactValue(analysisModelVocabulary, fact.metric, fact.value, fact.unit, language),
-    observedAt: fact.observedAt,
-    asOf: fact.asOf,
-    freshness: fact.freshness,
-    confidence: fact.confidence,
-    comparability: readableAnalysisName(analysisModelVocabulary, 'comparability', fact.comparability),
-    evidenceRef: fact.evidenceRefId ? map.evidenceHandleById.get(fact.evidenceRefId) ?? fact.evidenceRefId : null
-  }))
+  return facts.map(fact => {
+    // 日历事实把事件键带出来：`nextCatalysts.calendarEventKey` 要求逐字相等，模型只有看得到才抄得对。
+    // 键从证据引用里取（`macro-calendar:<sourceId>:<eventKey>`），不新增字段、也不让模型自己拼。
+    const calendarEventKey = fact.evidenceRefId?.startsWith('macro-calendar:') === true
+      ? eventKeyOfEvidenceRef(fact.evidenceRefId)
+      : null
+    return {
+      factRef: map.factHandleById.get(fact.factId) ?? fact.factId,
+      domain: readableAnalysisName(analysisModelVocabulary, 'domain', fact.domain),
+      ...(fact.subject ? { subject: readableAnalysisName(analysisModelVocabulary, 'subject', fact.subject) } : {}),
+      metric: readableAnalysisName(analysisModelVocabulary, 'metric', fact.metric),
+      value: readableAnalysisFactValue(analysisModelVocabulary, fact.metric, fact.value, fact.unit, language),
+      observedAt: fact.observedAt,
+      asOf: fact.asOf,
+      freshness: fact.freshness,
+      confidence: fact.confidence,
+      comparability: readableAnalysisName(analysisModelVocabulary, 'comparability', fact.comparability),
+      evidenceRef: fact.evidenceRefId ? map.evidenceHandleById.get(fact.evidenceRefId) ?? fact.evidenceRefId : null,
+      ...(calendarEventKey === null ? {} : { calendarEventKey })
+    }
+  })
 }
 
 function changeSummary(snapshot: EvidenceSnapshot, language: AppLanguage): string {

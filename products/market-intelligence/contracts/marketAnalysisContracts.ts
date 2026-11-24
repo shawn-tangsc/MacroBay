@@ -504,7 +504,18 @@ export type FactClaim = Readonly<{ factId: string; statement: string; evidenceRe
 export type Hypothesis = Readonly<{ statement: string; evidenceRefIds: readonly string[] }>
 export type ReactionClaim = Readonly<{ statement: string; factIds: readonly string[]; evidenceRefIds: readonly string[] }>
 export type EvidenceClaim = Readonly<{ statement: string; evidenceRefId: string }>
-export type Catalyst = Readonly<{ statement: string; evidenceRefIds: readonly string[] }>
+/**
+ * 后续关注：一句话 + 它依据的证据，外加**可选**的日历事件键。
+ *
+ * `calendarEventKey` 只在它指向日历上某一场时写，而且必须与快照里那条日历事实的 `eventKey`
+ * **逐字相等**（服务端会核，对不上整份拒）。有了它，「后续关注」里那句话指向日历上哪一场是可查的，
+ * 不再是读者无法核对的一句自由文本；没有指向具体某一场的催化剂不写这个字段，不写不算错。
+ */
+export type Catalyst = Readonly<{
+  statement: string
+  evidenceRefIds: readonly string[]
+  calendarEventKey?: string
+}>
 /**
  * 失效条件：**引用快照里已经存在的东西**，不是一句可以随便写价位的自由文本。
  *
