@@ -62,4 +62,38 @@ export const mapping_FR: Readonly<Record<string, Readonly<{ metricKey: string; p
   '215061': { metricKey: 'FR.GDP.NONE.YOY', periodRule: 'month' },
   '215062': { metricKey: 'FR.HOUSEHOLD_CONSUMPTION_EXPENDITURE.NONE.MOM', periodRule: 'month' },
   '215063': { metricKey: 'FR.HOUSEHOLD_CONSUMPTION_EXPENDITURE.NONE.YOY', periodRule: 'month' },
+  '10081': { metricKey: 'FR.GDP.NONE.YOY', periodRule: 'quarter' },  // 1 行 · 第三季度GDP初值(年率)
+  '10083': { metricKey: 'FR.GDP.NONE.YOY', periodRule: 'quarter' },  // 1 行 · 第三季度GDP终值(年率)
+  '10153': { metricKey: 'FR.CDAF_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月制造业采购经理人指数初值 | 11月制造业采购经理人指数初值
+  '10155': { metricKey: 'FR.CDAF_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 9月制造业采购经理人指数终值 | 10月制造业采购经理人指数终值
+  '10156': { metricKey: 'FR.CDAF_SERVICES_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月服务业采购经理人指数初值 | 11月服务业采购经理人指数初值
+  '10158': { metricKey: 'FR.CDAF_SERVICES_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 3 行 · 7月服务业采购经理人指数终值 | 9月服务业采购经理人指数终值
+  '10222': { metricKey: 'FR.CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 1 行 · 10月消费者物价指数(年率)初值
+  '10224': { metricKey: 'FR.CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月消费者物价指数(年率)终值
+  '10225': { metricKey: 'FR.CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 10月消费者物价指数(月率)初值 | 11月消费者物价指数(月率)初值
+  '10227': { metricKey: 'FR.CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // 3 行 · Consumer Price Index (MoM)(Final)(Jul) | 9月消
+  '10228': { metricKey: 'FR.HARMONIZED_CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 10月调和消费者物价指数(年率)初值 | 11月调和消费者物价指数(年率)初值
+  '10230': { metricKey: 'FR.HARMONIZED_CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 3 行 · 7月调和消费者物价指数(年率)终值 | 9月调和消费者物价指数(年率)终值
+  '10231': { metricKey: 'FR.HARMONIZED_CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 10月调和消费者物价指数(月率)初值 | 11月调和消费者物价指数(月率)初值
+  '10233': { metricKey: 'FR.HARMONIZED_CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月调和消费者物价指数(月率)终值 | 10月调和消费者物价指数(月率)终值
+  '10243': { metricKey: 'FR.GDP.NONE.QOQ', periodRule: 'quarter' },  // 1 行 · 第三季度GDP初值(季率)
+  '10245': { metricKey: 'FR.GDP.NONE.QOQ', periodRule: 'quarter' },  // 1 行 · 第三季度GDP终值(季率)
+  '10270': { metricKey: 'FR.CDAF_COMPOSITE_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月综合采购经理人指数初值 | 11月综合采购经理人指数初值
+  '10272': { metricKey: 'FR.CDAF_COMPOSITE_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 9月综合采购经理人指数终值 | 10月综合采购经理人指数终值
+  '10288': { metricKey: 'FR.INSEE_MANUFACTURING_CONFIDENCE.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月INSEE制造业信心指数 | 11月INSEE制造业信心指数
+  '4150': { metricKey: 'FR.EXPORTS.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 8月出口(亿欧元) | 9月出口(亿欧元)
+  '4151': { metricKey: 'FR.IMPORTS.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 8月进口(亿欧元) | 9月进口(亿欧元)
+  '9047': { metricKey: 'FR.CURRENT_ACCOUNT.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 8月经常帐(十亿欧元) | 9月经常帐(十亿欧元)
+  '9564': { metricKey: 'FR.MANUFACTURING_OUTPUT.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月制造业产出(年率)
+  '9565': { metricKey: 'FR.INDUSTRIAL_OUTPUT.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月工业产出(年率)
+  '9566': { metricKey: 'FR.GOVERNMENT_BUDGET.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 8月政府预算(十亿欧元) | 9月政府预算(十亿欧元)
+  '9572': { metricKey: 'FR.INSEE_BUSINESS_CONFIDENCE.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月INSEE商业信心指数 | 11月INSEE商业信心指数
+  '9573': { metricKey: 'FR.HOUSEHOLD_CONSUMPTION_EXPENDITURE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月家庭消费支出(年率) | 10月家庭消费支出(年率)
+  '9574': { metricKey: 'FR.HOUSEHOLD_CONSUMPTION_EXPENDITURE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月家庭消费支出(月率) | 10月家庭消费支出(月率)
+  '9575': { metricKey: 'FR.PRODUCER_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月生产者物价指数(年率) | 10月生产者物价指数(年率)
+  '9576': { metricKey: 'FR.PRODUCER_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月生产者物价指数(月率) | 10月生产者物价指数(月率)
+  '9577': { metricKey: 'FR.COMPOSITE_CONSUMER_CONFIDENCE.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月消费者综合信心指数 | 11月消费者综合信心指数
+  '9778': { metricKey: 'FR.MANUFACTURING_OUTPUT.NONE.MOM', periodRule: 'month' },  // 1 行 · 9月制造业产出(月率)
+  '9779': { metricKey: 'FR.INDUSTRIAL_OUTPUT.NONE.MOM', periodRule: 'month' },  // 1 行 · 9月工业产出(月率)
+  '9854': { metricKey: 'FR.ILO_UNEMPLOYMENT.NONE.RATE', periodRule: 'quarter' },  // 1 行 · 第三季度ILO失业率
 })

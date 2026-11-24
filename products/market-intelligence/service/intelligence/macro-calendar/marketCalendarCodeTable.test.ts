@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { codeTableReasonSets, marketCalendarCodeTable, validateCodeTableRows } from './marketCalendarCodeTable'
+import { resolveCalendarCode } from './marketCalendarCodeLookup'
 import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
@@ -25,7 +26,8 @@ describe('标准码表', () => {
       ...Object.values(zeroXRouterSourceMetricMappings).map((entry) => entry.metricKey),
       ...Object.values(germanSourceMetricMappings).map((entry) => entry.metricKey),
     ]
-    const missing = [...new Set(mappedCodes)].filter((code) => marketCalendarCodeTable[code] === undefined)
+    // 判据走统一查表（架构师 2026-11-25）：目标码可以在主码表或按国家码表里，两表不重叠
+    const missing = [...new Set(mappedCodes)].filter((code) => !resolveCalendarCode(code).found)
     expect(missing, `映射表用了码表里没有的码：${missing.slice(0, 5).join(', ')}`).toEqual([])
     // **事件类型码不在码表里**（2026-11-18 Chief 定）：`evt.*` 是「一类」，不是「一场」，
     // 没有单一主办国；它们的名字由事件码表提供，码表只放带国家的指标行。这里核对它们都有名字。

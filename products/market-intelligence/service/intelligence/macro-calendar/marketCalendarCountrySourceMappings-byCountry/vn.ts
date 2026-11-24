@@ -14,4 +14,10 @@ export const mapping_VN: Readonly<Record<string, Readonly<{ metricKey: string; p
   '214160': { metricKey: 'VN.INDUSTRIAL_OUTPUT.NONE.YOY', periodRule: 'month' },
   '214161': { metricKey: 'VN.CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },
   '214378': { metricKey: 'VN.SP_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'month' },
+  '9901': { metricKey: 'VN.SP_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 9月标普全球制造业采购经理人指数 | 10月标普全球制造业采购经理人指数
+  '9903': { metricKey: 'VN.CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月消费者物价指数(年率)
+  '9904': { metricKey: 'VN.INDUSTRIAL_OUTPUT.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月工业产出(年率)
+  '9905': { metricKey: 'VN.RETAIL_SALES.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月零售销售(年率)
+  '9907': { metricKey: 'VN.IMPORTS.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月进口(年率)
+  '9908': { metricKey: 'VN.EXPORTS.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月出口(年率)
 })
