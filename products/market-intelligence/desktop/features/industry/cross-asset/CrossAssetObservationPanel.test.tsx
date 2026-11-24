@@ -148,14 +148,9 @@ describe('cross-asset observation workspace', () => {
       expect(host.querySelector('[data-asset-price="dxy"]')?.textContent).toBe('101.42')
       expect(host.querySelector('[data-asset-return="dxy:15m"]')?.textContent).toBe('+0.12%')
       expect(host.querySelector('[data-asset-return="dxy:7d"]')?.textContent).toBe('+0.56%')
-      // The synthetic label rides with the level and carries the caveat the wire published.
-      const tag = host.querySelector('[data-synthetic="dxy"]')
-      expect(tag?.textContent).toBe(text.syntheticTag)
-      // 不是真控件就不迁：没有 title、没有 tabindex，说明挂到可访问名上。
-      expect(tag?.getAttribute('title')).toBeNull()
-      expect(tag?.getAttribute('tabindex')).toBeNull()
-      expect(tag?.getAttribute('aria-label')).toBe(text.syntheticCaveat)
-      expect(tag?.getAttribute('data-caveat')).toBe('synthetic-dollar-index')
+      // 合成不再挂 pill（用户 2026-11-25）：wire 上的 caveat 仍带着，界面改在行名旁的 ⓘ 里说。
+      expect(host.querySelector('[data-synthetic="dxy"]')).toBeNull()
+      expect(macro.caveats).toContain('synthetic-dollar-index')
       expect(host.querySelector('[data-status-row="gold"][data-connected="true"]')).not.toBeNull()
       expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toBe('3412.55')
       // 7d was not in the gold reading: the cell is a dash, not a zero. Its accessible name now says

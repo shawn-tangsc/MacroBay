@@ -122,6 +122,7 @@ describe('the macro rows against the real wire payload', () => {
     const host = await renderPayload({ ...wirePayload, readings: [stale, synthetic, realGold], caveats: ['synthetic-dollar-index', 'provider-time-series'] })
     expect(row(host, 'dxy')?.dataset.connected).toBe('true')
     expect(host.querySelector('[data-asset-price="dxy"]')?.textContent).toBe('102.88')
-    expect(host.querySelector('[data-synthetic="dxy"]')?.textContent).toBe(text.syntheticTag)
+    // 合成不再挂 pill（用户 2026-11-25）；值照旧按合成那条回退，那句话改在行名旁的 ⓘ 里。
+    expect(host.querySelector('[data-synthetic="dxy"]')).toBeNull()
   })
 })

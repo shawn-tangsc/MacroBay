@@ -2,7 +2,6 @@ import { LiveBadge } from './CrossAssetLiveBadge'
 import { crossAssetWindows, type CrossAssetWindow } from './crossAssetWindowReturns'
 import { crossAssetWindowReturns } from './crossAssetWindowReturns'
 import type { CrossAssetId, CrossAssetMetric, CrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
-import { macroMarketSnapshotPublicPolicy } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroMarketSnapshotReading } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 import type { productText } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
@@ -236,12 +235,8 @@ export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
     <th scope="row">
       {/* 名字 + ⓘ 是一组、不换行；标签（合成/实时）跟在后面，窄列时它们各自换行，图标不离开名字。 */}
       <RowName name={text.assetLabels[id]} hint={<RowHint id={id} name={text.assetLabels[id]}
-        lines={[...(text.statusReads[id] ? [text.statusReads[id]] : []), ...(age === undefined ? [] : [age]), ...(liveHint === undefined ? [] : [liveHint])]} />} />
-      {/* The synthetic label rides with the level: a level this product computed is never shown as
-          if it were the licensed index, and the caveat sentence is one hover away. */}
-      {reading?.synthetic ? <em className="mi-cross-asset__synthetic" data-synthetic={id}
-        aria-label={text.syntheticCaveat}
-        data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex}>{text.syntheticTag}</em> : null}
+        lines={[...(text.statusReads[id] ? [text.statusReads[id]] : []), ...(age === undefined ? [] : [age]), ...(liveHint === undefined ? [] : [liveHint]), ...(reading?.synthetic ? [text.syntheticCaveat] : [])]} />} />
+      {/* 合成这件事不再挂 pill（用户 2026-11-25）：那句话住进行名旁的 ⓘ，和这一行的其它说明同一处。 */}
       {/* 停更/不可用那两档仍挂 pill（那是提醒）；「实时」这一档不挂，原因在行名旁的 ⓘ 里。 */}
       {live && live.state !== 'live' ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
     </th>
