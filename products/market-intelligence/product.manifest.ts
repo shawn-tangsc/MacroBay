@@ -108,6 +108,10 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.macro.economicCalendar.importManualBlsIcs' },
     { method: 'intelligence.macro.economicCalendar.previewManualBlsIcs' },
     { method: 'intelligence.macro.economicCalendar.queryMonth' },
+    // AI 解读（R36 #34 第二半）：抽屉里先读、没有才请后端生成一次；两条都是只读写库/带成本的
+    // 显式请求，必须在封版清单里，否则 `seal()` 拒绝启动。
+    { method: 'intelligence.macro.economicCalendar.readEventInterpretation' },
+    { method: 'intelligence.macro.economicCalendar.requestEventInterpretation' },
     { method: 'intelligence.macro.policyPath.read' },
     // 三张关键指标卡的读数（只读）：按指标身份取最新一次已发布的值。
     { method: 'intelligence.macro.indicator.read' },
