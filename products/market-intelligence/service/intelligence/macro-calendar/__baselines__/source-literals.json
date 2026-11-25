@@ -66,8 +66,12 @@
       "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
     },
     "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageContracts.ts": {
-      "count": 6,
-      "why": "存储契约搬出旧源目录后仍在用；里面出现的源名是旧源协议字段，删旧源时随之清理"
+      "count": 7,
+      "why": "存储契约搬出旧源目录后仍在用；里面出现的源名是旧源协议字段，删旧源时随之清理。第 7 处是 2026-11-25 南非国家纠正：构造 draft 时把 providerId 显式传给 correctSourceCountryCode——纠正判据本身就按源分，这个 id 在调用点是事实，不是在比源名"
+    },
+    "service/intelligence/macro-calendar/marketCalendarSourceCountryCorrection.ts": {
+      "count": 1,
+      "why": "南非国家纠正的**作用域表**：这份文件存在的全部理由就是「哪个来源的码与名矛盾时以名为准」，`providerIds: ['0xrouter']` 是这张表本身；不是按源分支的业务逻辑，加来源要单独写判据"
     },
     "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageValidation.ts": {
       "count": 8,

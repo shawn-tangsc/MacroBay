@@ -11,6 +11,7 @@ import { recomputeUnmappedReasons } from '../intelligence/macro-calendar/marketC
 import { normalizeSourcePeriods, normalizeSourcePeriodsByShape } from '../intelligence/macro-calendar/marketCalendarSourcePeriodMigration'
 import { backfillObservationCountries } from '../intelligence/macro-calendar/marketCalendarObservationCountryBackfill'
 import { fillObservationCountriesByName } from '../intelligence/macro-calendar/marketCalendarObservationCountryNameFill'
+import { correctSourceRecordedCountries } from '../intelligence/macro-calendar/marketCalendarSourceCountryCorrection'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
 import { markCrossSourceConflicts } from '../intelligence/macro-calendar/marketCalendarCrossSourceConflictAudit'
@@ -199,6 +200,18 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       if (observationCountries.updated > 0) {
         report(`[macro-calendar] 观测国家补齐：补 ${observationCountries.updated} 条`
           + `（${observationCountries.indicatorIds} 个 indicatorId）、补不了 ${observationCountries.unresolvable} 条`)
+      }
+      /**
+       * **源把南非记成 `SA` 的纠正**（0xrouter 作用域，2026-11-25）：源给 `SA` + `南非` 时以名为准。
+       * 必须排在观测名补齐之后（名字是判据）、标准表国家码归一之前（改出来的是两位码，不用再归一）。
+       */
+      const sourceCountries = correctSourceRecordedCountries(database)
+      if (sourceCountries.pending > 0) {
+        report(`[macro-calendar] 源内国家纠正：待改 ${sourceCountries.pending} 条、观测 ${sourceCountries.observations} 行、`
+          + `标准表 ${sourceCountries.events} 行、台账 ${sourceCountries.ledger} 条`
+          + (sourceCountries.collisions.length > 0
+            ? `、撞主键未合并 ${sourceCountries.collisions.length} 条（${sourceCountries.collisions.slice(0, 3).join('；')}）`
+            : ''))
       }
       // **观测表国家码归一（迁移 26）**：UK/JPN/FRA… 这些别名与三位写法归成两位（Chief 2026-11-18）。
       // 幂等、跑前备份；`EMU` 不动。放在标准表国家归一之前：观测是上游，先把它洗干净。
