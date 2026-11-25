@@ -104,7 +104,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                 所以未接入/读不到时那一列不会塌成一行、留一大片空白。 */}
             {cellOff !== undefined
               ? <StateSlot tone="disabled" stateAttribute="disabled" icon={<CircleSlash size={14} aria-hidden="true" />}
-                sentence={`${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）`} />
+                sentence={fillLabelParams(dataText('pages.intelligence.portal.data.sourcesNotEnabledWithSource'), { source: cellOff.sourceLabel })} />
               : fearGreed?.state === 'unavailable'
                 ? <StateSlot tone="unreadable" stateAttribute="unreadable" icon={<TriangleAlert size={14} aria-hidden="true" />}
                   sentence={dataText('pages.intelligence.portal.data.temporarilyUnavailable')} />

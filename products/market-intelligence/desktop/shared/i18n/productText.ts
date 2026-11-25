@@ -76,6 +76,8 @@ mi: miText['zh-CN'],
             retry: '再试一次',
             sourcesNotConfigured: '还没有配置来源',
             sourcesNotEnabled: '来源没有启用',
+            /** 说到**哪一格**时用它：源名进括号，句子本身不手拼（`{source}` 由调用方填）。 */
+            sourcesNotEnabledWithSource: '来源没有启用（{source}）',
             configureSources: '去设置配置',
             enableSources: '去启用'
           },
@@ -1931,6 +1933,8 @@ mi: miText['en-US'],
             retry: 'Try again',
             sourcesNotConfigured: 'No source configured yet',
             sourcesNotEnabled: 'The source is off',
+            /** Says **which** cell is off: the source name goes in the bracket, never the sentence. */
+            sourcesNotEnabledWithSource: 'The source is off ({source})',
             configureSources: 'Configure in settings',
             enableSources: 'Enable in settings'
           },
