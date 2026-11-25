@@ -4,9 +4,9 @@ import { getMacroCalendarReleaseValueMapping } from './macroCalendarReleaseValue
 import { displayValueFromJson, valueObjectFromJson } from './marketCalendarValueEncoding'
 import { calendarNumericJsonFromSourceValues } from './marketCalendarNumericParse'
 import { calendarNumericUnitHintForMetricKey } from './marketCalendarNumericUnits'
-import { normalizeCalendarPeriodKey, normalizeCalendarSourceEventId } from './marketCalendarPeriodKey'
+import { isCalendarPeriodToken, normalizeCalendarPeriodKey, normalizeCalendarSourceEventId } from './marketCalendarPeriodKey'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
-import { recordCalendarUnmapped } from './marketCalendarStandardTable'
+import { calendarStandardTablePolicy, hasActualValue, recordCalendarUnmapped } from './marketCalendarStandardTable'
 
 /**
  * **把官方修订表的历史回放进标准表**（S1，契约 §8）。
@@ -104,7 +104,15 @@ function rowsFor(revision: RevisionRow): Readonly<{ row: Record<string, unknown>
   if (mapping !== undefined) {
     // 指标行：期间取源给的期次，**但按 `YYYY-MM` 归一**（来源原样是 `2026-M10`）。
     // 不归一，同一期会在标准表里落成两行，补值那行永远问不到 FRED 的值。
-    const rawPeriod = revision.event_key.split('.').at(-1) ?? ''
+    /**
+     * **期次取身份里第一个合法的令牌段，不是「最后一段」**（0.4.5 #52）：
+     * 官方 GDP 的事件键是 `US.GDP.2026-Q3.SECOND`，末段 `SECOND` 是二读序号，不是期次；
+     * 照末段写会得到 `period_key='SECOND'`，与 BEA 那行（`2026-Q3`）主键相差一期 → 同一发布两行。
+     * 从后往前找「像期次」的那一段；一个都没有就按未映射计，**不写空壳**。
+     */
+    // 先按既有规则归一每段（来源内部写法 `2026-M10` 要认），再判它像不像期次。
+    const rawPeriod = revision.event_key.split('.').map(normalizeCalendarPeriodKey)
+      .filter((segment) => isCalendarPeriodToken(segment)).at(-1) ?? ''
     if (rawPeriod === '') return undefined
     const periodKey = normalizeCalendarPeriodKey(rawPeriod)
     return { row: { ...shared, metricKey: mapping.metricKey, periodKey }, ...scored }
@@ -119,6 +127,88 @@ function rowsFor(revision: RevisionRow): Readonly<{ row: Record<string, unknown>
       identityKind: 'source' as const, sourceLabel: revision.event_name_key }, ...scored }
   }
   return undefined
+}
+
+/**
+ * 标准表里每个**归一后的源内发布 id** → 它落下的行（期次 + 有没有实际值）。
+ *
+ * 回放要判的是「这一期、这个值写对了没有」，所以不能只收 id：同一 id 在真库里可能有两行
+ * （期次写坏的那行 + 正确的那行），只看 id 就分不清哪一行该补。
+ */
+type ExistingSourceRow = Readonly<{ periodKey: string; hasActual: boolean }>
+
+type ExistingIndex = Readonly<{
+  rowsById: ReadonlyMap<string, readonly ExistingSourceRow[]>
+  /**
+   * 台账里有这个 id、但它当时落的身份行**已经不存在**（被启动规范化当重复并掉了）。
+   * 那次写入发生过，只是行被合并走了——再补一遍会写一行、当场又被并掉，每条启动都 +1/−1。
+   */
+  writtenThenMerged: ReadonlySet<string>
+}>
+
+function existingRowsBySourceId(database: DatabaseSync): ExistingIndex {
+  const { eventsTable, sourceIdsTable } = calendarStandardTablePolicy
+  const rowsById = new Map<string, ExistingSourceRow[]>()
+  const add = (sourceEventId: string, periodKey: string, valuesJson: string): void => {
+    const id = normalizeCalendarSourceEventId(sourceEventId)
+    const list = rowsById.get(id) ?? []
+    list.push({ periodKey, hasActual: hasActualValue(valuesJson) })
+    rowsById.set(id, list)
+  }
+  for (const row of database.prepare(`select source_event_id, period_key, values_json from ${eventsTable}`)
+    .all() as Array<{ source_event_id: string; period_key: string; values_json: string }>) {
+    add(String(row.source_event_id), String(row.period_key), String(row.values_json))
+  }
+  /**
+   * **台账也算「写过」**：一行只存一个 `source_event_id`，同一次发布被别的来源后写覆盖后，
+   * 原 id 只留在台账里（拆分前的判据就是它）。不读台账，回放会把「已经补过」的那批每条启动
+   * 都判成缺口、每轮白跑一遍——收敛不了，日志里每次都像有新东西。
+   *
+   * 台账行带它当时的身份四列：按身份 join 回事件行，才知道**那一行现在**的期次与值；
+   * join 不上的（行已被并掉）记进 `writtenThenMerged`。
+   */
+  const writtenThenMerged = new Set<string>()
+  const ledger = database.prepare("select 1 from sqlite_master where type = 'table' and name = ?")
+    .get(sourceIdsTable)
+  if (ledger !== undefined) {
+    const entries = database.prepare(`select s.source_event_id as source_event_id, s.country_code as country_code,
+        s.metric_key as metric_key, s.period_key as period_key, s.first_scheduled_date as first_scheduled_date,
+        e.period_key as row_period_key, e.values_json as row_values_json
+      from ${sourceIdsTable} s left join ${eventsTable} e
+        on e.country_code = s.country_code and e.metric_key = s.metric_key
+       and e.period_key = s.period_key and e.first_scheduled_date = s.first_scheduled_date`).all() as Array<{
+      source_event_id: string; country_code: string; metric_key: string; period_key: string
+      first_scheduled_date: string; row_period_key: string | null; row_values_json: string | null }>
+    for (const row of entries) {
+      if (row.row_values_json === null) {
+        writtenThenMerged.add(normalizeCalendarSourceEventId(String(row.source_event_id)))
+        continue
+      }
+      add(String(row.source_event_id), String(row.row_period_key), String(row.row_values_json))
+    }
+  }
+  return { rowsById, writtenThenMerged }
+}
+
+/**
+ * 这条修订「已经写对了」：同一发布在**这次算出来的期次**上有一行，且（修订没带实际值 或 那行已有实际值）。
+ * 期次对不上说明旧回放把它写坏了，值缺说明只写过壳——两种都要重写，不是缺口已补。
+ *
+ * 一行都没有、但台账说它写过（行已被合并走）：算写过——否则每次启动都补一行、当场被并掉。
+ */
+function alreadyWritten(
+  mapped: Readonly<{ row: Record<string, unknown> }>,
+  index: ExistingIndex
+): boolean {
+  const id = normalizeCalendarSourceEventId(String(mapped.row.sourceEventId))
+  const rows = index.rowsById.get(id) ?? []
+  const target = rows.find((row) => row.periodKey === String(mapped.row.periodKey))
+  const actual = mapped.row.actual
+  const incomingHasActual = actual !== undefined && String(actual).trim() !== ''
+  if (target !== undefined) return !incomingHasActual || target.hasActual
+  // 有行但期次不对：要修期次，不是缺口已补。
+  if (rows.length > 0) return false
+  return index.writtenThenMerged.has(id)
 }
 
 export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, input?: Readonly<{
@@ -138,8 +228,23 @@ export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, i
   const rows: Record<string, unknown>[] = []
   let unmapped = 0
   let numericUnparsed = 0
+  /**
+   * **判据是「写对了没有」，不是「写过没有」**（架构师 2026-11-24 复核，0.4.5 #52）。
+   *
+   * 只问 id 在不在表里，会漏掉两种必须补的缺口：行在、期次对、**没有值**（修订后来带了 actual），
+   * 以及行在、**期次是 `SECOND`**（旧回放写坏的）而这次算出来是 `2026-Q3`。两种都被跳过 = 
+   * 读者永远看不到那个值，或者看到两行。
+   *
+   * 缺口补写时**不能裸写**：upsert 会把 BEA/BLS 那行的 `source_provider_id` 换成回放自己。
+   * 所以这一批行带 `preserveProvenance`，只在行已存在时保留来源两列。
+   *
+   * 写坏的期次那一行由启动规范化收尾（**回放必须早于规范化**，见 `calendarStandardRows` 的接线）；
+   * 这里只管把值落到正确的那一主键上。
+   */
+  const existing = existingRowsBySourceId(database)
   for (const revision of latest.values()) {
     const mapped = rowsFor(revision)
+    if (mapped !== undefined && alreadyWritten(mapped, existing)) continue
     if (mapped === undefined) {
       unmapped += 1
       if (write) {
@@ -151,7 +256,8 @@ export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, i
       continue
     }
     numericUnparsed += mapped.numericUnparsed
-    rows.push(mapped.row)
+    // 只有回放带这个开关：它补的是别的来源已写下的那一行。
+    rows.push({ ...mapped.row, preserveProvenance: true })
   }
   const written = write && rows.length > 0
     ? dualWriteMeasureRows(database, { providerId: officialHistoryReplayPolicy.providerId,
@@ -194,13 +300,14 @@ export function pendingOfficialHistoryRevisions(database: DatabaseSync): readonl
     order by event_key, detected_at_ms asc, recorded_at asc`).all() as unknown as RevisionRow[]
   const latest = new Map<string, RevisionRow>()
   for (const revision of revisions) latest.set(revision.event_key, revision)
-  const known = knownSourceIds(database)
+  const existing = existingRowsBySourceId(database)
   const pending: string[] = []
   for (const revision of latest.values()) {
     // 映射不出码的按设计进 `unmapped`、不进标准表——**不算缺口**，否则回放每次启动都会重跑。
     const built = rowsFor(revision)
     if (built === undefined) continue
-    if (known.has(normalizeCalendarSourceEventId(String(built.row.sourceEventId)))) continue
+    // 与回放同一个判据：只差「值/期次没写对」的那批也算缺口，否则启动闸挡住、回放永远不跑。
+    if (alreadyWritten(built, existing)) continue
     pending.push(revision.event_key)
   }
   return pending

@@ -32,7 +32,7 @@ import {
 
 import { SignalDetail } from '../shared'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
-import { PositioningChart, PositioningChartSkeleton, formatRate } from './PositioningChart'
+import { PositioningChartBody, PositioningChartSkeleton, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
 import {
   projectPositioningCardState,
@@ -84,8 +84,8 @@ export type PositioningPanelProps = Readonly<{
 
 // A strip above the plot belongs to the liquidation marks: a label drawn over the curves hid the
 // very movement it was pointing at.
-// The viewBox is drawn at roughly the width the card is, so the svg scales ~1:1: text keeps its
-// nominal size and the drawing is 186 units tall instead of being blown up with the container.
+// The viewBox is width-driven: the drawing keeps its 1000×240 aspect and scales with the card, so text
+// keeps its nominal size and the card does not blow up with the window.
 /** 牌子那一行：方向进词，符号进数——两条规则各写各的，正号配“空头”而不是配“强平”。 */
 function chipLabel(text: PositioningPanelText, chip: Extract<DashboardSignalChip, { state: 'alert' }>): string {
   const move = chip.pricePct !== undefined ? formatDashboardChange(chip.pricePct) : formatDashboardChange(chip.dropPct)
@@ -354,24 +354,10 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           {oiReady && positioning.state === 'loading' || fundingReady && funding.state === 'loading'
             ? <LoadingState label={text.loading} minHeight={140} />
             : available && oiReady
-              ? <>
-                  {/* 费率那一格不可用时只画持仓线，不画半张柱子图；缺的那格由上面那行说明。 */}
-                  <PositioningChart positioning={positioning} funding={fundingReady ? funding : { state: 'unavailable' }} text={text} />
-                  {/* 一条腿读不到时的说明：整句、muted、不带重试——另半张图照常画，读者要知道少了哪条腿。 */}
-                  {fundingReady && fundingMissingNote ? (
-                    <p className="mi-positioning-panel__funding-missing" data-funding-missing="true" role="status">{fundingMissingNote}</p>
-                  ) : null}
-                  {/*
-                    截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
-                    一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
-                    只在真的画不下时出现：命中 0 时这一行不存在，卡面不多一个字。
-                  */}
-                  {positioning.hiddenHits > 0 ? (
-                    <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
-                      {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}
-                    </p>
-                  ) : null}
-                </>
+              ? /* 费率那一格不可用时只画持仓线，不画半张柱子图；缺的那格由上面那行说明。
+                   量容器、排牌、那句截断数在图那一块里同源算，拆两处就会各算一套。 */
+                <PositioningChartBody positioning={positioning} funding={fundingReady ? funding : { state: 'unavailable' }}
+                  text={text} fundingNote={fundingReady ? fundingMissingNote : ''} />
               : <PositioningChartSkeleton text={text} />}
         </div>
       </div>

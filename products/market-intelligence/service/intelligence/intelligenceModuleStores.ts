@@ -32,7 +32,7 @@ import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalend
 import { createMacroMarketStore, macroMarketStoragePolicy } from './macro-market/macroMarketStore'
 import { createFredRatesHistorySink } from './macro-rates/fredRatesHistory'
 import { createRawRecordJsonStorage, readRawRecordSnapshotSync } from './store/rawRecordStorage'
-import { contentAddressedPayloadPolicy, resolvePayloadDirectory, writeVerifiedPayload } from './storage/contentAddressedPayloads'
+import { contentAddressedPayloadPolicy, readPayload as readContentAddressedPayload, resolvePayloadDirectory, writeVerifiedPayload } from './storage/contentAddressedPayloads'
 
 /**
  * `intelligenceModule` 的本地存储与采集底座（拆分 M2，2026-11-15，**只搬不改**）。
@@ -78,6 +78,17 @@ export function createIntelligenceStores(input: {
     storage: rawRecordStorage,
     snapshot: readRawRecordSnapshotSync(join(dataDir, 'intelligence-raw-records.json')),
     ...(payloadDirectory === undefined ? {} : { payloadDirectory, writeVerifiedPayload }),
+    // 读回原文（归一化用）：与写入同一套内容寻址原语，missing / hash-mismatch 分开报。
+    ...(payloadDirectory === undefined ? {} : {
+      readPayload: ({ fileRef, expectedHash }: Readonly<{ fileRef: string; expectedHash?: string }>) => {
+        const read = readContentAddressedPayload({
+          directory: payloadDirectory,
+          fileRef,
+          ...(expectedHash === undefined ? {} : { expectedHash })
+        })
+        return read.state === 'found' ? { state: 'found' as const, body: read.body } : read
+      }
+    }),
     /* 保留期回收原文（缺陷③）：只在「内容寻址目录」里删，删前由 store 重新核对引用。 */
     ...(payloadDirectory === undefined ? {} : {
       deletePayload: (fileRef: string) => {

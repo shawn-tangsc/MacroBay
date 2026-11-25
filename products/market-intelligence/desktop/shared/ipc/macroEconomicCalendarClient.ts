@@ -13,7 +13,9 @@ import {
   type RefreshFedFomcDecisionInput,
   type RefreshFedFomcDecisionResult,
   type SyncBlsEmploymentScheduleInput,
-  type SyncBlsScheduleAndValuesResult
+  type SyncBlsScheduleAndValuesResult,
+  type MacroCalendarInterpretationInput,
+  type MacroCalendarInterpretationView
 } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { macroEconomicCalendarCaveatPolicy } from '../macroEconomicCalendarCaveatPolicy'
 import { macroEconomicCalendarConsensusPolicy } from '../macroEconomicCalendarConsensusPolicy'
@@ -61,6 +63,10 @@ export type MacroEconomicCalendarClient = {
   /** The reader's own release time. Main is the only writer; the renderer only asks. */
   setReleaseTime: (input: SetMacroEconomicCalendarReleaseTimeInput) => Promise<MacroEconomicCalendarReleaseTimeResult>
   clearReleaseTime: (input: ClearMacroEconomicCalendarReleaseTimeInput) => Promise<MacroEconomicCalendarReleaseTimeResult>
+  /** 读已生成的解读：只读，不触发生成。 */
+  readEventInterpretation: (input: MacroCalendarInterpretationInput) => Promise<MacroCalendarInterpretationView>
+  /** 生成 / 重试：服务侧按档门控，低档与未分级返回 `not-applicable`（不花模型调用）。 */
+  requestEventInterpretation: (input: MacroCalendarInterpretationInput) => Promise<MacroCalendarInterpretationView>
 }
 
 export const macroEconomicCalendarClient: MacroEconomicCalendarClient = {
@@ -99,6 +105,14 @@ export const macroEconomicCalendarClient: MacroEconomicCalendarClient = {
   async clearReleaseTime(input) {
     if (!isClearReleaseTimeInput(input)) return { state: 'rejected' }
     return sanitizeReleaseTime(await invoke(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.clearReleaseTime, input))
+  },
+  async readEventInterpretation(input) {
+    if (!isInterpretationInput(input)) return { state: 'absent' }
+    return sanitizeInterpretation(await invoke(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.readEventInterpretation, input))
+  },
+  async requestEventInterpretation(input) {
+    if (!isInterpretationInput(input)) return { state: 'absent' }
+    return sanitizeInterpretation(await invoke(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.requestEventInterpretation, input))
   }
 }
 
@@ -387,4 +401,32 @@ function manualPreviewFailure(failureCode: Extract<ManualBlsIcsPreview, { state:
 
 function manualImportFailure(failureCode: Extract<ManualBlsIcsImportResult, { state: 'failed' }>['failureCode']): ManualBlsIcsImportResult {
   return { state: 'failed', failureCode }
+}
+
+function isInterpretationInput(value: unknown): value is MacroCalendarInterpretationInput {
+  if (!isRecord(value)) return false
+  return typeof value.eventKey === 'string' && value.eventKey.length > 0 &&
+    (value.locale === 'zh-CN' || value.locale === 'en-US')
+}
+
+/**
+ * 解读的四态在边界上收严：形状不对就是「没有」，**不把半个对象画给读者**。
+ * 失败码是闭集外的字符串也保留形状（渲染侧查不到就退回通用句）——界面永远有话说。
+ */
+function sanitizeInterpretation(value: unknown): MacroCalendarInterpretationView {
+  if (!isRecord(value)) return { state: 'absent' }
+  if (value.state === 'not-applicable') return { state: 'not-applicable' }
+  if (value.state === 'absent') return { state: 'absent' }
+  if (value.state === 'failed' && typeof value.failureCode === 'string') {
+    return { state: 'failed', failureCode: value.failureCode }
+  }
+  if (value.state === 'ready' && typeof value.text === 'string' && value.text.trim().length > 0 &&
+    typeof value.generatedAt === 'string' && Array.isArray(value.evidenceScope) &&
+    value.evidenceScope.every((entry) => typeof entry === 'string')) {
+    return {
+      state: 'ready', text: value.text, generatedAt: value.generatedAt,
+      evidenceScope: value.evidenceScope as string[]
+    }
+  }
+  return { state: 'absent' }
 }

@@ -18,8 +18,8 @@
       "why": "事件来源的联合类型：`source` 的旧值 `'Narwhal' | '0xRouter'`（历史行兼容，读侧按 feed id 优先、旧值兜底）与说明注释；不是按源分支的读数逻辑，是这个字段的类型定义处"
     },
     "contracts/macro/marketCalendarQueryContracts.ts": {
-      "count": 20,
-      "why": "契约里的 provider id 常量与来源标签定义处；2026-11-20 从 27 收到 20——0xRouter 三路 feed id 与 collectionFeeds 对齐那几处已收拢进注册表/常量，这里只留契约自己必须写的那一份"
+      "count": 17,
+      "why": "契约里的 provider id 常量与来源标签定义处；2026-11-20 从 27 收到 20——0xRouter 三路 feed id 与 collectionFeeds 对齐那几处已收拢进注册表/常量，这里只留契约自己必须写的那一份；2026-11-24 采集清单与描述清单收成一份，删掉重复的 `descriptors` 三个 id，27→20→17"
     },
     "desktop/features/macro/economic-calendar/calendarTwoSourceValue.ts": {
       "count": 2,
@@ -66,8 +66,12 @@
       "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
     },
     "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageContracts.ts": {
-      "count": 6,
-      "why": "存储契约搬出旧源目录后仍在用；里面出现的源名是旧源协议字段，删旧源时随之清理"
+      "count": 7,
+      "why": "存储契约搬出旧源目录后仍在用；里面出现的源名是旧源协议字段，删旧源时随之清理。第 7 处是 2026-11-25 南非国家纠正：构造 draft 时把 providerId 显式传给 correctSourceCountryCode——纠正判据本身就按源分，这个 id 在调用点是事实，不是在比源名"
+    },
+    "service/intelligence/macro-calendar/marketCalendarSourceCountryCorrection.ts": {
+      "count": 1,
+      "why": "南非国家纠正的**作用域表**：这份文件存在的全部理由就是「哪个来源的码与名矛盾时以名为准」，`providerIds: ['0xrouter']` 是这张表本身；不是按源分支的业务逻辑，加来源要单独写判据"
     },
     "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageValidation.ts": {
       "count": 8,
@@ -173,6 +177,10 @@
     "service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts": {
       "count": 2,
       "why": "provider id 常量定义处（单一来源）"
+    },
+    "service/intelligence/macro-calendar/marketCalendarPeriodProvenance.ts": {
+      "count": 2,
+      "why": "「哪些来源的统计期是源自己给的」这张小表（2026-11-24 Chief 定：不新造 `periodDerivation` 列、按来源判）：表里 `0xrouter` 与 `narwhal` 两行登记的是**来源属性事实**，不是按源分支的读数逻辑——判定函数只查表，读者可见的行照样不因来源走不同逻辑。将来某个源补上期次就改这一行数据。"
     },
     "service/intelligence/macro-calendar/marketCalendarSourceFeedIds.ts": {
       "count": 10,

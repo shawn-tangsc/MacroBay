@@ -76,7 +76,6 @@ export type PositioningPanelText = Readonly<{
   markShort: string
   markLongMany: string
   markShortMany: string
-  markMixedMany: string
   /** The module rule's chip: what it says, and what its own hover line is made of. */
   signalHover: string
   signalKindInferred: string

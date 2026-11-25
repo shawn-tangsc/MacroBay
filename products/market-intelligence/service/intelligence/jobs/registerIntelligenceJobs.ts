@@ -3,6 +3,7 @@ import type { JobRuntime } from '@platform/jobs'
 import type { IntelligenceArchiveService } from '../application/intelligenceArchiveService'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { IntelligenceReplayService } from '../application/intelligenceReplayService'
+import type { RawRecordStore } from '../application/rawRecordStore'
 import type { IntelligenceTranslationService } from '../application/intelligenceTranslationService'
 import type { createNewsSentimentEnrichmentService } from '../news-sentiment/newsSentimentEnrichmentService'
 import type { createNewsSentimentScoringService } from '../news-sentiment/newsSentimentScoringService'
@@ -11,6 +12,7 @@ import { isZeroXRouterSource } from '../application/zeroXRouterSourcePolicy'
 import { getSource } from '../application/providerRegistry'
 import type { TranslateIntelligenceItemsJobInput } from '../schema/intelligenceTranslation'
 import { enqueueIntelligencePipelineJobs } from './enqueueIntelligencePipelineJobs'
+import { registerRawRecordRecoveryJob } from './rawRecordRecoveryJob'
 import {
   INTELLIGENCE_ARCHIVE_COMPACTION_JOB,
   INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB,
@@ -43,9 +45,19 @@ export function registerIntelligenceJobs(
     etfFlowHistory?: { refresh: () => Promise<Readonly<{ state: string; reason?: string }>> }
     fundingRateHistory?: { refresh: () => Promise<unknown> }
     openInterest?: { refresh: (input?: Readonly<{ log?: (entry: Readonly<{ level: 'warn'; message: string }>) => void | Promise<void> }>) => Promise<unknown> }
+    /** 定时回捞用它量队列长度；省略时回捞照常注册（不早退），不会静默关掉。 */
+    rawRecordStore?: Pick<RawRecordStore, 'listUnprocessed'>
   }
 ): void {
   const { pipeline, archiveService, replayService, translationService } = deps
+
+  // 归一化不能只等「启动」或「该源有新记录」：采集全部命中去重时队列会整段停住（0.4.5 #44）。
+  registerRawRecordRecoveryJob(jobRuntime, {
+    normalizeRawRecords: pipeline.normalizeRawRecords,
+    ...(deps.rawRecordStore === undefined
+      ? {}
+      : { pendingRawRecordCount: () => deps.rawRecordStore!.listUnprocessed().length })
+  })
 
   jobRuntime.registerHandler(INTELLIGENCE_COLLECT_SOURCE_JOB, async (payload, context) => {
     const input = payload as { sourceId: string; runId?: string }
@@ -118,9 +130,19 @@ export function registerIntelligenceJobs(
     await enqueueIntelligencePipelineJobs(jobRuntime, result.queuedJobs, {
       sourceId: input.sourceId,
       newItemIds: result.newItemIds,
+      ...(result.backfillItemIds.length > 0 ? { backfillItemIds: result.backfillItemIds } : {}),
       ...(input.firstCollection ? { firstCollection: true } : {})
     })
-    await context.log({ level: 'info', message: 'Normalized pending raw records.' })
+    // 三种情况各说各的（2026-11-21）：跑完了 / 有记录解析失败但没挡住队列 / 有新闻条目超过一天
+    // 还没归一化出来。最后一种正是这次被静默盖住的事故——采集全绿、新闻却是两天前的。
+    const level = result.failedCount > 0 || result.staleNewsCount > 0 || result.staleReceivedCount > 0
+      ? 'warn'
+      : 'info'
+    await context.log({
+      level,
+      message: `Normalized pending raw records: ${result.processedCount} processed, ${result.failedCount} failed, `
+        + `${result.staleNewsCount} news pending over 24h, ${result.staleReceivedCount} records pending over 24h.`
+    })
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_TRANSLATE_ITEMS_JOB, async (payload, context) => {

@@ -36,7 +36,7 @@ Source: `platform/ui/components/drawer/`. Visual spec:
 | --- | --- | --- | --- |
 | `open` | `boolean` | yes | Whether the drawer is on screen. |
 | `onClose` | `() => void` | yes | Mask click, Esc (modal only) and the close control. |
-| `size` | `DrawerSize` | yes | `narrow` 420, `large` 640, `wide` 860, `full` 1040. No default: every call answers it. |
+| `size` | `DrawerSize` | yes | `narrow` 420, `large` 640, `wide` 860, `full` 1280. No default: every call answers it. |
 | `mode` | `'modal' \| 'inline'` | no, default `modal` | `modal` has a mask, locks focus and closes on Esc; `inline` sits in the page flow. |
 | `side` | `'left' \| 'right'` | no, default `right` | Only for `mode="inline"`. Modal drawers are always right. |
 | `header` | `'titled' \| 'none'` | no, default `titled` | A titled header, or no header at all. |
@@ -48,9 +48,10 @@ Source: `platform/ui/components/drawer/`. Visual spec:
 | `contentPadding` | `'default' \| 'flush'` | no, default `default` | `flush` for full-bleed content. |
 | `children` | `ReactNode` | yes | Body. |
 | `className` | `string` | no | Positioning only; it must not carry a width or layout. |
+| `bodyClassName` | `string` | no | Mount point on the body node, passed to antd's `classNames.body`. Hang `container-type` on this class instead of `.ant-drawer-body`. **A class name only — never a style.** |
 | `resolveText` | `(key: string) => string` | yes | The caller's text resolver, used for `titleKey` only. |
 
-The width is `min(<size>px, 92vw)` inside the component. There is no `width`, no `style`, no
+The width is `min(<size>px, 94vw)` inside the component. There is no `width`, no `style`, no
 `styles`, no `mask`, no `closable`, no `placement` and no `getContainer`: each of those is how the
 same drawer grew a twelfth width.
 
@@ -61,7 +62,7 @@ same drawer grew a twelfth width.
 | `narrow` | 420 | Settings panels, single-column forms |
 | `large` | 640 | Two-column detail, inspectors |
 | `wide` | 860 | Agent configuration, dashboard panels |
-| `full` | 1040 | The widest immersive panel |
+| `full` | 1280 | The widest immersive panel |
 
 ### Pass-through list
 
@@ -92,11 +93,17 @@ lifecycle question — whether the content exists is unaffected by it.
 - **No footer means no footer row** — not an empty wrapper kept for spacing.
 - **Two header states only.** `header="none"` still requires `ariaLabelKey`: an unnamed dialog is
   announced as "dialog".
+- **The body class is a mount point, not a second padding.** `bodyClassName` only names the body
+  node, so a caller hangs `container-type` on a class of ours instead of `.ant-drawer-body`.
+  Platform styles declare **nothing** for that class: padding still comes from the `--default` /
+  `--flush` rules and the scroll container is still antd's body. Declaring anything there would let
+  a caller change body padding — and a second source of "body padding" is how the classes drifted
+  before.
 
 ## How to verify a page that uses it
 
 1. **Width**: in DevTools the content wrapper resolves to the size's pixels, and never to a value
-   you passed in. On a narrow window it caps at `92vw`.
+   you passed in. On a narrow window it caps at `94vw`.
 2. **Close**: the top-right control is keyboard reachable and its announced name is
    "关闭抽屉" / "Close drawer" — not a key, not empty.
 3. **Mode**: a `modal` drawer darkens the page and closes on Esc; an `inline` drawer has no mask and

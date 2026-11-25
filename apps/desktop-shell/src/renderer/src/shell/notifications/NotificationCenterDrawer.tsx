@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -14,6 +14,13 @@ import type { PlatformText } from '../../i18n/platformText'
 import { createNotificationCenterSource, type NotificationCenterSource } from './notificationCenterSource'
 import type { NotificationCenterSettingsEntry } from './notificationCenterSettingsEntry'
 
+import {
+  NotificationActionButton,
+  hasActionTarget,
+  rowTitleId
+} from './notificationActionButton'
+import { NotificationDetailView } from './NotificationDetailView'
+
 import './notificationCenter.css'
 
 /**
@@ -24,6 +31,16 @@ import './notificationCenter.css'
  */
 export const NOTIFICATION_CENTER_PANEL_ID = 'notification-center-panel'
 
+/**
+ * 某一行那颗「详情」入口的 id：返回列表时把焦点送回它（详情里 Esc＝回列表，不是关抽屉）。
+ *
+ * 只在有详情的行上渲染（`item.poster` 存在），所以没有 poster 的行不会有这个 id——
+ * 回列表后 `getElementById` 拿到 null 时不做事，不抛。
+ */
+export function detailEntryId(id: string): string {
+  return `notification-detail-entry-${id}`
+}
+
 export const CENTER_TITLE_KEY = 'notifications.centerTitle'
 
 type NotificationCenterDrawerProps = {
@@ -32,6 +49,16 @@ type NotificationCenterDrawerProps = {
   labels: PlatformText['notifications']
   /** 通知自带的动作要真的做那件事：把 deeplink 交给外壳打开，而不是再标一次已读。 */
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  /**
+   * 外链动作（`open-external`）的出口：舆情那条「看原文」就是它（验收 N37⑦）。
+   *
+   * 与 `onOpenDeeplink` 分开：一个交给外壳导航，一个交浏览器打开。合并成一个回调会让调用方
+   * 自己判「这是落点还是网址」，那套判断就跑到两个地方去了。
+   *
+   * **必填**：`hasActionTarget` 把外链算作「有地方可去」，行因此进主位、必须有按钮。
+   * 做成可选就会留下一个只有类型才看得见的洞——调用点漏传时，那一行进未读组却一颗按钮都没有。
+   */
+  onOpenExternal: (url: string) => Promise<unknown>
   source?: NotificationCenterSource
   /**
    * 产品注册的设置抽屉（`productSettingsDrawers` 里声明了 `notifications` 那一屏）。
@@ -62,6 +89,7 @@ export function NotificationCenterDrawer({
   onClose,
   labels,
   onOpenDeeplink,
+  onOpenExternal,
   source,
   settingsEntry,
   onOpenSettings
@@ -69,6 +97,10 @@ export function NotificationCenterDrawer({
   const [state, setState] = useState<LoadState>('loading')
   const [items, setItems] = useState<readonly NotificationCenterItem[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
+  /** 第二层视图：同一条抽屉里换内容，`null`＝列表。 */
+  const [detailId, setDetailId] = useState<string | null>(null)
+  /** 回列表后要还焦点的那颗入口（详情里 Esc 的规矩：回列表 + 焦点回入口）。 */
+  const returnFocusTo = useRef<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async (): Promise<void> => {
@@ -104,11 +136,39 @@ export function NotificationCenterDrawer({
     setNotice(unread.unread === 0 ? labels.centerReadDone : null)
   }
 
+  /**
+   * 外链没打开时的那一句。
+   *
+   * 为什么不能只写日志：`console.error` 打包后只进 devtools，生产里等于没有——读者看到的就是
+   * 「点了没反应」。列表上方的 notice 位已经在用（标已读 / 删除 / 读到旧数据都在那儿说一句）。
+   */
+  function showLinkFailed(): void {
+    setNotice(labels.centerLinkFailed)
+  }
+
   async function markOneRead(id: string): Promise<void> {
     const centre = source ?? createNotificationCenterSource()
     const next = await centre.markRead(id)
     setItems((current) => current.map((item) => (item.id === id ? next : item)))
   }
+
+  /**
+   * 详情里按 Esc：**回列表**，不是关抽屉（界面设计 2026-11-25 ①）。
+   * 抽屉的 Esc 走 `onClose`，所以这里在 `onClose` 上分流：有详情就回列表，没有才关。
+   */
+  function backToList(): void {
+    if (detailId !== null) returnFocusTo.current = detailEntryId(detailId)
+    setDetailId(null)
+  }
+
+  useEffect(() => {
+    if (detailId !== null) return
+    const target = returnFocusTo.current
+    if (target === null) return
+    returnFocusTo.current = null
+    // 列表刚重新渲染完，节点这时才在；焦点回到当初点的那颗「详情」。
+    document.getElementById(target)?.focus()
+  }, [detailId])
 
   async function deleteRead(): Promise<void> {
     const centre = source ?? createNotificationCenterSource()
@@ -119,21 +179,30 @@ export function NotificationCenterDrawer({
     setNotice(result.deleted === 0 ? labels.centerDeleteReadEmpty : labels.centerDeleteReadDone(String(result.deleted)))
   }
 
-  // 有目标可去的通知才进主位；没有动作目标的只留记录，不占主位（A3）。
-  const actionables = items.filter((item) => item.deeplink !== undefined)
-  const recorded = items.filter((item) => item.deeplink === undefined)
+  // 有地方可去的通知才进主位；落点与外链都算「有地方可去」，两者都没有的只留记录（A3）。
+  const actionables = items.filter(hasActionTarget)
+  const recorded = items.filter((item) => !hasActionTarget(item))
   const unreadItems = actionables.filter((item) => item.state === 'unread')
   const readItems = actionables.filter((item) => item.state !== 'unread')
+  // 第二层视图找这一条：它被别处删掉时自动退回列表（`undefined` 就是列表）。
+  const detailItem = detailId === null ? undefined : items.find((item) => item.id === detailId)
 
   return (
     <Drawer
       mode="modal"
       size="large"
       open={open}
-      onClose={onClose}
-      titleKey={CENTER_TITLE_KEY}
-      resolveText={(key) => (key === CENTER_TITLE_KEY ? labels.centerTitle : '')}
-      footer={
+      /*
+        详情里 Esc/遮罩/右上关闭键**都是「退一层」**：平台 `Drawer` 只有一个 `onClose` 出口
+        （`Drawer.tsx` 的关闭键、Esc、遮罩三条都走它），所以它们与左上返回箭头同义——不是关闭键坏了。
+        列表里维持现状（关抽屉）。翻案条件：`Drawer` 将来给出前导槽或独立 `onBack` 时，把关闭键改回
+        关整个抽屉，详情里的 Esc 仍留「退一层」。
+      */
+      onClose={detailItem === undefined ? onClose : backToList}
+      /* 标题在详情里换成**这一条通知的标题**（记录里的句子，不是键）：交给 resolver 原样取回。 */
+      titleKey={detailItem === undefined ? CENTER_TITLE_KEY : detailItem.title}
+      resolveText={(key) => (key === CENTER_TITLE_KEY ? labels.centerTitle : key)}
+      footer={detailItem === undefined ? (
         <div className="notification-center-footer">
           {confirmDelete ? (
             <>
@@ -168,8 +237,10 @@ export function NotificationCenterDrawer({
             </>
           )}
         </div>
-      }>
+      ) : undefined}>
       <div id={NOTIFICATION_CENTER_PANEL_ID} data-notification-center-panel>
+      {detailItem === undefined ? (
+        <>
       {notice === null ? null : (
         <p className="notification-center-notice" role="status">
           {notice}
@@ -192,7 +263,10 @@ export function NotificationCenterDrawer({
           ) : null}
           <NotificationGroups
             labels={labels}
+            onOpenDetail={setDetailId}
             onOpenDeeplink={onOpenDeeplink}
+            onOpenExternal={onOpenExternal}
+            onOpenExternalFailed={showLinkFailed}
             onRead={markOneRead}
             readItems={readItems}
             recorded={recorded}
@@ -223,6 +297,18 @@ export function NotificationCenterDrawer({
           <p className="notification-center-empty-hint">{labels.centerEmptyHint}</p>
         </>
       )}
+        </>
+      ) : (
+        <NotificationDetailView
+          item={detailItem}
+          labels={labels}
+          onBack={backToList}
+          onOpenDeeplink={onOpenDeeplink}
+          onOpenExternal={onOpenExternal}
+          onOpenExternalFailed={showLinkFailed}
+          onRead={markOneRead}
+        />
+      )}
       </div>
     </Drawer>
   )
@@ -230,13 +316,16 @@ export function NotificationCenterDrawer({
 
 function NotificationGroups(props: {
   labels: PlatformText['notifications']
+  onOpenDetail: (id: string) => void
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  onOpenExternal: (url: string) => Promise<unknown>
+  onOpenExternalFailed: () => void
   onRead: (id: string) => Promise<void>
   unreadItems: readonly NotificationCenterItem[]
   readItems: readonly NotificationCenterItem[]
   recorded: readonly NotificationCenterItem[]
 }): React.ReactElement {
-  const { labels, onOpenDeeplink, onRead } = props
+  const { labels, onOpenDetail, onOpenDeeplink, onOpenExternal, onOpenExternalFailed, onRead } = props
   return (
     <div className="notification-center-groups">
       {props.unreadItems.length === 0 ? null : (
@@ -244,7 +333,10 @@ function NotificationGroups(props: {
           title={labels.centerUnreadGroup}
           items={props.unreadItems}
           labels={labels}
+          onOpenDetail={onOpenDetail}
           onOpenDeeplink={onOpenDeeplink}
+          onOpenExternal={onOpenExternal}
+          onOpenExternalFailed={onOpenExternalFailed}
           onRead={onRead}
           actionable
         />
@@ -254,7 +346,10 @@ function NotificationGroups(props: {
           title={labels.centerEarlierGroup}
           items={props.readItems}
           labels={labels}
+          onOpenDetail={onOpenDetail}
           onOpenDeeplink={onOpenDeeplink}
+          onOpenExternal={onOpenExternal}
+          onOpenExternalFailed={onOpenExternalFailed}
           onRead={onRead}
           actionable
         />
@@ -264,7 +359,10 @@ function NotificationGroups(props: {
           title={labels.centerRecordedGroup}
           items={props.recorded}
           labels={labels}
+          onOpenDetail={onOpenDetail}
           onOpenDeeplink={onOpenDeeplink}
+          onOpenExternal={onOpenExternal}
+          onOpenExternalFailed={onOpenExternalFailed}
           onRead={onRead}
         />
       )}
@@ -276,8 +374,11 @@ function Group(props: {
   title: string
   items: readonly NotificationCenterItem[]
   labels: PlatformText['notifications']
+  onOpenDetail: (id: string) => void
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  onOpenExternal: (url: string) => Promise<unknown>
+  onOpenExternalFailed: () => void
   /** 主位才给动作；「仅记录」组没有动作目标，行上不出按钮（A2 只约束主位，A3 管这里）。 */
   actionable?: boolean
 }): React.ReactElement {
@@ -288,10 +389,14 @@ function Group(props: {
         {props.items.map((item) => (
           <NotificationRow
             actionable={props.actionable === true}
+            detailable={item.poster !== undefined}
             item={item}
             key={item.id}
             labels={props.labels}
+            onOpenDetail={props.onOpenDetail}
             onOpenDeeplink={props.onOpenDeeplink}
+            onOpenExternal={props.onOpenExternal}
+            onOpenExternalFailed={props.onOpenExternalFailed}
             onRead={props.onRead}
           />
         ))}
@@ -316,9 +421,14 @@ export const LONG_BODY_CHARS = 90
 function NotificationRow(props: {
   item: NotificationCenterItem
   actionable: boolean
+  /** 只有这一条真有详情内容（`poster` 存在）才给入口：没有海报的行点进去只是把正文再说一遍。 */
+  detailable: boolean
   labels: PlatformText['notifications']
+  onOpenDetail: (id: string) => void
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  onOpenExternal: (url: string) => Promise<unknown>
+  onOpenExternalFailed: () => void
 }): React.ReactElement {
   const { item, labels } = props
   const [expanded, setExpanded] = useState(false)
@@ -331,7 +441,7 @@ function NotificationRow(props: {
   return (
     <li className="notification-center-row" data-state={item.state} key={item.id}>
       <div className="notification-center-copy">
-        <strong className="notification-center-title" title={text.title}>
+        <strong className="notification-center-title" id={rowTitleId(item.id)} title={text.title}>
           {text.title}
           {merged === null ? null : (
             <span className="notification-center-merged">{labels.centerMergedCount(String(merged))}</span>
@@ -352,45 +462,28 @@ function NotificationRow(props: {
             {expanded ? labels.centerCollapse : labels.centerExpand}
           </Button>
         ) : null}
+        {props.detailable ? (
+          <Button
+            type="text"
+            size="small"
+            className="notification-center-link text-action"
+            id={detailEntryId(item.id)}
+            aria-describedby={rowTitleId(item.id)}
+            onClick={() => props.onOpenDetail(item.id)}>
+            {labels.detail.entry}
+          </Button>
+        ) : null}
       </div>
       {props.actionable ? (
         <NotificationActionButton
           item={item}
           onOpenDeeplink={props.onOpenDeeplink}
+          onOpenExternal={props.onOpenExternal}
+          onOpenExternalFailed={props.onOpenExternalFailed}
           onRead={props.onRead}
         />
       ) : null}
     </li>
-  )
-}
-
-/**
- * 主位行上的动作 = **这条通知要你做的事**，不是列表管理。
- *
- * 之前这里放的是「标为已读」——那是「我看过了」，不是「任务失败了你去看一眼」。记录里本来就有
- * `actions[0]`（如「打开任务」）与 `deeplink`，UI 不消费它，用户就只能点标记已读，事没做。
- * 现在点击真的把 deeplink 交给外壳打开；没有动作的通知本来就不会进主位。
- */
-function NotificationActionButton(props: {
-  item: NotificationCenterItem
-  onOpenDeeplink: (deeplink: NotificationDeeplink) => void
-  onRead: (id: string) => Promise<void>
-}): React.ReactElement | null {
-  const action = props.item.actions[0]
-  const deeplink = action?.deeplink ?? props.item.deeplink
-  if (action === undefined || deeplink === undefined) return null
-  const label = action.label
-  return (
-    <Button
-      size="small"
-      onClick={() => {
-        // 一次操作两个效果：把人送到地方，同时把这条标成已读。
-        // 只送不标的话，回来仍看见同一条未读，角标也不减，等于留了个没人用的钩子。
-        if (props.item.state === 'unread') void props.onRead(props.item.id)
-        props.onOpenDeeplink(deeplink)
-      }}>
-      {label}
-    </Button>
   )
 }
 

@@ -33,6 +33,12 @@ import { normalizePublishedAt } from './publishedAtNormalizer'
 import { resolveCluster } from './clusterResolver'
 import { getIntelligenceSourceDefinition, isDefillamaStablecoinRetiredPath } from './sourceCatalog'
 import { createRawRecordStore } from './rawRecordStore'
+import { parseRecordForNormalization } from './normalizeRecordParsing'
+import { describeNormalizeQueue } from './normalizeQueueDiagnostics'
+import { selectNormalizationBatch } from './normalizationBatchSelection'
+import { settleNormalizedRecord } from './normalizeRecordOutcome'
+import { buildPipelineHealthSnapshot } from './pipelineHealth'
+import { mergeNormalizeStreak, normalizeStreakUpdate, preserveNormalizeStreak } from './sourceStaleness'
 import { resolveRevision } from './revisionResolver'
 import { createSourceProfileStore, createInMemoryProfileStorage } from './sourceProfileStore'
 import { resolveAndValidateRuntimeConfig } from './sourceRuntimeConfig'
@@ -49,7 +55,6 @@ import type {
   IntelligencePipelineStateStorage
 } from '../store/intelligencePipelineStateStorage'
 import { createEmptyIntelligencePipelineSnapshot } from '../store/intelligencePipelineStateStorage'
-import { NEWS_SENTIMENT_SOURCE_IDS } from '../schema/newsSentiment'
 import type { IntelligenceRuntimeStateStorage } from '../store/intelligenceRuntimeStateStorage'
 import type { IntelligenceRuntimeStateHistoryStorage } from '../store/intelligenceRuntimeStateHistoryStorage'
 import {
@@ -67,28 +72,12 @@ import type { SentimentSignalInput, IntelligenceSentimentAggregate } from '../sc
 import type { IntelligenceSourceConfig, IntelligenceSourceDefinition } from '../schema/intelligenceSource'
 import type { ParsedIntelligenceRecord } from '../adapters/sourceAdapter'
 import type { IntelligenceEventPublisher } from './intelligenceEventPublisher'
-import {
-  classifyParsedIntelligence,
-  enrichDraftWithClassification,
-  SOURCE_CLASSIFIER_VERSION
-} from './sourceClassifiers/classifyParsedIntelligence'
+import { classifyParsedIntelligence, enrichDraftWithClassification } from './sourceClassifiers/classifyParsedIntelligence'
 import type { ClassifiedSourceEvent } from './sourceClassifiers/sourceClassifierTypes'
 import { notifySourceIssueForSource, type SourceIssueNotifier } from './sourceIssueNotifier'
 
-export type IntelligencePipelineHealth = {
-  sourceId: string
-  runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'
-  lastSuccessAt?: string
-  lastFailureAt?: string
-  consecutiveFailures: number
-  lastRunSummary?: string
-  checkpointPreview?: string
-  parserVersion?: string
-  lastPublishedAt?: string
-  cursor?: string
-  supportsHistoricalBackfill?: boolean
-  collectionGap?: boolean
-}
+export type { IntelligencePipelineHealth } from './pipelineHealth'
+import type { IntelligencePipelineHealth } from './pipelineHealth'
 
 import { collectSourceOnce, type SourceCollectionResult } from './sourceCollectionRun'
 
@@ -99,8 +88,16 @@ export type IntelligencePipeline = {
   collectSource: (input: { sourceId: string; runId: string; fixtureText?: string }) => Promise<SourceCollectionResult>
   normalizeRawRecords: (input: { sourceId?: string; limit?: number }) => Promise<{
     processedCount: number
+    /** 解析失败但**没有挡住队列**的记录数（一条坏记录继续留在待办里，下一轮重试）。 */
+    failedCount: number
+    /** 超过 24 小时还没归一化出来的新闻原始记录数（饿死诊断，见 `registerIntelligenceJobs`）。 */
+    staleNewsCount: number
+    /** 超过 24 小时还停在「已接收」的原始记录数，不分来源：盯的是队列整体还在不在动。 */
+    staleReceivedCount: number
     queuedJobs: string[]
     newItemIds: string[]
+    /** Items older than the backfill age: created, but kept out of the translate/assess queues. */
+    backfillItemIds: string[]
   }>
   assessChangedItems: (input: { itemIds?: string[] }) => Promise<{ assessmentCount: number; failedCount: number }>
   retryItemAssessment: (input: { itemId: string }) => Promise<{ assessmentCount: number; failedCount: number }>
@@ -241,32 +238,12 @@ export function createIntelligencePipeline(deps?: {
   }
 
   function buildHealthSnapshot(sourceId: string): IntelligencePipelineHealth | undefined {
-    if (isDefillamaStablecoinRetiredPath(sourceId)) return undefined
-    const state = runtimeStateStore.get('product', 'market-intelligence', sourceId)
-    if (!state) return undefined
-    const definition = getIntelligenceSourceDefinition(sourceId)
-    const checkpoint = state.checkpoint as
-      | {
-          parserVersion?: string
-          lastPublishedAt?: string
-          cursor?: string
-        }
-      | undefined
-    const isStreamSource = definition?.executionMode === 'websocket'
-    return {
+    return buildPipelineHealthSnapshot({
       sourceId,
-      runtimeStatus: state.status === 'failed' ? 'failed' : state.consecutiveFailures > 0 ? 'degraded' : 'healthy',
-      lastSuccessAt: state.lastSuccessAt,
-      lastFailureAt: state.lastFailureAt,
-      consecutiveFailures: state.consecutiveFailures,
-      lastRunSummary: state.cursorPreview,
-      checkpointPreview: state.cursorPreview,
-      parserVersion: checkpoint?.parserVersion,
-      lastPublishedAt: checkpoint?.lastPublishedAt,
-      cursor: checkpoint?.cursor,
-      supportsHistoricalBackfill: !isStreamSource,
-      collectionGap: isStreamSource
-    }
+      runtimeStateStore,
+      definition: getIntelligenceSourceDefinition(sourceId),
+      isRetired: isDefillamaStablecoinRetiredPath
+    })
   }
 
   function persistState(): Promise<void> {
@@ -312,7 +289,16 @@ export function createIntelligencePipeline(deps?: {
     checkpoint?: Record<string, unknown>,
     summary?: string
   ): Promise<void> {
-    runtimeStateStore.recordSuccess('product', 'market-intelligence', sourceId, checkpoint, summary)
+    // 采集成功会整份换掉 checkpoint；归一化连续失败是另一条线的状态，不能因此被清零。
+    const previousCheckpoint = runtimeStateStore.get('product', 'market-intelligence', sourceId)
+      ?.checkpoint as Record<string, unknown> | undefined
+    runtimeStateStore.recordSuccess(
+      'product',
+      'market-intelligence',
+      sourceId,
+      preserveNormalizeStreak(checkpoint, previousCheckpoint),
+      summary
+    )
     await recordRuntimeHealthRevision(sourceId)
     await publishEventsAfterPersist({ sourceIds: [sourceId] })
     await notifySourceIssueForSource({ notifier: deps?.sourceIssueNotifier, sourceId, health: buildHealthSnapshot(sourceId), adapterConfig: getIntelligenceSourceDefinition(sourceId)?.adapterConfig })
@@ -458,13 +444,16 @@ export function createIntelligencePipeline(deps?: {
     async normalizeRawRecords({ sourceId, limit = 100 }) {
       const queuedJobs: string[] = []
       let processedCount = 0
+      let failedCount = 0
       let stateDirty = false
+      // 按源记「解析失败 / 解析成功」：`normalize-failing` 判据读的是同源连续失败，不是全局失败数。
+      const normalizeStats = new Map<string, { failed: number; parsed: number }>()
       const newItemIds: string[] = []
-      const pending = rawRecordStore
-        .listUnprocessed()
-        .filter((record) => !isDefillamaStablecoinRetiredPath(record.sourceId))
-        .filter((record) => (sourceId ? record.sourceId === sourceId : true))
-        .slice(0, limit)
+      const backfillItemIds: string[] = []
+      const pending = selectNormalizationBatch(rawRecordStore, {
+        ...(sourceId === undefined ? {} : { sourceId }),
+        limit
+      })
 
       for (const rawRecord of pending) {
         const definition = getIntelligenceSourceDefinition(rawRecord.sourceId)
@@ -474,27 +463,25 @@ export function createIntelligencePipeline(deps?: {
         const profile = await profileStore.resolveProfile(rawRecord.sourceId)
         const { config } = resolveAndValidateRuntimeConfig({ definition, profile })
 
-        const parsed = adapter.parseRawRecord({
+        const stats = normalizeStats.get(rawRecord.sourceId) ?? { failed: 0, parsed: 0 }
+        normalizeStats.set(rawRecord.sourceId, stats)
+
+        const recordParse = parseRecordForNormalization({
+          rawRecord,
+          adapter,
           config,
-          rawRecord: {
-            ...rawRecord,
-            payloadBody: rawRecord.payloadBody
-          }
+          readPayloadBody: (record) => rawRecordStore.readPayloadBody(record),
+          ...(deps?.onMetricWindow ? { onMetricWindow: deps.onMetricWindow } : {})
         })
-        if (deps?.onMetricWindow && parsed.metricEvents?.length && rawRecord.payloadBody !== undefined) {
-          try {
-            deps.onMetricWindow({
-              sourceId: rawRecord.sourceId,
-              payloadBody: rawRecord.payloadBody,
-              ...(rawRecord.payloadMetaJson === undefined ? {} : { payloadMetaJson: rawRecord.payloadMetaJson })
-            })
-          } catch (error) {
-            console.log(JSON.stringify({
-              marker: 'MI_METRIC_WINDOW_SINK_FAILED', sourceId: rawRecord.sourceId,
-              message: String(error).slice(0, 200)
-            }))
-          }
+        // 失败的记录转 `failed` 离开待办：只隔离不挪队头，下一轮捞回来的还是这 100 条（2026-11-21）。
+        if (recordParse.state === 'failed') {
+          failedCount += 1
+          stats.failed += 1
+          rawRecordStore.markFailed(rawRecord.rawRecordId, recordParse.marker)
+          continue
         }
+        const { parsed, payloadBody } = recordParse
+        stats.parsed += 1
         rawRecordStore.markParsed(rawRecord.rawRecordId)
 
         const drafts = adapter.normalizeParsedItems
@@ -530,6 +517,15 @@ export function createIntelligencePipeline(deps?: {
           }
 
           const enrichedDraft = enrichDraftWithClassification(draft, classification)
+          // One decision, two consumers: the label and the queue status must agree, so compute it
+          // once here and hand the same boolean into the draft writer.
+          const isBackfill = resolveIsBackfillLabel({
+            publishedAt: enrichedDraft.publishedAt,
+            detectedAt: enrichedDraft.detectedAt,
+            intelligenceLayer: enrichedDraft.intelligenceLayer ?? definition.intelligenceLayer,
+            eventFamily: enrichedDraft.eventFamily ?? definition.eventFamily
+          })
+          const itemCountBefore = newItemIds.length
           const created = processNormalizedDraft({
             draft: enrichedDraft,
             parsed,
@@ -542,40 +538,53 @@ export function createIntelligencePipeline(deps?: {
             clusters,
             revisions,
             metricEvents,
-            newItemIds
+            newItemIds,
+            isBackfill
           })
           if (created) {
             recordProcessed = true
             stateDirty = true
+            if (isBackfill && newItemIds.length > itemCountBefore) {
+              backfillItemIds.push(newItemIds[newItemIds.length - 1]!)
+            }
           }
         }
 
-        if (recordProcessed) {
-          rawRecordStore.markNormalized(rawRecord.rawRecordId)
-          processedCount += 1
-          queueJob(queuedJobs, 'market-intelligence.assessChangedItems')
-          queueJob(queuedJobs, 'market-intelligence.refreshSentimentAggregates')
-          queueJob(queuedJobs, 'market-intelligence.translateItems')
-          if ((NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(rawRecord.sourceId)) {
-            queueJob(queuedJobs, 'market-intelligence.enrichNewsDocuments')
-          }
-        } else if (recordIgnored && ignoredAudit?.ignoredReasonCode) {
-          rawRecordStore.markIgnored(rawRecord.rawRecordId, {
-            ignoredReasonCode: ignoredAudit.ignoredReasonCode,
-            classifierVersion: SOURCE_CLASSIFIER_VERSION,
-            classifierNotes: ignoredAudit.eventSubtype
-          })
-        } else {
-          rawRecordStore.markNormalized(rawRecord.rawRecordId)
-        }
+        const settled = settleNormalizedRecord({
+          rawRecord,
+          store: rawRecordStore,
+          recordProcessed,
+          ...(recordIgnored && ignoredAudit !== undefined ? { ignoredAudit } : {}),
+          enqueue: (jobId) => queueJob(queuedJobs, jobId)
+        })
+        if (settled === 'processed') processedCount += 1
       }
 
       if (stateDirty) {
         await persistState()
         await publishEventsAfterPersist({ newItemIds: [...newItemIds] })
       }
+      // 同源连续失败要跨轮存活：只在这一轮归一化过的源上合并，别碰没轮到的源。
+      const nowIso = new Date().toISOString()
+      for (const [statSourceId, stats] of normalizeStats) {
+        const existing = runtimeStateStore.get('product', 'market-intelligence', statSourceId)
+        if (!existing) continue
+        const checkpoint = existing.checkpoint as Record<string, unknown> | undefined
+        runtimeStateStore.upsert({
+          owner: 'product',
+          productId: 'market-intelligence',
+          resourceId: statSourceId,
+          checkpoint: mergeNormalizeStreak(
+            checkpoint,
+            normalizeStreakUpdate({ checkpoint, failed: stats.failed, processed: stats.parsed, nowIso })
+          )
+        })
+      }
 
-      return { processedCount, queuedJobs: [...queuedJobs], newItemIds }
+      // 饿死诊断：新原始记录进来、却超过一天没有归一化出来的新闻条目——这次就是它被静默盖住的。
+      // 第二个数字不分来源，盯的是「队列整体还在不在动」：那次连 730 条行情记录也一起卡住了。
+      const queueDiagnostics = describeNormalizeQueue(rawRecordStore.listUnprocessed())
+      return { processedCount, failedCount, ...queueDiagnostics, queuedJobs: [...queuedJobs], newItemIds, backfillItemIds }
     },
 
     async assessChangedItems({ itemIds }) {
@@ -802,6 +811,8 @@ function processNormalizedDraft(input: {
   revisions: IntelligenceItemRevision[]
   metricEvents: MetricIntelligenceEvent[]
   newItemIds: string[]
+  /** Older than the backfill age: kept out of the queues, so it must not say "queued". */
+  isBackfill: boolean
 }): boolean {
   const publishedAt = normalizePublishedAt(input.draft.publishedAt) ?? input.draft.publishedAt
   const eventType = normalizeEventType({
@@ -826,7 +837,7 @@ function processNormalizedDraft(input: {
       canonicalDedupeKey: normalizedDraft.canonicalDedupeKey,
       title: normalizedDraft.title,
       summary: normalizedDraft.summary,
-      bodyHash: input.parsed.bodyHash,
+      bodyHash: input.draft.bodyHash ?? input.parsed.bodyHash,
       publishedAt: normalizedDraft.publishedAt,
       detectedAt: normalizedDraft.detectedAt
     },
@@ -849,13 +860,9 @@ function processNormalizedDraft(input: {
 
   const processingLabels = serializeProcessingLabels(
     mergeProcessingLabels(parseProcessingLabels(existingItem?.processingLabelsJson), {
-      isBackfill: resolveIsBackfillLabel({
-        publishedAt: normalizedDraft.publishedAt,
-        detectedAt: normalizedDraft.detectedAt,
-        intelligenceLayer: normalizedDraft.intelligenceLayer ?? input.definition.intelligenceLayer,
-        eventFamily: normalizedDraft.eventFamily ?? input.definition.eventFamily
-      }),
-      assessmentStatus: 'queued',
+      isBackfill: input.isBackfill,
+      // A backfill item never enters the assess queue, so "queued" would be a lie it can never leave.
+      assessmentStatus: input.isBackfill ? 'pending' : 'queued',
       intelligenceLayer: normalizedDraft.intelligenceLayer ?? input.definition.intelligenceLayer,
       dataDomain: normalizedDraft.dataDomain ?? input.definition.dataDomain,
       eventFamily: normalizedDraft.eventFamily ?? input.definition.eventFamily,
@@ -946,7 +953,21 @@ function persistMetricEventFromDraft(input: {
     const draft = JSON.parse(input.draftJson) as MetricIntelligenceEventDraft
     const metricEventId = `metric-${input.itemId}-${draft.metricKey}`
     const existing = input.metricEvents.find((entry) => entry.metricEventId === metricEventId)
-    if (existing) return existing
+    if (existing) {
+      // Same day, new value: the source revised `period`. Take it only when the incoming release
+      // is not older than what we already hold — a late-arriving older payload must not undo a
+      // newer revision (PRD AC-18: one point per day, the latest release wins).
+      const incoming = Date.parse(draft.releaseTime)
+      const held = Date.parse(existing.releaseTime)
+      const notOlder = Number.isFinite(incoming) && (!Number.isFinite(held) || incoming >= held)
+      if (notOlder && existing.actual !== draft.actual) {
+        existing.actual = draft.actual
+        existing.releaseTime = draft.releaseTime
+        existing.rawValueJson = draft.rawValueJson
+        existing.surpriseDirection = draft.surpriseDirection
+      }
+      return existing
+    }
 
     const event: MetricIntelligenceEvent = {
       metricEventId,

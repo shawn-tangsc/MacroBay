@@ -90,10 +90,17 @@ describe('the empty macro section in a daily briefing', () => {
 })
 
 /**
- * 「未来 7 天」那一栏的两段话（产品 2026-11-14 定）：主句说**我们判不出**，
- * 小标题给自己的一级指标排期。这里钉两件事：
+ * 「未来 7 天」那一栏的两段话：主句说**我们判不出**，小标题给自己的一级排期。
+ *
+ * 这里钉三件事：
  * 1. 中英都齐、都非空；
- * 2. **「无法判定」与「确实没有」必须是两句不同的话**——合并成一句就等于替来源下断言。
+ * 2. **「无法判定」与「确实没有」必须是两句不同的话**——合并成一句就等于替来源下断言；
+ * 3. 理由换了（R44）：不再是「来源没给重要性」，而是**我们还没分级**。中文说「分级」不说「定档」
+ *    （行上的值叫「未分级」，同屏还有「日历时间：待定」，说「定档」会被读成日期没定），英文用 `rated`。
+ *
+ * 什么时候出哪一句（周里有事件且一条已分级的都没有 → 这句；周里零事件 → 「没有高影响事件」）
+ * 是数据判据，钉在 `service/intelligence/daily-briefing/dailyBriefingEmptyCodes.test.ts`——那里能构造事件，
+ * 文案表这边没有事件可判，只能钉用词与两句不同。
  */
 describe('the "next 7 days" section when importance is unknown', () => {
   it('carries both sentences in both languages, and never reuses the "nothing there" one', () => {
@@ -105,6 +112,10 @@ describe('the "next 7 days" section when importance is unknown', () => {
       expect(unknown.sentence.trim(), language).not.toBe('')
       expect(unknown.scheduleTitle.trim(), language).not.toBe('')
       expect(unknown.sentence, language).not.toBe(noEvent)
+      // 用词：中文「分级」、英文 `rated`；「定档」与旧理由（来源未提供重要性）都不许回来。
+      expect(unknown.sentence, language).toMatch(language === 'zh-CN' ? /分级/ : /rated/)
+      expect(unknown.sentence, language).not.toContain('定档')
+      expect(unknown.sentence, language).not.toContain(language === 'zh-CN' ? '来源未提供重要性' : 'the source provides no importance')
       /* 「接下来关注」没有条目时整块不渲染（用户 2026-11-15），这两句占位话已从文案表删掉。
          这里钉住「删干净了」：有人把它们加回来，这条就红——否则文案表里会再长出一句没人渲染的死话。 */
       /* 整张 `nextEmptyCodes` 已随「没有条目就整块不渲染」一起删掉（用户 2026-11-15 + Chief）。

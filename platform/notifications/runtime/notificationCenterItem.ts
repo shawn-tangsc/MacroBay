@@ -13,6 +13,7 @@ import {
   toSafeNotificationRecord,
   type NotificationCenterAction,
   type NotificationCenterItem,
+  type NotificationPosterEvidence,
   type NotificationRecord
 } from '../contracts/notificationContracts'
 import type { NotificationCategory } from '../contracts/notificationEventCatalog'
@@ -23,7 +24,9 @@ export function toNotificationCenterItem(
   content: NotificationDeliveryContent,
   category: NotificationCategory | undefined,
   /** 手机这一档的补充句（已解析）。只在「一条可用通道都没有」时由调用方给。 */
-  deliveryHint?: string
+  deliveryHint?: string,
+  /** 海报这一行（#46）：`undefined` ＝ 整行不出现；由 `posterEvidenceOf` 组装。 */
+  poster?: NotificationPosterEvidence
 ): NotificationCenterItem {
   const safe = toSafeNotificationRecord(record)
   const {
@@ -53,6 +56,7 @@ export function toNotificationCenterItem(
     actions: labelled,
     ...(content.occurrenceLabel === undefined ? {} : { occurrenceLabel: content.occurrenceLabel }),
     ...(deliveryHint === undefined ? {} : { deliveryHint }),
+    ...(poster === undefined ? {} : { poster }),
     ...(category === undefined ? {} : { category })
   }
 }

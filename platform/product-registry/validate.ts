@@ -482,6 +482,14 @@ export function validateDiscoveredProductManifest(
     validateSettingsSectionContribution(productId, productDir, contribution, globalSettingsIds)
   }
 
+  // 一次性窗口入口：不进菜单，但模块必须真实存在——否则壳层要到主进程起窗口那一刻才发现，
+  // 而那时正在出图，报错只会变成「这次没图」。
+  collectUniqueLocalIds(shellContributions.windowEntries ?? [], 'window entry')
+  for (const contribution of shellContributions.windowEntries ?? []) {
+    assertKebabCaseId(contribution.id, `window entry id "${contribution.id}"`)
+    resolveContributionModulePath(productDir, contribution.module)
+  }
+
   for (const contribution of manifest.assistantTemplates ?? []) {
     validateProductAssistantTemplate(contribution)
   }

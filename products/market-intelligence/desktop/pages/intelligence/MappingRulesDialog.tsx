@@ -13,6 +13,7 @@ import type { MappingRulesRead } from '../../../service/intelligence/macro-calen
 import type {
   CodeTableRead, CodeTableReadRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
+import type { PendingReason } from '../../../service/intelligence/macro-calendar/marketCalendarCodeTable'
 import type {
   CalendarEventListRead, CalendarEventRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventListRead'
@@ -57,6 +58,12 @@ export type MappingRulesText = Readonly<{
   codeStatus: Readonly<Record<'active' | 'not-built' | 'pending' | 'retired', string>>
   officialOpen: string
   officialPending: string
+  /**
+   * 待补理由的白话文案（键 = 码表闭集的 `PendingReason`）。悬停里给读者看的是这一句，
+   * **不是英文 token**；用 `Record<PendingReason, string>` 兜底：闭集加值却漏配文案就编译红，
+   * 渲染处不许写 `default` 回退成 token（那样第 7 个值会悄悄泄露给读者）。
+   */
+  officialPendingReasons: Readonly<Record<PendingReason, string>>
   officialNone: string
   codeEmpty: string
   unmappedColumns: Readonly<Record<'sourceId' | 'country' | 'rows' | 'sample' | 'firstSeen' | 'providers' | 'reason', string>>

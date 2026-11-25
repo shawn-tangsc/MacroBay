@@ -88,7 +88,9 @@ describe('outbound transport boundary', () => {
   it('has no direct global fetch usage outside the platform adapter', () => {
     const violations = findTransportViolations(collectSources())
 
-    expect(violations).toEqual([])
+    // 失败时把 offenders 打进断言信息：预检钩子按「失败行里有没有本次提交的文件」判断该不该拦，
+    // 只给一句 `expected [] to equal []` 的话，钩子永远也归不了责，只能放行。
+    expect(violations, violations.join('\n')).toEqual([])
   })
 
   it('flags every banned form when one is injected', () => {

@@ -1,7 +1,6 @@
 import { fredSeriesFor } from './fredIndicatorYoY'
 import { macroCalendarReleaseValueMappings } from './macroCalendarReleaseValueMappingPolicy'
-import { MACRO_INDICATOR_CARD_KEYS } from './macroIndicatorCardFacts'
-import { MACRO_INDICATOR_GROUP_METRIC_KEYS } from './macroIndicatorCardGroups'
+import { MACRO_INDICATOR_CARD_KEYS } from './macroIndicatorCardGroups'
 import { narwhalMeasureMetricKeys } from './marketCalendarNarwhalMeasureKeys'
 
 /**
@@ -180,7 +179,7 @@ export const coreIndicatorOfficialLegExceptions: readonly CoreIndicatorOfficialL
 ] as const)
 
 export function metricsWithoutOfficialLeg(): readonly string[] {
-  return MACRO_INDICATOR_GROUP_METRIC_KEYS.filter((metricKey) =>
+  return MACRO_INDICATOR_CARD_KEYS.filter((metricKey) =>
     !valueSourcesForMetric(metricKey).some((source) => source.kind === 'official'))
 }
 

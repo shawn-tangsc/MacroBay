@@ -41,6 +41,12 @@ export type NormalizedIntelligenceItemDraft = {
   eventSubtype?: string
   metricEventJson?: string
   impactHintJson?: string
+  /**
+   * Per-draft content hash. A metric payload that carries 365 days must not make every one of
+   * them look "changed" whenever a single day's value moves, so a metric draft hashes its own
+   * key/period/value instead of inheriting the whole payload's hash.
+   */
+  bodyHash?: string
 }
 
 export type IntelligenceAdapterError = {

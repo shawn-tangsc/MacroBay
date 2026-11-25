@@ -76,6 +76,8 @@ mi: miText['zh-CN'],
             retry: '再试一次',
             sourcesNotConfigured: '还没有配置来源',
             sourcesNotEnabled: '来源没有启用',
+            /** 说到**哪一格**时用它：源名进括号，句子本身不手拼（`{source}` 由调用方填）。 */
+            sourcesNotEnabledWithSource: '来源没有启用（{source}）',
             configureSources: '去设置配置',
             enableSources: '去启用'
           },
@@ -109,7 +111,7 @@ mi: miText['zh-CN'],
           },
           analysisWorkspace: {
             openAgent: '完整 Agent 面板', stop: '停止', approvalRequired: '等待工具审批，请打开完整 Agent 面板处理；也可停止本次运行。',
-            title: '数字货币解读 Agent', chat: '分析对话', dashboard: '市场看板', view: '切换工作区', selectedAnalysis: '已绑定选中分析', selectedEvent: '选中事件', selectedNews: '选中舆情', contextAnalysis: '引用分析',
+            title: '数字货币解读 Agent', chat: '分析对话', openChat: '打开分析对话', openAnalysisDrawer: '打开 AI 分析与舆情', analysisDrawerTitle: 'AI 分析与舆情', dashboard: '市场看板', view: '切换工作区', selectedAnalysis: '已绑定选中分析', selectedEvent: '选中事件', selectedNews: '选中舆情', contextAnalysis: '引用分析',
             newConversation: '市场解读对话', newChatAction: '新对话', sessionHistory: '历史会话', deleteSession: '删除会话', deleteSessionConfirm: '删除这个会话？', cancel: '取消', noSessions: '还没有历史会话', untitledSession: '未命名会话', loading: '正在加载 Agent…', noSelection: '当前市场 · 可选择下方分析节点追问', clearSelection: '返回当前市场',
             empty: '向市场解读员提问，或选择下方时间轴中的分析。', input: '输入问题', placeholder: '想了解哪些市场变化？', followUpPlaceholder: '针对选中的分析继续提问…',
             send: '发送', sending: '分析中', resize: '调整日历与舆情高度', failed: '发送未完成，请检查会话记录和模型配置后再试。', modelRequired: '请在通用 Agent 设置中为数字货币市场解读员选择可用模型。',
@@ -227,6 +229,8 @@ mi: miText['zh-CN'],
             // 时间轴跨事件组：同一屏出现多个事件时，每行标出它属于哪条事件、在说什么，
             // 否则相隔几十秒的两条结论（一条消息面、一条宏观）看起来像重复发布。
             groupTypes: { macro: '宏观', 'market-reaction': '行情反应', capital: '资金面', sentiment: '消息面', funding: '资金费率', 'cross-asset': '跨资产' },
+            /** 新闻分组里那行标题是**背景**，不是触发（用户 2026-11-21）；类型标签与它分两行。 */
+            groupBackground: '背景新闻：{title}',
             settings: '设置', settingsTitle: 'AI 分析设置', analysisEnabled: '开启 AI 分析',
             analysisEnabledHint: '关闭后不再自动分析，也不会调用模型。', analysisModel: '分析模型', modelFollowDefault: '跟随默认助手模型', followsDefaultPrefix: '跟随默认：',
             enableAnalysis: '开启 AI 分析', analysisOffHint: 'AI 分析已关闭。历史分析仍保留，开启后才会生成新的分析。',
@@ -444,6 +448,53 @@ mi: miText['zh-CN'],
               'contract-invalid': '这条信号有没有被分析过，这次没查到（不是没有分析过）。上面的数字不受影响。',
               ariaLabel: '这条信号有没有被分析过，这次没查到；上面的数字不受影响',
             },
+            /**
+             * 国债收益率 · 日频（左表右图）。行名用 `3M/2Y/…` 与契约同一套写法；
+             * 「10Y 实际利率 / 10Y 通胀补偿」是分解行，不进曲线。
+             */
+            ustCurve: {
+              title: '国债收益率 · 日频',
+              info: 'FRED 日收盘，最后一个点就是观测日，不画到今天。起点归一按基点算：4.5% → 5.0% 是 +50bp，不是 +11%。10Y 实际利率 + 10Y 通胀补偿 = 10Y，这两行只做分解、不进曲线，三行日期不同时不能直接相加；价差要两条腿同一天都有收盘，缺一天就留空。',
+              tableAria: '国债收益率读数',
+              colName: '指标',
+              colLatest: '最新',
+              colChange: '变化（bp）',
+              windows: { d1: '1 日', w1: '1 周', m1: '1 月', y1: '1 年' },
+              periods: { '1w': '1 周', '1m': '1 月', '3m': '3 月', '1y': '1 年' },
+              rows: {
+                '3m': '3M', '2y': '2Y', '5y': '5Y', '10y': '10Y', '30y': '30Y',
+                '10y2y': '10Y−2Y', '10y3m': '10Y−3M', real: '10Y 实际利率', breakeven: '10Y 通胀补偿'
+              },
+              notConnected: '未接入',
+              unreadableOne: '暂时读不到',
+              dash: '—',
+              dashShort: '这条序列还没有这么久的历史',
+              dashLegMissing: '缺 {leg}',
+              dashLegsDiffer: '两条腿的观测日不同',
+              axisLabel: '纵轴',
+              curveLabel: '曲线',
+              mode: { level: '收益率', normalized: '起点归一' },
+              modeAria: '纵轴读数',
+              periodAria: '曲线窗口',
+              refresh: '刷新',
+              loading: '正在读取国债日频收益率…',
+              footLag: 'FRED 日收盘，可能滞后 1–2 个交易日',
+              footSource: '来源 FRED',
+              ariaLevel: '国债收益率日频折线图：横轴交易日，纵轴收益率百分比',
+              ariaNormalized: '国债收益率起点归一日频折线图：横轴交易日，纵轴相对窗口起点的基点变化',
+              signs: { plus: '+', minus: '−', zero: '0' },
+              templates: {
+                percent: '{value}%',
+                basisPoints: '{value}bp',
+                separator: ' · ',
+                asOf: '截至 {date}',
+                footObserved: '观测日 {date}',
+                footRange: '观测日 {from} 至 {to}',
+                footZone: '时区 {zone}',
+                footBase: '曲线归一自 {date}',
+                footBasePerLine: '各线自首个观测日归一'
+              }
+            },
             crossAsset: {
               title: '纳斯达克 100 / QQQ 代理 × BTC × ETH 联动', subtitle: 'Binance QQQUSDT 代币化永续代理（24/7，默认，带「代理」标签）；该腿不可用时回落到真实纳斯达克 100 指数（USTEC · 美股现金时段）',
               chart: '同起点收益率',
@@ -483,42 +534,23 @@ mi: miText['zh-CN'],
               staleAsOf: '偏旧 · 截至 {time}',
               /* 供应商永久不提供这个品种：整行遮住只留这一句（用户 2026-11-16：说清楚，来源未提供）。 */
               sourceRefused: '来源未提供',
-              /* 表标题右上的勾：勾上就不显示这类行，取消就照旧显示（读者自己选，不替他决定）。 */
-              hideUnavailableRows: '不显示来源不可用的行',
               /* 原因收进 ⓘ：先给最近收盘最新的一条，其余合并成一句；整块仍受 4 行上限约束。 */
               planNotServedReason: '{name}：供应商当前套餐不提供这个品种，最近一次收盘 {time}。',
               planNotServedReasonMore: '{name}：供应商当前套餐不提供这个品种，最近一次收盘 {time}；另有 {count} 个品种同样不提供。',
               staleRead: '这次刷新没读出来，下面是上一次的读数。',
               // 界面设计 2026-11-09 的条件①：这句要说清「重启之后才生效」与「怎么重启」，不能只写「版本不一致」。
               contractMismatch: '界面与主进程的版本不一致，当前数据无法读取。重启之后才会生效：点下面的「重启应用」，或完全退出观潮再打开——只刷新页面不够。',
-              quote: '纳斯达克 100 最新收盘', closed: '已闭合涨跌', observed: '成交时间', analysis: '闭合数据截至',
+              quote: '纳斯达克 100 最新收盘', observed: '成交时间', analysis: '闭合数据截至',
               observations: '跨市场观察', correlations: '24h · 5m 收益率相关性', indexBtc: '纳斯达克 100 ↔ BTC', indexEth: '纳斯达克 100 ↔ ETH',
               proxyTag: '代理', proxyCaveat: '代币化合成品：Binance QQQUSDT 永续（24/7），不是标准纳斯达克 100 指数。本行默认显示它；真实指数只在它拿不到数据时接手。',
               indexCaveat: '真实纳斯达克 100 指数（RealMarketAPI · USTEC），只在美股现金时段产生新的 5 分钟 K 线。',
               marketClosed: '休市', marketClosedHint: '美股现金时段（纽约 09:30–16:00）之外没有新的 5 分钟 K 线，这里显示最后一根已收盘 K 线。',
-              lastClosedBar: '最后一根已收盘 K 线',
               proxyMarketState: '代币化代理 24/7 交易',
               statusTitle: '市场状态', statusColumns: { asset: '资产', latest: '最新', '15m': '15m', '1h': '1h', '24h': '24h', '7d': '7d' },
-              assetLabels: { dxy: '美元 DXY', gold: '黄金 XAU', us10y: '美债 10Y', realRate: '实际利率' },
+              assetLabels: { dxy: '美元 DXY', gold: '黄金 XAU' },
+              statusReads: { dxy: '美元↑ 对加密逆风', gold: '与 BTC 同跌 = 贴现率驱动', index: '风险偏好', btc: '双重属性：风险 + 流动性', eth: '跟随 BTC，弹性更大' },
               syntheticTag: '合成', syntheticCaveat: '该美元指数由 ICE 篮子货币按公布权重合成，不是官方 ICE DXY 指数。',
               notConnected: '未接入', notConnectedHint: '尚未接入数据源，接入后自动显示',
-              dailyFrequency: '日频', bpUnit: 'bp',
-              // One observation per trading day, so the four intraday windows are one cell whose date
-              // is the day FRED actually published — never "now".
-              dailyChangeWithDate: '日频 {change}（截至 {date}）',
-              // 区块自己的节奏：官方日频每交易日发布一次，没发布新收盘前这行不会变——读者
-              // 看到一行两天不动时会以为坏了，所以节奏写在区块表头上，不塞进数值格。
-              dailyCadence: '每交易日发布一次；未发布新收盘前不变',
-              dailyChangeUnknownWithDate: '日频 —（截至 {date}）',
-              termSpread: '期限利差',
-              // 通胀预期是自己一条序列，可以比这两行早一天（2026-10-15 就是），所以永远带自己的观察日。
-              inflationExpectationWithDate: '通胀预期 {value}%（截至 {date}）',
-              // 同一句话里本来就并列的两段（同一张表相邻两个读数）合成一个键：` · ` 是句子的一部分，
-              // 不是调用点拼出来的结构。只有一段时各走单段键，不为少一行硬合。
-              dailySpreadAndInflation: '期限利差 {spread} · 通胀预期 {inflation}%（截至 {date}）',
-              dailySpreadOnly: '期限利差 {spread}',
-              dailyMixedDates: '两条日频序列观察日不一致，不计算差值',
-              dailyCaveat: '官方日频收盘，仅反映交易日收盘水平，不解释盘中波动。',
               // 跨市场判读（设计 142）。文案一律读者语言：剧本名是口语短名，解释是"钱在做什么"，
               // 数字只在"不像"里出现一次，且带上是哪条腿没走成——只给名字的结论读者已经有了。
               reading: {
@@ -540,6 +572,8 @@ mi: miText['zh-CN'],
                 // 没有剧本匹配时：说清**最接近**的那个剧本，以及是哪条腿没走成——只点名字读起来像半句话，
                 // 甚至像自相矛盾（「看不出是哪一种」+「不像 X」）。
                 nearestMiss: '最接近的是 {scenario}，但 {leg}没走成',
+                // 缺腿时「按仅有的数据能排除什么」：每一条都是被读到的某条腿否掉的，与缺的那条无关。
+                ruledOut: '能排除 {scenario}（{leg}没走成）',
                 // 认不出组合时的兜底描述：不是"我不知道"，而是把四条腿说成人话，读者能拿上表逐格核对。
                 noDriverNone: '几条线都在自己的平常波动里，看不出有谁在推',
                 noDriverOne: '只有 {direction}，其余几条都在自己的平常波动里',
@@ -552,8 +586,10 @@ mi: miText['zh-CN'],
                 relative: 'BTC−纳指 {btcMinusIndex} · ETH−BTC {ethMinusBtc}',
                 undetermined: {
                   'window-not-judged': '这个窗口不做解读：相关性固定按 24 小时算，切回 24H',
-                  'legs-missing': '数据不足，暂不判：{leg}这条腿在该窗口没有数据',
-                  stale: '数据不足，暂不判：{leg}的数据已停止更新',
+                  // 缺腿时不再整条停住：说清缺哪条、判不出是哪一种，能排除的另起一行列出来（用户 2026-11-24）。
+                  // 「档」在本产品里专指重要性（高/中/低/未分级），剧本是「哪一种」，别混用。
+                  'legs-missing': '{leg}这个窗口没有数据，判不出是哪一种',
+                  stale: '{leg}的数据已停止更新，判不出是哪一种',
                   'no-match': '看不出是哪一种：几条线没走出能被认出的组合'
                 },
                 notices: {
@@ -562,7 +598,6 @@ mi: miText['zh-CN'],
               },
               /* 行名旁那颗 ⓘ 的可访问名：这一行的说明句只在它的浮层里。 */
               rowHint: '{name}：这一行的说明',
-              statusReads: { dxy: '美元↑ 对加密逆风', gold: '与 BTC 同跌 = 贴现率驱动', us10y: '名义资金成本', realRate: '与 BTC 关系最直接', index: '风险偏好', btc: '双重属性：风险 + 流动性', eth: '跟随 BTC，弹性更大' },
               btcIndex: 'BTC − 纳斯达克 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: '样本', coverage: '历史覆盖',
               states: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', limited: '资源受限', unavailable: '不可用', missing: '无数据' },
               liveStateLabels: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', unavailable: '实时不可用' },
@@ -623,6 +658,112 @@ mi: miText['zh-CN'],
               sourceStates: { loading: '加载中', available: '指数读到', stale: '指数偏旧 · 截至 {time}', empty: '暂无观测值', unavailable: '指数读不到' },
               manageSettings: '管理恐惧与贪婪设置',
               buckets: { 'extreme-fear': '极度恐惧', fear: '恐惧', neutral: '中性', greed: '贪婪', 'extreme-greed': '极度贪婪' }
+            },
+            /**
+             * 恐惧与防跌溢价卡。键名由界面定稿冻结；`titleInfo` / `titleInfoLabel` 是界面键表里的
+             * `title.info` / `title.infoLabel`——`title` 已被卡名占用，TS 里不能再当对象父键，
+             * 见 docs-private/.../178-*.md §6.2 的说明。
+             */
+            defensivePremium: {
+              title: '恐惧与防跌溢价',
+              titleInfo: '把「恐惧与贪婪」和「BTC 期权的防跌溢价」放在一起读：一边是市场怕不怕，一边是买下跌保护贵不贵。它回答情绪落在哪一档、保费在往哪边动，以及两者合起来是什么局面——只表达组合，不给方向，也不给买卖点。两半口径不同：恐惧贪婪是全球加密情绪指数，防跌溢价来自 BTC、Deribit 单所的期权；两者不能相加，也不能互相印证；两半各自怎么读，看那一格自己的 ⓘ。两半的日期都是数据源日（UTC）。数据来源：恐惧贪婪来自 Alternative.me，偏斜来自 Deribit。',
+              titleInfoLabel: '关于这张卡',
+              window: '近 30 天',
+              observedAt: '观测时间',
+              fearGreed: {
+                name: '恐惧与贪婪',
+                axis: '指数 0–100',
+                asOf: '截至',
+                infoLabel: '关于恐惧贪婪',
+                info: {
+                  volatility: '恐惧贪婪指数本身包含波动率因子：它和隐含波动率同涨时，不能当成两个独立证据。',
+                  percentile: '过去一年排在第 {percentile}%',
+                  percentileInsufficient: '历史不足，暂不给分位'
+                }
+              },
+              skew: {
+                name: 'BTC 期权偏斜（Deribit）',
+                asOf: '截至',
+                unit: '百分点',
+                axis: 'BTC 期权偏斜（百分点）',
+                notConnected: '期权偏斜还没接入。',
+                empty: '暂无已采集的期权偏斜读数。',
+                accumulating: '还在攒：已有 {collected} 个读数，还差 {remaining} 个。',
+                infoLabel: '关于期权偏斜',
+                info: {
+                  definition: '30 天 25Δ 风险反转：25Δ 看跌 IV − 25Δ 看涨 IV',
+                  relative: '隐含波动率的绝对值没有意义，要和它自己的历史比；线往上只说明比过去贵。',
+                  since: '偏斜是接入后才开始攒的，更早那段留白'
+                },
+                unavailable: {
+                  connection: '期权偏斜：Deribit 连不上。',
+                  source: '期权偏斜：来源暂时不可用。',
+                  read: '期权偏斜：读数没读出来。'
+                },
+                direction: {
+                  window: '近 5 天',
+                  steeper: '走阔',
+                  flatter: '收窄',
+                  flat: '基本没动',
+                  insufficient: '偏斜还不够 5 天，不判方向。',
+                  stale: '偏斜数据停在 {time}。',
+                  discontinuous: '偏斜数据不连续，不判方向。'
+                }
+              },
+              history: { remaining: '从 {date} 开始记录 · 还差 {n} 个读数' },
+              chart: {
+                fearGreedAria: '恐惧贪婪指数走势图：横轴是日期，纵轴是 0 到 100 的指数值',
+                skewAria: '25Δ 风险反转走势图：横轴是日期，纵轴是百分点',
+                fearGreedSummary: '恐惧贪婪走势：{from} 至 {to}，共 {count} 个源日；首值 {first}，末值 {last}，指数 0–100。',
+                skewSummary: '25Δ 风险反转走势：{from} 至 {to}，共 {count} 个源日；首值 {first}，末值 {last}，单位百分点。'
+              },
+              stale: { pill: '偏旧', stopsAt: '数据停在 {date}' },
+              action: { refresh: '刷新', enable: '去启用', viewSource: '查看来源' },
+              verdict: {
+                asOfSuffix: '（截至 {date}）',
+                fear: {
+                  steeper: '情绪在恐惧档，防跌保费在走阔。',
+                  flatter: '情绪在恐惧档，防跌保费在收窄。',
+                  flat: '情绪在恐惧档，防跌保费基本没动。',
+                  skewMissing: '情绪在恐惧档，偏斜这半没有可用的方向。',
+                  skewUnknown: {
+                    insufficient: '情绪在恐惧档；偏斜还不够 5 天，暂不判方向。',
+                    stale: '情绪在恐惧档；偏斜数据停在 {date}，暂不判方向。',
+                    discontinuous: '情绪在恐惧档；偏斜读数不连续，暂不判方向。'
+                  }
+                },
+                greed: {
+                  steeper: '情绪在贪婪档，防跌保费在走阔。',
+                  flatter: '情绪在贪婪档，防跌保费在收窄。',
+                  flat: '情绪在贪婪档，防跌保费基本没动。',
+                  skewMissing: '情绪在贪婪档，偏斜这半没有可用的方向。',
+                  skewUnknown: {
+                    insufficient: '情绪在贪婪档；偏斜还不够 5 天，暂不判方向。',
+                    stale: '情绪在贪婪档；偏斜数据停在 {date}，暂不判方向。',
+                    discontinuous: '情绪在贪婪档；偏斜读数不连续，暂不判方向。'
+                  }
+                },
+                neutral: {
+                  steeper: '情绪在中性档，防跌保费在走阔。',
+                  flatter: '情绪在中性档，防跌保费在收窄。',
+                  flat: '情绪在中性档，防跌保费基本没动。',
+                  skewMissing: '情绪在中性档，偏斜这半没有可用的方向。',
+                  skewUnknown: {
+                    insufficient: '情绪在中性档；偏斜还不够 5 天，暂不判方向。',
+                    stale: '情绪在中性档；偏斜数据停在 {date}，暂不判方向。',
+                    discontinuous: '情绪在中性档；偏斜读数不连续，暂不判方向。'
+                  }
+                },
+                fgMissing: {
+                  steeper: '偏斜在走阔，恐惧贪婪这半没有可用的读数。',
+                  flatter: '偏斜在收窄，恐惧贪婪这半没有可用的读数。',
+                  flat: '偏斜基本没动，恐惧贪婪这半没有可用的读数。'
+                }
+              },
+              degraded: {
+                fearGreed: '恐惧贪婪这半读不到，这句结论给不出组合。',
+                skew: '偏斜这半读不到，这句结论给不出组合。'
+              }
             },
             positioning: {
               title: '永续持仓与资金费率',
@@ -685,7 +826,6 @@ mi: miText['zh-CN'],
               markShort: '疑似空头爆仓 {pct}',
               markLongMany: '疑似多头爆仓 ×{count}',
               markShortMany: '疑似空头爆仓 ×{count}',
-              markMixedMany: '疑似爆仓 ×{count}',
               signalHover: '{rule}｜窗口 {window}｜{kind}',
               signalKindInferred: '推断值',
               window15m: '15 分钟',
@@ -1000,7 +1140,7 @@ mi: miText['zh-CN'],
             },
             unifiedDay: { total: '当日共 {count} 条', grouped: '已按类型分组', groupCount: '{type} · {count} 条', empty: '当日暂无事件', timePending: '待定', more: '还有 {count} 条', loading: '加载中', incomplete: '未完整加载', back: '返回当日列表', storageUnavailable: '存储受限，已有数据保留', coverage: '读取范围：{months}（UTC 月，含网格相邻月）；官方每月最多 200 条' },
             calendarPanel: { title: '日历源', configure: '在数据源中配置', loading: '正在加载日历源…', unavailable: '当前面板没有可配置的日历源。', pending: '待接入', enabled: '已启用', disabled: '未启用' },
-            market: { marketReadFailure: { 'input-invalid': '这次读取的请求没有通过校验，刷新一次会重新发起。', 'read-threw': '这次读取没有完成，可以重试。', 'too-large': '这段窗口的事件太多，这次没有读完，可以重试。', 'cursor-loop': '读取没有继续向前，已停下，可以重试。' }, refreshOutcome: { succeeded: '刷新成功', failed: '刷新失败', unattempted: '本次尚未刷新' }, refreshTrigger: { manual: '手动', automatic: '自动' }, attemptFailure: { 'input-invalid': '请求无效', 'credential-not-configured': '未配置凭据', 'response-unavailable': '来源未响应', 'archive-unavailable': '证据归档不可用', 'parse-unavailable': '解析受限', 'storage-unavailable': '存储不可用', 'storage-pressure': '存储受限' }, collectedAt: '数据采集于', retainedData: '显示上次数据', automaticRefresh: '每 {interval} 分钟自动更新', officialActual: '官方公布值', officialPrevious: '官方前值', sourceAdvanced: '该来源此后已更新；以下数值与时间属于上方那条观测。', linkedTimeOfficial: '日历时间：官方', linkedTimeProvider: '日历时间：Narwhal', linkedTimePending: '日历时间：待定', missingValue: '暂无', importance: { high: '高', medium: '中', low: '低' }, locale: 'zh' as const, refresh: '刷新市场日历', loading: '正在读取市场事件…', pending: '正在刷新市场日历…', completed: '市场日历已更新', partial: '部分来源失败，保留已有数据', unavailable: '刷新未完成，已有数据可能过期', queryUnavailable: '市场事件读取受限', settings: '管理市场日历来源', unknownCountry: '未知国家', consensus: '市场预期', surprise: '预期差', surpriseBeat: '超预期', surpriseMiss: '低于预期', surpriseInline: '符合预期', surpriseUnavailable: '无一致预期', surpriseNotComparable: '预期差不可比', providerPrevious: '前值（Narwhal）', providerActual: '公布值（Narwhal）', comparison: '暂不可比较',
+            market: { marketReadFailure: { 'input-invalid': '这次读取的请求没有通过校验，刷新一次会重新发起。', 'read-threw': '这次读取没有完成，可以重试。', 'too-large': '这段窗口的事件太多，这次没有读完，可以重试。', 'cursor-loop': '读取没有继续向前，已停下，可以重试。' }, refreshOutcome: { succeeded: '刷新成功', failed: '刷新失败', unattempted: '本次尚未刷新' }, refreshTrigger: { manual: '手动', automatic: '自动' }, attemptFailure: { 'input-invalid': '请求无效', 'credential-not-configured': '未配置凭据', 'response-unavailable': '来源未响应', 'archive-unavailable': '证据归档不可用', 'parse-unavailable': '解析受限', 'storage-unavailable': '存储不可用', 'storage-pressure': '存储受限' }, collectedAt: '数据采集于', retainedData: '显示上次数据', automaticRefresh: '每 {interval} 分钟自动更新', officialActual: '官方公布值', officialPrevious: '官方前值', sourceAdvanced: '该来源此后已更新；以下数值与时间属于上方那条观测。', linkedTimeOfficial: '日历时间：官方', linkedTimeProvider: '日历时间：Narwhal', linkedTimePending: '日历时间：待定', missingValue: '暂无', importance: { high: '高', medium: '中', low: '低', unrated: '未分级' }, importanceUnratedDetail: '未分级（这类事件我们还没有分级）', locale: 'zh' as const, refresh: '刷新市场日历', loading: '正在读取市场事件…', pending: '正在刷新市场日历…', completed: '市场日历已更新', partial: '部分来源失败，保留已有数据', unavailable: '刷新未完成，已有数据可能过期', queryUnavailable: '市场事件读取受限', settings: '管理市场日历来源', unknownCountry: '未知国家', consensus: '市场预期', surprise: '预期差', surpriseBeat: '超预期', surpriseMiss: '低于预期', surpriseInline: '符合预期', surpriseUnavailable: '无一致预期', surpriseNotComparable: '预期差不可比', providerPrevious: '前值（Narwhal）', providerActual: '公布值（Narwhal）', comparison: '暂不可比较',
               /* 按真实来源显示：旧的两档枚举把官方行说成「Narwhal」。键是 feed id，不是 provider——
                  三个 Narwhal feed 显示**同一个源名**（它们是同一次采集的三类，不是三个来源）。
                  `source` 保留为兜底：行上还没有真值时，宁可显示旧的固定名，也不显示 id。 */
@@ -1024,6 +1164,171 @@ mi: miText['zh-CN'],
             // `unknown` 是官方路线里没有注册名字的那些行（`labelKey === 'unknown'`）的兜底词，
             // 它不是任何一个发布的名字，所以留在这里。
             events: { ...registeredEventNames['zh-CN'], unknown: '官方宏观事件' },
+            /*
+             * 事件说明（R36 #34「说明文案」那一半，产品审定稿
+             * `docs-private/iterations/r36-calendar-event-enrichment/04-event-explanations-final.md`）。
+             * 25 段 / 25 个概念键：每段三段——这场发布是什么 / 为什么值得看 / 看哪里。
+             * 按「概念」取键，不按族名各写一份——四对同一份数据的族共用一段（见该稿 §1①）；
+             * 族 → 键的映射在 `calendarEventExplanation.ts`，不在这张表里。
+             * 取不到键 → 详情里**整段不出现**：不留空行、不写兜底句、不拿别的族的文案顶上。
+             */
+            explanations: {
+              'cpi': {
+                what: '美国劳工统计局每月公布的消费者物价指数，统计城市家庭一篮子商品和服务的价格变化。',
+                why: '它是市场给美联储降息路径定价时最常引用的通胀读数，读数超出预期时，美元和美债收益率往往同时动。',
+                watch: '先看同比的绝对水平，再看环比是否连续多月偏高，最后看能源和食品之外的分项有没有扩散。'
+              },
+              'core-cpi': {
+                what: '核心 CPI 是同一份发布里剔除食品和能源之后的读数。',
+                why: '食品和能源波动大，核心更能看出通胀的趋势，所以利率预期更看重这一条。',
+                watch: '看环比是否连续几个月停在同一个区间，以及房租、医疗服务这些变化慢的分项在往哪走。'
+              },
+              'nonfarm': {
+                what: '美国劳工统计局每月初发布的非农就业报告，统计企业调查里的新增就业人数。',
+                why: '它同时说明经济还在不在扩张、劳动力市场还有多紧，是美联储决定降息还是按兵不动的关键依据之一。',
+                watch: '看新增人数的三个月均值、前两个月的修正方向，再看失业率和时薪有没有给出同一个信号。'
+              },
+              'unemployment': {
+                what: '失业率来自同一份就业报告的家庭调查，是正在找工作却还没有工作的人占劳动力的比例。',
+                why: '它往往比非农更早出现拐点，也决定市场怎么理解「劳动力市场在降温」这句话。',
+                watch: '看三个月的累计变化，以及它和参与率、非农是不是同向。'
+              },
+              'unemployment-u6': {
+                what: 'U6 是同一份报告里最宽的失业口径，把想找全职却只能做兼职的人、以及近期放弃找工作的人也算进来。',
+                why: '它比官方失业率更贴近基层就业的松紧，经济转弱时上行更快，是判断衰退压力的旁证。',
+                watch: '看 U6 与官方失业率之间的差距有没有扩大。'
+              },
+              'average-hourly-earnings': {
+                what: '平均时薪是同一份就业报告里的工资读数，统计非农企业平均每小时付多少钱。',
+                why: '工资是服务通胀最大的一块成本，涨得太快，市场就会担心通胀下不来。',
+                watch: '看环比的三个月均值，以及它和生产率、核心服务通胀能不能对上。'
+              },
+              'real-average-hourly-earnings': {
+                what: '实际平均时薪是平均时薪扣掉物价之后的读数，代表居民购买力的变化。',
+                why: '工资涨得再快，如果被通胀吃掉，就不会变成消费，所以这一条决定工资上涨的实际含义。',
+                watch: '看同比是正是负，以及它和个人支出、零售销售的方向是否一致。'
+              },
+              'average-weekly-hours': {
+                what: '平均每周工时是同一份就业报告里的工作时间读数。',
+                why: '企业通常先减少工时、再考虑裁员，所以工时下滑常常早于失业率上行。',
+                watch: '看制造业工时和整体工时的分化，以及它和非农新增是否互相印证。'
+              },
+              'participation-rate': {
+                what: '参与率是同一份就业报告里的劳动力供给读数，指适龄人口里在工作或积极找工作的人占多少。',
+                why: '就业增长如果来自更多人进入劳动力市场，和来自企业招人需求，含义完全不同。',
+                watch: '看月度变化，以及 25 到 54 岁这个核心年龄段的方向。'
+              },
+              'private-payrolls': {
+                what: '私营部门就业是同一份报告里扣掉政府之后的就业人数。',
+                why: '政府招聘会盖住私营需求的强弱，这一条更接近企业自己的用工意愿。',
+                watch: '看它和非农总数的差额，以及服务业和商品生产谁在贡献。'
+              },
+              'manufacturing-payrolls': {
+                what: '制造业就业是同一份报告里的行业分项，统计工厂的用工人数。',
+                why: '制造业对利率和海外需求最敏感，它的转向常被当作周期的先行信号。',
+                watch: '看连续几个月的方向，不要只看单月。'
+              },
+              'government-payrolls': {
+                what: '政府就业是同一份报告里的公共部门用工人数，包括联邦、州和地方。',
+                why: '私营部门走弱时，政府招聘能把非农总数托住，所以两者要分开看。',
+                watch: '看联邦和地方各自的变化，以及它是否在解释非农与私营就业之间的缺口。'
+              },
+              'fomc': {
+                what: 'FOMC 是美联储的议息会议，公布利率目标区间，会后有主席记者会，季度会议还会给出经济预测。',
+                why: '它直接决定美元的融资成本，也是全球风险资产估值的锚，传导比任何一份数据都快。',
+                watch: '看结果是否符合预期、声明措辞改了什么、点阵图给出的利率路径，以及记者会的语气。'
+              },
+              'gdp-real-growth': {
+                what: '美国商务部每季度公布三次 GDP，按年化季率报实际增长，三次分别是初值、修正值和终值。',
+                why: '它是判断经济有没有走向衰退、美联储还剩多少空间的主要依据，这一行报的是扣掉价格之后的增长。',
+                watch: '看环比折年率和预期的差距，再看消费、投资、净出口各自贡献了多少。'
+              },
+              'gdp-real-level': {
+                what: '实际 GDP 水平是同一份 GDP 报告里的总量，按年化后的链条美元计，不是增长率。',
+                why: '它给出经济的绝对规模，用来看增长是在多大的体量上发生的。',
+                watch: '看它的季度增量与上一季度的差距，并记住它和年化季率不是同一个数。'
+              },
+              'gdp-deflator': {
+                what: 'GDP 平减指数是同一份 GDP 报告里的整体价格读数，包含经济里所有最终产品。',
+                why: '它是最宽的通胀口径，和 CPI、PCE 放在一起，能看出通胀压力落在哪一层。',
+                watch: '看它和 CPI、PCE 的背离，以及内需部分的价格方向。'
+              },
+              'final-sales': {
+                what: '最终销售是同一份 GDP 报告里扣掉库存变化之后的销售读数。',
+                why: '库存会让 GDP 的短期波动失真，最终销售更接近真实需求。',
+                watch: '看它和 GDP 的差距，以及连续两个季度的方向。'
+              },
+              'pce-price': {
+                what: 'PCE 物价指数是美国商务部每月随个人收入与支出报告公布的物价读数，权重来自居民实际买了什么；这一行是价格，不是支出金额。',
+                why: '它是美联储更偏好的通胀口径，季度版本还进入它的经济预测。',
+                watch: '看同比离 2% 还有多远，以及环比折成一年的速度是在升还是在降。'
+              },
+              'core-pce-price': {
+                what: '核心 PCE 物价指数是同一份报告里剔除食品和能源之后的读数。',
+                why: '美联储判断通胀能不能回到目标，主要看这一条，它也直接连到利率路径的预期。',
+                watch: '看同比是否继续向 2% 收敛，以及近三个月环比折年的方向。'
+              },
+              'personal-income': {
+                what: '个人收入是同一份报告里的居民收入读数，包括工资、经营收入、租金和转移支付。',
+                why: '收入决定后面能不能撑住消费，是消费支出这条链的起点。',
+                watch: '看环比是否稳定、工资收入这一项贡献多少，以及它和时薪的方向是否一致。'
+              },
+              'personal-spending': {
+                what: '个人支出是同一份报告里的居民消费金额，按月公布；这一行是金额，不是物价，季调与未季调是同一组数的两个口径。',
+                why: '消费占美国经济的大头，它的强弱直接决定增长能不能延续。',
+                watch: '看扣掉价格之后的实际增速，以及它和零售销售是否互相印证。'
+              },
+              'real-personal-spending': {
+                what: '实际个人消费支出是扣掉价格之后的消费金额，代表居民真正买到了多少东西。',
+                why: '名义支出可能被涨价推高，实际支出才说明消费是在扩张还是在收缩。',
+                watch: '看环比的实际增速，以及它和名义支出的差距有多大。'
+              },
+              'policy-rate-emu': {
+                what: '欧洲央行管理委员会公布的利率决议，为主要再融资利率和存款便利利率定档。',
+                why: '欧元区是全球美元之外最大的融资池，它的利率决定会改变欧元汇率和跨境资金流向。',
+                watch: '看结果是否符合预期、声明对通胀和增长的表述变了什么，以及行长记者会的语气。'
+              },
+              'policy-rate-gb': {
+                what: '英国央行货币政策委员会公布的银行利率决定，同时给出投票分布。',
+                why: '英国通胀和工资的压力常被当作发达经济体里更早的样本，它的转向对全球利率预期有参考价值。',
+                watch: '看投票是几比几、声明对工资和服务的说法，以及季度货币政策报告里的预测路径。'
+              },
+              'policy-rate-jp': {
+                what: '日本央行公布的政策利率决定，会后有行长记者会。',
+                why: '日元是全球套息交易的主要融资货币，日本利率方向一变，跨境资金的成本就跟着变。',
+                watch: '看结果是否符合预期、声明对工资和通胀的表述，以及行长对下次调整的暗示。'
+              },
+            },
+            /*
+             * AI 解读（R36 #34 第二半）：只在事件详情抽屉出现。生成时刻与依据范围必须露出来——
+             * 读者要能分清「这段是模型写的、哪一刻写的、用了哪几项」，那是它与固定说明的分界。
+             * 低档与未分级不会走到这里（服务侧就不生成），所以界面不需要为它们准备文案。
+             */
+            interpretation: {
+              title: 'AI 解读',
+              /* 一条模板键：时刻与依据范围之间的标点属于文案，不进代码（海报行那个病的第二次）。 */
+              meta: '生成于 {time} · 依据：{scope}',
+              /* 空依据与「读不懂」是两件事：空数组整行不画（这条是只有时刻的那一行）。 */
+              metaTime: '生成于 {time}',
+              /* 三项全认不出时的兜底：不拿空串、也不假装是某一项。 */
+              basisFallback: '这条事件的数据',
+              /* 读与生成共用一句中性文案：句子不按「读/生成」分叉。 */
+              loading: '正在加载解读',
+              unavailable: '这次没能生成解读。',
+              retry: '重新生成',
+              /* 读失败那一档的动作是**重读**（本地读取，不花钱），所以不叫「重新生成」。 */
+              retryRead: '重试',
+              failure: {
+                'model-unavailable': '模型服务还没就绪，配置好之后再试。',
+                'provider-error': '模型服务这次没有回答，可以重试。',
+                /* 读失败不是「模型没回答」：我们根本没问过模型，两句话不能混成一句。 */
+                'read-failed': '暂时读不到这条解读',
+                timeout: '模型这次超时了，可以重试。',
+                'invalid-output': '生成的文字没有通过校验，可以重试。',
+                'fact-mismatch': '生成的文字引用了数据里没有的数，已丢弃，可以重试。'
+              },
+              scope: { event: '这条发布', actual: '实际值', previous: '前值', consensus: '预期', history: '往期读数' }
+            },
             abbreviations: {
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': '非农', unemployment: '失业率',
               'average-hourly-earnings': '时薪', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: '宏观'
@@ -1628,6 +1933,8 @@ mi: miText['en-US'],
             retry: 'Try again',
             sourcesNotConfigured: 'No source configured yet',
             sourcesNotEnabled: 'The source is off',
+            /** Says **which** cell is off: the source name goes in the bracket, never the sentence. */
+            sourcesNotEnabledWithSource: 'The source is off ({source})',
             configureSources: 'Configure in settings',
             enableSources: 'Enable in settings'
           },
@@ -1661,7 +1968,7 @@ mi: miText['en-US'],
           },
           analysisWorkspace: {
             openAgent: 'Full Agent panel', stop: 'Stop', approvalRequired: 'Waiting for tool approval. Open the full Agent panel to review, or stop this run.',
-            title: 'Crypto analysis Agent', chat: 'Analysis conversation', dashboard: 'Market dashboard', view: 'Switch workspace', selectedAnalysis: 'Selected analysis is bound', selectedEvent: 'Selected event', selectedNews: 'Selected news', contextAnalysis: 'Quoted analysis',
+            title: 'Crypto analysis Agent', chat: 'Analysis conversation', openChat: 'Open the analysis chat', openAnalysisDrawer: 'Open AI analysis and sentiment', analysisDrawerTitle: 'AI analysis and sentiment', dashboard: 'Market dashboard', view: 'Switch workspace', selectedAnalysis: 'Selected analysis is bound', selectedEvent: 'Selected event', selectedNews: 'Selected news', contextAnalysis: 'Quoted analysis',
             newConversation: 'Market analysis conversation', newChatAction: 'New chat', sessionHistory: 'History', deleteSession: 'Delete chat', deleteSessionConfirm: 'Delete this conversation?', cancel: 'Cancel', noSessions: 'No conversations yet', untitledSession: 'Untitled session', loading: 'Loading Agent…', noSelection: 'Current market · Select a timeline entry to follow up', clearSelection: 'Current market',
             empty: 'Ask the analyst a question or select an analysis below.', input: 'Your question', placeholder: 'What market changes would you like to understand?', followUpPlaceholder: 'Ask about the selected analysis…',
             send: 'Send', sending: 'Analyzing', resize: 'Resize calendar and sentiment', failed: 'Send did not complete. Check the conversation and model configuration before retrying.', modelRequired: 'Select an available model for the crypto analyst in the shared Agent settings.',
@@ -1772,6 +2079,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             // The list spans event groups: on one screen each row says which event it belongs to,
             // so two conclusions seconds apart do not read as the same one posted twice.
             groupTypes: { macro: 'Macro', 'market-reaction': 'Market reaction', capital: 'Capital flows', sentiment: 'News', funding: 'Funding', 'cross-asset': 'Cross-asset' },
+            groupBackground: 'Background news: {title}',
             settings: 'Settings', settingsTitle: 'AI analysis settings', analysisEnabled: 'Enable AI analysis',
             analysisEnabledHint: 'When off, nothing is analysed automatically and no model is called.', analysisModel: 'Analysis model', modelFollowDefault: 'Follow the default assistant model', followsDefaultPrefix: 'Following default: ',
             enableAnalysis: 'Enable AI analysis', analysisOffHint: 'AI analysis is off. Published analyses are kept; new ones start once it is enabled.',
@@ -1982,6 +2290,49 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               'contract-invalid': 'We could not check whether this signal has been analysed (this does not mean it was not). The numbers above are unaffected.',
               ariaLabel: 'Could not check whether this signal has been analysed; the numbers are unaffected',
             },
+            ustCurve: {
+              title: 'Treasury yields · daily',
+              info: 'FRED daily close: the last point is the observation date, never drawn up to today. Normalization is in basis points: 4.5% → 5.0% is +50bp, not +11%. Nominal 10Y = real yield + breakeven, and those two rows are the decomposition only, not drawn, so they cannot be added up when the three rows are on different dates; a spread needs both legs on the same trading day, and a missing day stays blank.',
+              tableAria: 'Treasury yield readings',
+              colName: 'Series',
+              colLatest: 'Latest',
+              colChange: 'Change (bp)',
+              windows: { d1: '1D', w1: '1W', m1: '1M', y1: '1Y' },
+              periods: { '1w': '1W', '1m': '1M', '3m': '3M', '1y': '1Y' },
+              rows: {
+                '3m': '3M', '2y': '2Y', '5y': '5Y', '10y': '10Y', '30y': '30Y',
+                '10y2y': '10Y−2Y', '10y3m': '10Y−3M', real: '10Y real yield', breakeven: '10Y breakeven'
+              },
+              notConnected: 'not connected',
+              unreadableOne: 'temporarily unreadable',
+              dash: '—',
+              dashShort: 'not enough history for this window',
+              dashLegMissing: 'missing {leg}',
+              dashLegsDiffer: 'the two legs cover different days',
+              axisLabel: 'Y axis',
+              curveLabel: 'Curve',
+              mode: { level: 'Yield', normalized: 'Change from start' },
+              modeAria: 'Y axis reading',
+              periodAria: 'Curve window',
+              refresh: 'Refresh',
+              loading: 'Reading daily Treasury yields…',
+              footLag: 'FRED daily close, may lag 1–2 trading days',
+              footSource: 'Source FRED',
+              ariaLevel: 'Daily Treasury yield chart: trading days along the horizontal axis, yield percent along the vertical axis',
+              ariaNormalized: 'Daily Treasury yield chart normalized from the window start: trading days along the horizontal axis, basis-point change along the vertical axis',
+              signs: { plus: '+', minus: '−', zero: '0' },
+              templates: {
+                percent: '{value}%',
+                basisPoints: '{value}bp',
+                separator: ' · ',
+                asOf: 'as of {date}',
+                footObserved: 'Observed {date}',
+                footRange: 'Observed {from} to {to}',
+                footZone: 'Time zone {zone}',
+                footBase: 'Curve normalized from {date}',
+                footBasePerLine: 'Each line normalized from its own first observation'
+              }
+            },
             crossAsset: {
               title: 'Nasdaq 100 / QQQ proxy × BTC × ETH', subtitle: 'Binance QQQUSDT, the tokenised perpetual proxy (24/7, default, labelled “Proxy”); the real Nasdaq 100 index (USTEC, US cash session) answers only when that leg cannot',
               chart: 'Common-anchor returns',
@@ -2012,39 +2363,22 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               // Sits beside the row name, in the same slot as the live badge; `{time}` is formatted once.
               staleAsOf: 'Out of date · as of {time}',
               sourceRefused: 'source not provided',
-              hideUnavailableRows: 'Hide rows whose source is unavailable',
               planNotServedReason: '{name}: the provider does not offer this instrument on the current plan; last close {time}.',
               planNotServedReasonMore: '{name}: the provider does not offer this instrument on the current plan; last close {time}; {count} more are also unavailable.',
               staleRead: 'The refresh failed; the readings below are from the last successful read.',
               // Condition ①: say that a restart is what makes it take effect, and how to restart.
               contractMismatch: 'The interface and the main process are running different versions, so this data cannot be read. A restart is what makes it take effect: press “Restart the app” below, or quit the app completely and open it again; reloading the page is not enough.',
-              quote: 'Nasdaq 100 latest close', closed: 'Closed returns', observed: 'Trade time', analysis: 'Closed data through',
+              quote: 'Nasdaq 100 latest close', observed: 'Trade time', analysis: 'Closed data through',
               observations: 'Cross-market observations', correlations: '24h · 5m return correlation', indexBtc: 'Nasdaq 100 ↔ BTC', indexEth: 'Nasdaq 100 ↔ ETH',
               proxyTag: 'Proxy', proxyCaveat: 'A tokenised synthetic: Binance QQQUSDT perpetual (24/7), not the standard Nasdaq 100 index. It is the default reading of this row; the real index takes over only when it cannot answer.',
               indexCaveat: 'The real Nasdaq 100 index (RealMarketAPI · USTEC); new five-minute bars appear only during the US cash session.',
               marketClosed: 'Market closed', marketClosedHint: 'Outside the US cash session (09:30–16:00 New York) no new five-minute bar is printed; this is the last bar that closed.',
-              lastClosedBar: 'Last closed bar',
               proxyMarketState: 'Tokenised proxy trades 24/7',
               statusTitle: 'Market status', statusColumns: { asset: 'Asset', latest: 'Latest', '15m': '15m', '1h': '1h', '24h': '24h', '7d': '7d' },
-              assetLabels: { dxy: 'Dollar DXY', gold: 'Gold XAU', us10y: 'US 10Y', realRate: 'Real rate' },
+              assetLabels: { dxy: 'Dollar DXY', gold: 'Gold XAU' },
+              statusReads: { dxy: 'A rising dollar is a crypto headwind', gold: 'Falling with BTC = discount-rate driven', index: 'Risk appetite', btc: 'Two natures: risk and liquidity', eth: 'Follows BTC with more beta' },
               syntheticTag: 'Synthetic', syntheticCaveat: 'This dollar index is synthesised from the ICE basket with published weights; it is not the official ICE DXY.',
               notConnected: 'Not connected', notConnectedHint: 'No data source admitted yet; it appears here once connected',
-              dailyFrequency: 'Daily', bpUnit: 'bp',
-              dailyChangeWithDate: 'Daily {change} (as of {date})',
-              // The block's own rhythm, next to its heading rather than inside a figure cell: an
-              // official daily close arrives once per trading day, so a row that has not moved is
-              // waiting for the source, not stuck.
-              dailyCadence: 'published once per trading day; unchanged until the next close',
-              dailyChangeUnknownWithDate: 'Daily — (as of {date})',
-              termSpread: 'Term spread',
-              // The expectation is its own series and can be a day ahead of these rows; the date
-              // therefore travels with the value instead of being inherited from the row.
-              inflationExpectationWithDate: 'Inflation expectation {value}% (as of {date})',
-              // Two readings of the same table that belong in one sentence; ` · ` is part of the copy.
-              dailySpreadAndInflation: 'Term spread {spread} · Inflation expectation {inflation}% (as of {date})',
-              dailySpreadOnly: 'Term spread {spread}',
-              dailyMixedDates: 'Two daily series disagree on the observation date; no difference stated',
-              dailyCaveat: 'Official daily close: the level of a trading day, and no explanation of intraday moves.',
               // The cross-market reading (design 142), in the same plain words as the Chinese copy.
               reading: {
                 title: 'How to read',
@@ -2062,6 +2396,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 verdict: 'Like: {scenario} · {story}',
                 refuted: 'Unlike {scenario} ({leg} {direction})',
                 nearestMiss: 'Closest was {scenario}, but {leg} did not move that way',
+                // What the legs we do have rule out, when one leg has no value.
+                ruledOut: 'Rules out {scenario} ({leg} did not move that way)',
                 noDriverNone: 'Every line is inside its own usual range — nothing is pushing',
                 noDriverOne: 'Only {direction}; the rest are inside their own usual range',
                 noDriverSeveral: 'Several lines are moving on their own ({detail}), but they do not form a scenario',
@@ -2072,8 +2408,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 relative: 'BTC−index {btcMinusIndex} · ETH−BTC {ethMinusBtc}',
                 undetermined: {
                   'window-not-judged': 'This window is not interpreted: the correlation is always the 24-hour one — switch back to 24H',
-                  'legs-missing': 'Not enough data to judge: {leg} has no value in this window',
-                  stale: 'Not enough data to judge: {leg} stopped updating',
+                  // A missing leg no longer stops the whole reading: name it, say the scenario cannot be
+                  // pinned, and list what the legs we do have rule out (user, 2026-11-24).
+                  'legs-missing': '{leg} has no value in this window, so the scenario cannot be pinned down',
+                  stale: '{leg} stopped updating, so the scenario cannot be pinned down',
                   'no-match': 'No recognisable combination: these lines do not fit any of the five scenarios'
                 },
                 notices: {
@@ -2081,7 +2419,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 }
               },
               rowHint: '{name}: about this row',
-              statusReads: { dxy: 'A rising dollar is a crypto headwind', gold: 'Falling with BTC = discount-rate driven', us10y: 'Nominal cost of money', realRate: 'The most direct link to BTC', index: 'Risk appetite', btc: 'Two natures: risk and liquidity', eth: 'Follows BTC with more beta' },
               btcIndex: 'BTC − Nasdaq 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: 'Samples', coverage: 'History coverage',
               states: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', limited: 'Resource limited', unavailable: 'Unavailable', missing: 'No data' },
               liveStateLabels: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', unavailable: 'Live unavailable' },
@@ -2143,6 +2480,107 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               manageSettings: 'Manage Fear & Greed settings',
               buckets: { 'extreme-fear': 'Extreme fear', fear: 'Fear', neutral: 'Neutral', greed: 'Greed', 'extreme-greed': 'Extreme greed' }
             },
+            defensivePremium: {
+              title: 'Fear & Greed and Downside Premium',
+              titleInfo: 'Read the Fear & Greed index together with the cost of downside protection from BTC options: one side is how afraid the market is, the other is how expensive it is to insure against a fall. It answers which band sentiment sits in, which way the premium is moving, and what the two together describe — the pairing only, with no direction and no trade signal. The two halves measure different things: Fear & Greed is a global crypto sentiment index, while the downside premium comes from BTC options on Deribit alone; they cannot be added together or used to confirm each other — how to read each half is in that half\'s own ⓘ. Dates on both halves are the data source\'s day (UTC). Sources: Fear & Greed from Alternative.me; skew from Deribit.',
+              titleInfoLabel: 'About this card',
+              window: 'Last 30 days',
+              observedAt: 'Observed at',
+              fearGreed: {
+                name: 'Fear & Greed',
+                axis: 'Index 0–100',
+                asOf: 'As of',
+                infoLabel: 'About the Fear & Greed reading',
+                info: {
+                  volatility: 'The Fear & Greed index already contains a volatility factor: when it and implied volatility rise together, that is one piece of evidence, not two.',
+                  percentile: '{percentile}th percentile over the past year',
+                  percentileInsufficient: 'Not enough history yet; no percentile'
+                }
+              },
+              skew: {
+                name: 'BTC options skew (Deribit)',
+                asOf: 'As of',
+                unit: 'percentage points',
+                axis: 'BTC options skew (percentage points)',
+                notConnected: 'Options skew is not connected yet.',
+                empty: 'No option-skew reading collected yet.',
+                accumulating: 'Still filling in: {collected} of 30 readings, {remaining} to go.',
+                infoLabel: 'About options skew',
+                info: {
+                  definition: '30-day 25-delta risk reversal: 25-delta put IV − 25-delta call IV',
+                  relative: 'An implied-volatility level means nothing on its own; only its own history gives it meaning. A rising line says options are more expensive than before.',
+                  since: 'Skew only accumulates from the day it was connected; earlier days stay blank'
+                },
+                unavailable: {
+                  connection: 'Options skew: Deribit is unreachable.',
+                  source: 'Options skew: the source is unavailable.',
+                  read: 'Options skew: the reading could not be read.'
+                },
+                direction: {
+                  window: 'Last 5 days',
+                  steeper: 'Widening',
+                  flatter: 'Narrowing',
+                  flat: 'Little changed',
+                  insufficient: 'Fewer than 5 days of skew data; no direction.',
+                  stale: 'Skew data stops at {time}.',
+                  discontinuous: 'Skew data is not continuous; no direction.'
+                }
+              },
+              history: { remaining: 'Recording since {date} · {n} more readings needed' },
+              chart: {
+                fearGreedAria: 'Fear & Greed index chart: dates along the horizontal axis, the index from 0 to 100 along the vertical axis',
+                skewAria: '25-delta risk reversal chart: dates along the horizontal axis, percentage points along the vertical axis',
+                fearGreedSummary: 'Fear & Greed: {count} source days from {from} to {to}; first {first}, last {last}, index 0–100.',
+                skewSummary: '25-delta risk reversal: {count} source days from {from} to {to}; first {first}, last {last}, in percentage points.'
+              },
+              stale: { pill: 'Stale', stopsAt: 'Data stops at {date}' },
+              action: { refresh: 'Refresh', enable: 'Turn on', viewSource: 'View source' },
+              verdict: {
+                asOfSuffix: '(as of {date})',
+                fear: {
+                  steeper: 'Sentiment sits in the fear band; the cost of downside protection is widening.',
+                  flatter: 'Sentiment sits in the fear band; the cost of downside protection is narrowing.',
+                  flat: 'Sentiment sits in the fear band; the cost of downside protection is little changed.',
+                  skewMissing: 'Sentiment sits in the fear band; the skew half has no usable direction.',
+                  skewUnknown: {
+                    insufficient: 'Sentiment sits in the fear band; fewer than 5 days of skew, so no direction is called yet.',
+                    stale: 'Sentiment sits in the fear band; skew data stops at {date}, so no direction is called yet.',
+                    discontinuous: 'Sentiment sits in the fear band; skew readings are discontinuous, so no direction is called yet.'
+                  }
+                },
+                greed: {
+                  steeper: 'Sentiment sits in the greed band; the cost of downside protection is widening.',
+                  flatter: 'Sentiment sits in the greed band; the cost of downside protection is narrowing.',
+                  flat: 'Sentiment sits in the greed band; the cost of downside protection is little changed.',
+                  skewMissing: 'Sentiment sits in the greed band; the skew half has no usable direction.',
+                  skewUnknown: {
+                    insufficient: 'Sentiment sits in the greed band; fewer than 5 days of skew, so no direction is called yet.',
+                    stale: 'Sentiment sits in the greed band; skew data stops at {date}, so no direction is called yet.',
+                    discontinuous: 'Sentiment sits in the greed band; skew readings are discontinuous, so no direction is called yet.'
+                  }
+                },
+                neutral: {
+                  steeper: 'Sentiment sits in the neutral band; the cost of downside protection is widening.',
+                  flatter: 'Sentiment sits in the neutral band; the cost of downside protection is narrowing.',
+                  flat: 'Sentiment sits in the neutral band; the cost of downside protection is little changed.',
+                  skewMissing: 'Sentiment sits in the neutral band; the skew half has no usable direction.',
+                  skewUnknown: {
+                    insufficient: 'Sentiment sits in the neutral band; fewer than 5 days of skew, so no direction is called yet.',
+                    stale: 'Sentiment sits in the neutral band; skew data stops at {date}, so no direction is called yet.',
+                    discontinuous: 'Sentiment sits in the neutral band; skew readings are discontinuous, so no direction is called yet.'
+                  }
+                },
+                fgMissing: {
+                  steeper: 'Skew is widening; the Fear & Greed half has no usable reading.',
+                  flatter: 'Skew is narrowing; the Fear & Greed half has no usable reading.',
+                  flat: 'Skew is little changed; the Fear & Greed half has no usable reading.'
+                }
+              },
+              degraded: {
+                fearGreed: 'The Fear & Greed half cannot be read, so this line cannot combine the two.',
+                skew: 'The skew half cannot be read, so this line cannot combine the two.'
+              }
+            },
             positioning: {
               title: 'Perpetual positioning & funding',
               pairTitle: 'Perpetual positioning & funding · Binance USDT perpetual',
@@ -2199,7 +2637,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               markShort: 'Suspected short liquidation {pct}',
               markLongMany: 'Suspected long liquidations ×{count}',
               markShortMany: 'Suspected short liquidations ×{count}',
-              markMixedMany: 'Suspected liquidations ×{count}',
               signalHover: '{rule} | window {window} | {kind}',
               signalKindInferred: 'inferred',
               window15m: '15 minutes',
@@ -2476,7 +2913,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             unifiedDay: { total: '{count} events today', grouped: 'Grouped by type', groupCount: '{type} · {count} events', empty: 'No events today', timePending: 'TBD', more: '{count} more', loading: 'Loading', incomplete: 'Partially loaded', back: 'Back to day list', storageUnavailable: 'Storage limited; existing data retained', coverage: 'Reading {months} (UTC months, including the grid\'s neighbouring months); up to 200 official events per month' },
             calendarPanel: { title: 'Calendar sources', configure: 'Configure in data sources', loading: 'Loading calendar sources…', unavailable: 'No calendar sources are available for this panel.', pending: 'Pending', enabled: 'Enabled', disabled: 'Disabled' },
-            market: { marketReadFailure: { 'input-invalid': 'This read was rejected as invalid; refreshing sends it again.', 'read-threw': 'This read did not finish; you can retry.', 'too-large': 'This window holds more events than one read can finish; you can retry.', 'cursor-loop': 'The read stopped making progress and was cut off; you can retry.' }, refreshOutcome: { succeeded: 'Refresh succeeded', failed: 'Refresh failed', unattempted: 'Not refreshed this session' }, refreshTrigger: { manual: 'Manual', automatic: 'Automatic' }, attemptFailure: { 'input-invalid': 'Invalid request', 'credential-not-configured': 'No credential configured', 'response-unavailable': 'Source did not respond', 'archive-unavailable': 'Evidence archive unavailable', 'parse-unavailable': 'Parsing limited', 'storage-unavailable': 'Storage unavailable', 'storage-pressure': 'Storage limited' }, collectedAt: 'Data collected', retainedData: 'Showing previous data', automaticRefresh: 'Updates automatically every {interval} min', officialActual: 'Official actual', officialPrevious: 'Official previous', sourceAdvanced: 'This source has updated since; the figures and time below belong to the observation above.', linkedTimeOfficial: 'Calendar time: official', linkedTimeProvider: 'Calendar time: Narwhal', linkedTimePending: 'Calendar time: pending', missingValue: 'Unavailable', importance: { high: 'High', medium: 'Medium', low: 'Low' }, locale: 'en' as const, refresh: 'Refresh market calendar', loading: 'Loading market events…', pending: 'Refreshing market calendar…', completed: 'Market calendar updated', partial: 'Some sources failed; existing data retained', unavailable: 'Refresh incomplete; existing data may be stale', queryUnavailable: 'Market events unavailable', settings: 'Manage market calendar source', unknownCountry: 'Unknown', consensus: 'Market consensus', surprise: 'Surprise', surpriseBeat: 'Above expectation', surpriseMiss: 'Below expectation', surpriseInline: 'In line', surpriseUnavailable: 'No consensus', surpriseNotComparable: 'Surprise not comparable', providerPrevious: 'Previous (Narwhal)', providerActual: 'Actual (Narwhal)', comparison: 'Not comparable yet',
+            market: { marketReadFailure: { 'input-invalid': 'This read was rejected as invalid; refreshing sends it again.', 'read-threw': 'This read did not finish; you can retry.', 'too-large': 'This window holds more events than one read can finish; you can retry.', 'cursor-loop': 'The read stopped making progress and was cut off; you can retry.' }, refreshOutcome: { succeeded: 'Refresh succeeded', failed: 'Refresh failed', unattempted: 'Not refreshed this session' }, refreshTrigger: { manual: 'Manual', automatic: 'Automatic' }, attemptFailure: { 'input-invalid': 'Invalid request', 'credential-not-configured': 'No credential configured', 'response-unavailable': 'Source did not respond', 'archive-unavailable': 'Evidence archive unavailable', 'parse-unavailable': 'Parsing limited', 'storage-unavailable': 'Storage unavailable', 'storage-pressure': 'Storage limited' }, collectedAt: 'Data collected', retainedData: 'Showing previous data', automaticRefresh: 'Updates automatically every {interval} min', officialActual: 'Official actual', officialPrevious: 'Official previous', sourceAdvanced: 'This source has updated since; the figures and time below belong to the observation above.', linkedTimeOfficial: 'Calendar time: official', linkedTimeProvider: 'Calendar time: Narwhal', linkedTimePending: 'Calendar time: pending', missingValue: 'Unavailable', importance: { high: 'High', medium: 'Medium', low: 'Low', unrated: 'Unrated' }, importanceUnratedDetail: 'Unrated (we have not rated this kind of event yet)', locale: 'en' as const, refresh: 'Refresh market calendar', loading: 'Loading market events…', pending: 'Refreshing market calendar…', completed: 'Market calendar updated', partial: 'Some sources failed; existing data retained', unavailable: 'Refresh incomplete; existing data may be stale', queryUnavailable: 'Market events unavailable', settings: 'Manage market calendar source', unknownCountry: 'Unknown', consensus: 'Market consensus', surprise: 'Surprise', surpriseBeat: 'Above expectation', surpriseMiss: 'Below expectation', surpriseInline: 'In line', surpriseUnavailable: 'No consensus', surpriseNotComparable: 'Surprise not comparable', providerPrevious: 'Previous (Narwhal)', providerActual: 'Actual (Narwhal)', comparison: 'Not comparable yet',
               source: 'Narwhal',
               sourceUnknown: 'Source not specified', sourceByFeed: { 'macro-calendar-bls': 'BLS', 'macro-calendar-bea': 'BEA', 'macro-calendar-fed': 'Federal Reserve', 'macro-calendar-narwhal-economic-data': 'Narwhal', 'macro-calendar-narwhal-financial-events': 'Narwhal', 'macro-calendar-narwhal-central-bank-activities': 'Narwhal' }, observed: 'Source observed', lastGivenAt: 'The source last published this at', time: 'Published', more: 'More market events', kinds: { 'economic-indicator': 'Economic indicators', 'financial-event': 'Financial events', 'central-bank-activity': 'Central bank activities' }, statuses: { success: 'Collected', 'success-empty': 'No events this time', 'all-skipped': 'Parsing limited', partial: 'Partially available', unavailable: 'No available collection', 'no-locale-rows': 'The source provides no English items' }, collectorStopped: 'No new batches since {at}', collectorStoppedNoTime: 'No new batches' },
             eventStatus: { label: 'Release status', 'data-received': 'Data received', upcoming: 'Scheduled', 'awaiting-data': 'Awaiting value', backfilling: 'Awaiting value', missing: 'Not provided', 'storage-limited': 'Storage limited', 'time-pending': 'Time pending', 'elapsed-unconfirmed': 'Scheduled time elapsed', cancelled: 'Cancelled' },
@@ -2493,6 +2930,166 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             categories: { inflation: 'Inflation', employment: 'Employment', growth: 'Growth', 'monetary-policy': 'Monetary policy', consumption: 'Consumption' },
             // 与 zh-CN 同一口径：已注册的引用分析侧词表，`unknown` 是兜底词。
             events: { ...registeredEventNames['en-US'], unknown: 'Official macro event' },
+            /*
+             * 事件说明（R36 #34「说明文案」那一半，产品审定稿
+             * `docs-private/iterations/r36-calendar-event-enrichment/04-event-explanations-final.md`）。
+             * 25 段 / 25 个概念键：每段三段——这场发布是什么 / 为什么值得看 / 看哪里。
+             * 按「概念」取键，不按族名各写一份——四对同一份数据的族共用一段（见该稿 §1①）；
+             * 族 → 键的映射在 `calendarEventExplanation.ts`，不在这张表里。
+             * 取不到键 → 详情里**整段不出现**：不留空行、不写兜底句、不拿别的族的文案顶上。
+             */
+            explanations: {
+              'cpi': {
+                what: 'The US consumer price index, published monthly by the Bureau of Labor Statistics, tracks the prices urban households pay for a basket of goods and services.',
+                why: "It is the inflation reading markets lean on most when pricing the Federal Reserve's rate path; when it comes in above expectations, the dollar and Treasury yields usually move together.",
+                watch: 'Start with the year-over-year level, then check whether the monthly pace has stayed high for several months, and finally whether the rise is spreading beyond energy and food.'
+              },
+              'core-cpi': {
+                what: 'Core CPI is the same release with food and energy removed.',
+                why: 'Food and energy are volatile, so the core reading shows the trend more clearly — which is why rate expectations weight it more heavily.',
+                watch: 'Check whether the monthly pace has held in the same range for months, and where slow-moving items such as rent and medical care are heading.'
+              },
+              'nonfarm': {
+                what: 'The nonfarm payrolls report, published by the Bureau of Labor Statistics early each month, counts the jobs employers added.',
+                why: "It says both whether the economy is still expanding and how tight the labour market is — one of the main inputs into the Fed's decision to cut or hold.",
+                watch: "Look at the three-month average, the direction of the previous two months' revisions, and whether unemployment and hourly earnings tell the same story."
+              },
+              'unemployment': {
+                what: 'The unemployment rate comes from the household survey in the same report: people who are looking for work and do not have it, as a share of the labour force.',
+                why: 'It often turns before payrolls do, and it shapes how markets read the phrase "the labour market is cooling".',
+                watch: 'Look at the three-month change, and whether it moves with participation and payrolls rather than against them.'
+              },
+              'unemployment-u6': {
+                what: 'U6 is the broadest measure of unemployment in the same report: it adds people who want full-time work but can only find part-time, and those who have recently stopped looking.',
+                why: 'It tracks the real looseness of the job market more closely than the official rate and rises faster when the economy weakens, so it is supporting evidence on recession pressure.',
+                watch: 'Watch whether the gap between U6 and the official rate is widening.'
+              },
+              'average-hourly-earnings': {
+                what: 'Average hourly earnings are the pay line in the same report: what nonfarm employers pay per hour on average.',
+                why: 'Wages are the largest cost in services inflation, so a pace that stays too fast keeps markets worried that inflation will not come down.',
+                watch: 'Look at the three-month average of the monthly change, and whether it lines up with productivity and core services inflation.'
+              },
+              'real-average-hourly-earnings': {
+                what: 'Real average hourly earnings are hourly pay after prices are taken out, so they show what a wage actually buys.',
+                why: 'A pay rise that inflation eats does not turn into spending, which is why this line gives wages their real meaning.',
+                watch: 'Check whether the year-over-year change is positive or negative, and whether it moves in the same direction as personal spending and retail sales.'
+              },
+              'average-weekly-hours': {
+                what: 'Average weekly hours are the hours worked line in the same report.',
+                why: 'Firms usually cut hours before they cut jobs, so falling hours often come before unemployment rises.',
+                watch: 'Watch the split between manufacturing and total hours, and whether the direction agrees with payroll growth.'
+              },
+              'participation-rate': {
+                what: 'The participation rate is the labour supply line in the same report: the share of working-age people who are employed or actively looking.',
+                why: 'Jobs growth driven by more people entering the labour market means something different from growth driven by hiring demand.',
+                watch: 'Watch the monthly change and the direction for the 25-to-54 age group.'
+              },
+              'private-payrolls': {
+                what: 'Private payrolls are the same report with government jobs removed.',
+                why: 'Public hiring can mask how strong private demand really is, so this line sits closer to what firms themselves are choosing to do.',
+                watch: 'Look at the gap to total payrolls, and whether services or goods production is doing the hiring.'
+              },
+              'manufacturing-payrolls': {
+                what: 'Manufacturing payrolls are the factory jobs line within the same report.',
+                why: 'Factory work is the most sensitive to interest rates and overseas demand, so its turns are often read as an early cycle signal.',
+                watch: 'Follow the direction over several months rather than a single print.'
+              },
+              'government-payrolls': {
+                what: 'Government payrolls are the public-sector jobs in the same report, at federal, state and local level.',
+                why: 'When private hiring weakens, public hiring can hold up the headline number, so the two need to be read separately.',
+                watch: 'Look at federal and local separately, and whether they explain the gap between total and private payrolls.'
+              },
+              'fomc': {
+                what: "The FOMC sets the federal funds target range; the statement is followed by the chair's press conference, and quarterly meetings add the economic projections.",
+                why: 'It sets the cost of dollar funding and anchors how risk assets are valued worldwide, so it moves markets faster than any single data release.',
+                watch: 'Check whether the decision matched expectations, what changed in the statement, the rate path in the projections, and the tone of the press conference.'
+              },
+              'gdp-real-growth': {
+                what: 'The Commerce Department publishes GDP three times each quarter — advance, second and third estimates — reporting real growth at an annualized quarterly rate.',
+                why: 'It is the main read on whether the economy is heading into recession and how much room the Fed has left, and this line is growth after prices are removed.',
+                watch: 'Compare the annualized rate with expectations, then look at how much consumption, investment and net exports each contributed.'
+              },
+              'gdp-real-level': {
+                what: 'Real GDP, annualized level, is the total in the same GDP report — chained dollars, annualized — not a growth rate.',
+                why: 'It gives the absolute size of the economy, so you can see how large a base the growth is happening on.',
+                watch: 'Look at the quarterly increase against the previous quarter, and keep in mind it is not the same number as the annualized growth rate.'
+              },
+              'gdp-deflator': {
+                what: 'The GDP deflator is the broad price line in the same GDP report, taking in every final product in the economy.',
+                why: 'It is the widest inflation measure; read next to CPI and PCE it shows which layer the price pressure sits in.',
+                watch: 'Watch where it diverges from CPI and PCE, and the price direction for domestic demand.'
+              },
+              'final-sales': {
+                what: 'Final sales are the same GDP report with the change in inventories removed.',
+                why: 'Inventories distort headline GDP in the short run, so final sales sit closer to actual demand.',
+                watch: 'Look at the gap to GDP, and the direction across two consecutive quarters.'
+              },
+              'pce-price': {
+                what: 'The PCE price index is the price reading in the monthly personal income and outlays report, weighted by what households actually buy; this line is a price, not a spending amount.',
+                why: "It is the inflation measure the Fed prefers, and its quarterly version feeds the Fed's projections.",
+                watch: 'Check how far the year-over-year rate still is from 2%, and whether the monthly pace, annualized, is rising or falling.'
+              },
+              'core-pce-price': {
+                what: 'Core PCE is the same report with food and energy removed.',
+                why: 'It is the measure the Fed mostly watches to judge whether inflation is returning to target, and it feeds straight into rate-path expectations.',
+                watch: "Check whether the year-over-year rate keeps closing on 2%, and the direction of the past three months' monthly pace, annualized."
+              },
+              'personal-income': {
+                what: 'Personal income is the household income line in the same report: wages, business income, rent and transfer payments.',
+                why: 'Income decides whether spending can keep going, so it is the start of the spending chain.',
+                watch: 'Check whether the monthly change is steady, how much wage income contributed, and whether it agrees with hourly earnings.'
+              },
+              'personal-spending': {
+                what: 'Personal spending is the household spending amount in the same report, published monthly; this line is an amount rather than a price, and the seasonally adjusted and unadjusted versions are the same figure measured two ways.',
+                why: 'Consumer spending is the largest part of the US economy, so its strength decides whether growth continues.',
+                watch: 'Look at the real change after prices are taken out, and whether retail sales confirm it.'
+              },
+              'real-personal-spending': {
+                what: 'Real personal consumption expenditure is household spending after prices are taken out: how much households actually bought.',
+                why: 'Nominal spending can rise just because prices rose, so only the real figure says whether spending is expanding or shrinking.',
+                watch: 'Look at the real monthly change, and how wide the gap to nominal spending is.'
+              },
+              'policy-rate-emu': {
+                what: 'The ECB Governing Council sets the main refinancing rate and the deposit facility rate.',
+                why: 'The euro area is the largest funding pool outside the dollar, so its decisions move the euro and cross-border flows.',
+                watch: "Check whether the decision matched expectations, what changed in how the statement describes inflation and growth, and the tone of the president's press conference."
+              },
+              'policy-rate-gb': {
+                what: "The Bank of England's Monetary Policy Committee sets Bank Rate and publishes the vote split.",
+                why: 'UK inflation and wage pressure are often read as an early sample for advanced economies, so its turns carry information for global rate expectations.',
+                watch: 'Look at the vote count, what the statement says about wages and services, and the path in the quarterly Monetary Policy Report.'
+              },
+              'policy-rate-jp': {
+                what: 'The Bank of Japan sets its policy rate and holds a press conference by the governor afterwards.',
+                why: 'The yen is the main funding currency in global carry trades, so a change in the direction of Japanese rates changes the cost of cross-border funding.',
+                watch: 'Check whether the decision matched expectations, what the statement says about wages and inflation, and any hint the governor gives about the next move.'
+              },
+            },
+            /*
+             * AI interpretation (R36 #34, second half): the drawer only. The generation time and the
+             * evidence scope are printed with the text — that is how a reader tells model-written
+             * prose from the fixed explanation above it.
+             */
+            interpretation: {
+              title: 'AI read',
+              /* One template key: the separator belongs to the copy, not to JSX. */
+              meta: 'Generated {time} · Based on: {scope}',
+              metaTime: 'Generated {time}',
+              basisFallback: "this event's data",
+              loading: 'Loading the interpretation',
+              unavailable: 'No read could be generated this time.',
+              retry: 'Generate again',
+              retryRead: 'Retry',
+              failure: {
+                'model-unavailable': 'The model service is not ready yet; try again once it is configured.',
+                'provider-error': 'The model did not answer this time; you can retry.',
+                'read-failed': 'This interpretation cannot be read right now',
+                timeout: 'The model timed out this time; you can retry.',
+                'invalid-output': 'The generated text failed validation; you can retry.',
+                'fact-mismatch': 'The generated text cited a number the data does not carry, so it was discarded; you can retry.'
+              },
+              scope: { event: 'this release', actual: 'actual', previous: 'previous', consensus: 'consensus', history: 'earlier readings' }
+            },
             abbreviations: {
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': 'NFP', unemployment: 'Unemployment',
               'average-hourly-earnings': 'Wages', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: 'Macro'

@@ -232,6 +232,62 @@ describe('daily briefing document', () => {
     expect(document.lede.text).toBe('')
   })
 
+  it('未分级的事件不进「过去 24 小时宏观」：缺省不许当高', () => {
+    // R44 §4.4 ①：未分级（字段不出现）的事件即使窗口内、已发布，也不进高影响列表。
+    // 把筛子改成「没有档就当高」→ 这条立刻红（列表里多出这条）。
+    const base = packet()
+    const ungraded = {
+      eventKey: 'US.UNRATED.2026-M10', title: '未分级指标', metricKey: 'US.UNRATED.SA.LEVEL',
+      scheduledAt: '2026-10-29T12:30:00.000Z', lifecycleState: 'released' as const,
+      category: 'economic-indicator' as const, actual: '1.2', consensus: '1.0',
+      surprise: { direction: 'beat' as const, value: 0.2, unit: 'pp' as const }
+    }
+    const document = buildDailyBriefingDocument({
+      packet: { ...base, calendar: { state: 'available', events: [ungraded] } },
+      date: '2026-10-30'
+    })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual([])
+    expect(document.news.notes.macroHighImpactCount).toBeUndefined()
+  })
+
+  it('says the week is not rated yet when no event carries a grade, and prints the real schedule', () => {
+    // R44 §6.2：整周有事件、但一条已分级的都没有 → 属于「我们还没分级」，并列出真实排期。
+    const base = packet()
+    const ungradedCpi = {
+      eventKey: 'US.CPI.NSA.YOY', title: 'CPI 年率', metricKey: 'US.CPI.NSA.YOY',
+      scheduledAt: '2026-11-03T13:30:00.000Z', lifecycleState: 'scheduled' as const,
+      category: 'economic-indicator' as const, surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const document = buildDailyBriefingDocument({
+      packet: { ...base, calendar: { state: 'available', events: [ungradedCpi] } },
+      date: '2026-10-30'
+    })
+
+    expect(document.next.focus).toBeUndefined()
+    expect(document.next.items).toEqual([])
+    expect(document.next.note).toBe('next-7d-importance-unknown')
+    expect(document.next.tier1Upcoming?.[0]).toMatchObject({ metricKey: 'US.CPI.NSA.YOY', releaseDate: '2026-11-03' })
+  })
+
+  it('drops a first-tier event whose grade is not high, and still says there is no high-impact event', () => {
+    // 同族的 CPI，但档是中：R44 之后按档，不按身份。这一周**已分级**，所以不说「没分级」。
+    const base = packet()
+    const mediumCpi = {
+      eventKey: 'US.CPI.NSA.YOY', title: 'CPI 年率', metricKey: 'US.CPI.NSA.YOY', importance: 'medium' as const,
+      scheduledAt: '2026-11-03T13:30:00.000Z', lifecycleState: 'scheduled' as const,
+      category: 'economic-indicator' as const, surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const document = buildDailyBriefingDocument({
+      packet: { ...base, calendar: { state: 'available', events: [mediumCpi] } },
+      date: '2026-10-30'
+    })
+
+    expect(document.next.items).toEqual([])
+    expect(document.next.focus).toBeUndefined()
+    expect(document.next.note).toBe('next-7d-no-high-impact-event')
+    expect(document.next.tier1Upcoming).toBeUndefined()
+  })
+
   it('never copies the analysis conclusion into an edition of another language (A0.9)', () => {
     // 用户 2026-11-06 报的真库现象：英文版次的结论与引用整段是中文。分析摘要只有一种语言，
     // 逐字复制进另一种语言的版次就是「英文外壳、中文正文」——这里一律不进；编辑模型随后用
@@ -255,6 +311,34 @@ describe('daily briefing document', () => {
     expect(document.conclusion?.summary).toBe('稳定币持续收缩、ETF 赎回带走买盘。')
     expect(document.conclusion?.counterEvidence).toHaveLength(2)
     expect(document.citations.some((entry) => entry.statement === 'ETF 资金流印证。')).toBe(true)
+  })
+
+  it('prints a claim once, even when it cites several evidence items', () => {
+    // 用户 2026-11-24：同一句理由挂三条证据时，读者在「证据」里看到同一句重复三遍——那不是三条
+    // 证据，是一句话被数了三遍。句子只留在第一条引用上，其余条目只给来源。
+    const base = packet()
+    const document = buildDailyBriefingDocument({
+      packet: {
+        ...base,
+        conclusion: {
+          ...base.conclusion!,
+          summary: {
+            ...summary,
+            directions: summary.directions.map((entry) => entry.horizon === 'medium'
+              ? { ...entry, evidenceRefIds: ['ev-2', 'ev-3'] }
+              : entry)
+          }
+        }
+      },
+      date: '2026-10-30'
+    })
+
+    expect(document.conclusion?.topSignal?.rationale).toBe('ETF 资金流印证。')
+    expect(document.conclusion?.topSignal?.citations).toEqual([1, 2])
+    const statements = document.citations.flatMap((entry) => (entry.statement === undefined ? [] : [entry.statement]))
+    expect(statements.filter((statement) => statement === 'ETF 资金流印证。')).toHaveLength(1)
+    // 通用不变量：证据清单里任何一句话都不许出现第二次。
+    expect(new Set(statements).size).toBe(statements.length)
   })
 
   it('lists only events that have a name in the edition’s language (A0.9)', () => {
@@ -705,7 +789,9 @@ describe('daily briefing document', () => {
 
   // 一级事件按身份进候选，不按 `importance`（Chief 2026-11-16）：narwhal 那批行重要性是空的，
   // 它们恰好是 CPI、非农这类最该出现的事件；重要性是我们缺的字段，不是判断它们不重要的理由。
-  it('keeps a first-tier event in the candidates even when its importance is unknown', () => {
+  it('drops a first-tier event whose grade is unknown, and reports the week as unrated', () => {
+    // R44 把「按身份放行」删了：同一场 CPI 没有档，就不再进候选——它是「我们还没分级」，
+    // 不是「高影响」。读者拿到的是那句话 + 真实排期，而不是一场没判过的事件。
     const event = {
       eventKey: 'US.CPI.NSA.YOY.2026-10', title: '10月未季调消费者物价指数(年率)', titleKey: 'US.CPI.NSA.YOY',
       metricKey: 'US.CPI.NSA.YOY',
@@ -716,11 +802,13 @@ describe('daily briefing document', () => {
       packet: packet({ calendar: { state: 'available', events: [event] } }),
       date: '2026-10-30'
     })
-    expect(document.next.candidates?.map((item) => item.eventKey)).toContain('US.CPI.NSA.YOY.2026-10')
+    expect(document.next.candidates).toBeUndefined()
+    expect(document.next.note).toBe('next-7d-importance-unknown')
   })
 
-  // 0xrouter 那条纪要的身份是指标码为数组，没有 `metricKey`；只能按源原文名认出来。
-  it('keeps a first-tier event that has no metric key, matched by its source title', () => {
+  // 0xrouter 那条纪要没有 `metricKey`，以前只能靠源原文名认出来；现在**名字认不出档**，
+  // 所以它也不该被抬进候选——这正是删掉标题正则要挡住的那件事。
+  it('does not resurrect a first-tier event by its source title once it carries no grade', () => {
     const minutes = {
       eventKey: '9151f5c8-0000-4000-8000-000000000001', title: '美联储公布货币政策会议纪要',
       scheduledAt: '2026-11-02T19:00:00.000Z', lifecycleState: 'scheduled' as const,
@@ -730,7 +818,8 @@ describe('daily briefing document', () => {
       packet: packet({ calendar: { state: 'available', events: [minutes] } }),
       date: '2026-10-30'
     })
-    expect(document.next.candidates?.map((item) => item.title)).toContain('美联储公布货币政策会议纪要')
+    expect(document.next.candidates).toBeUndefined()
+    expect(document.next.note).toBe('next-7d-importance-unknown')
   })
 
   it('keeps all same-release candidates for the agent to choose', () => {

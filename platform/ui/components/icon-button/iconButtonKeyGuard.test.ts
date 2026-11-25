@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { looksLikeTextKey } from '../textKeyShape'
+import { judgeTextKey, looksLikeTextKey } from '../textKeyShape'
 import { sentinelResolveText } from '../resolveTextShape'
 import { declaredTextKeysIn, literalAriaLabelKeys } from '../textKeyPaths'
 import { resolveDrawerText } from '../drawer/drawerText'
@@ -86,7 +86,8 @@ function offendersIn(file: string): Offender[] {
     const tagStart = text.indexOf(tag)
     for (const match of tag.matchAll(pattern)) {
       const value = match[1] ?? ''
-      if (looksLikeTextKey(value)) continue
+      // 先展开同文件字符串常量再判；展开不了就跳过（与传变量同级，不扩张判据）。
+      if (judgeTextKey(text, value) !== 'reject') continue
       const line = text.slice(0, tagStart + (match.index ?? 0)).split('\n').length
       offenders.push({ file, line, prop: match[0].split(/[:=]/)[0]!.trim(), value })
     }

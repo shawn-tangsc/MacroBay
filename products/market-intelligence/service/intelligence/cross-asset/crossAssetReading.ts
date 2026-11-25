@@ -126,38 +126,51 @@ function matches(direction: CrossAssetReadingDirection, expected: Condition['dir
 
 export function resolveCrossAssetReading(input: CrossAssetReadingInput): CrossAssetReading {
   if (input.window !== crossAssetReadingPolicy.window) return Object.freeze({ state: 'undetermined', reason: 'window-not-judged', refuted: Object.freeze([]) })
+  /** 读到的那些腿的三态。缺腿时也要它：「能排除什么」只依赖读到的腿，缺的那条不参与判断。 */
+  const available = crossAssetReadingLegs.filter(leg => input.legs[leg].state === 'available')
+  const directions = Object.fromEntries(available.map(leg => [
+    leg, crossAssetLegDirection(leg, (input.legs[leg] as { returnPercent: number }).returnPercent, input.window)
+  ])) as Partial<Record<CrossAssetReadingLeg, CrossAssetReadingDirection>>
+  const mismatches = (scenario: Scenario): readonly CrossAssetReadingLeg[] =>
+    scenario.conditions.filter(value => {
+      const direction = directions[value.leg]
+      // 缺（或停更）的那条腿没有读数：既不能说它「像」，也不能说它「不像」。
+      return direction !== undefined && !matches(direction, value.direction)
+    }).map(value => value.leg)
+  /** 只列「差一条腿」的剧本：差两条以上显然不是它，读者从旁边那张表就能看出来。 */
+  const nearMisses = (excluded?: CrossAssetReadingScenarioId): readonly Readonly<{ scenario: CrossAssetReadingScenarioId; leg: CrossAssetReadingLeg }>[] =>
+    Object.freeze(crossAssetReadingScenarios
+      .filter(scenario => scenario.id !== excluded)
+      .map(scenario => ({ scenario, mismatched: mismatches(scenario) }))
+      .filter(value => value.mismatched.length === 1)
+      .slice(0, crossAssetReadingPolicy.maximumRefuted)
+      .map(value => Object.freeze({ scenario: value.scenario.id, leg: value.mismatched[0]! })))
   for (const leg of crossAssetReadingLegs) {
     const value = input.legs[leg]
     // Missing first, then stale: a leg that never arrived cannot be judged by its age, and the reader is
     // told which leg stopped the reading rather than that "some data" is missing.
     if (value.state !== 'available') {
       const reason = value.reason === 'missing' ? 'legs-missing' : 'stale'
-      return Object.freeze({ state: 'undetermined', reason, leg, refuted: Object.freeze([]) })
+      /**
+       * 缺一条腿时**整档判不了**（五个剧本每一个都要求美元），但「能排除的」照旧能排除：违反某个剧本
+       * 条件的那条腿自己是读到的，这个剧本就不成立，与缺的那条无关（用户 2026-11-24 拍板：按手上
+       * 仅有的数据也说，别整条停住）。
+       */
+      return Object.freeze({ state: 'undetermined', reason, leg, refuted: nearMisses() })
     }
   }
-  const directions = Object.fromEntries(crossAssetReadingLegs.map(leg => {
-    const value = input.legs[leg]
-    return [leg, crossAssetLegDirection(leg, (value as { returnPercent: number }).returnPercent, input.window)]
-  })) as Record<CrossAssetReadingLeg, CrossAssetReadingDirection>
-  /** 四条腿各自的三态与读数：判读成立时是"哪条腿不符"的论据，认不出组合时就是那条兜底描述。 */
+  /** 四条腿都在：判读本身照旧。 */
   const legReadings = Object.freeze(crossAssetReadingLegs.map(leg => Object.freeze({
-    leg, direction: directions[leg], returnPercent: (input.legs[leg] as { returnPercent: number }).returnPercent
+    leg, direction: directions[leg]!, returnPercent: (input.legs[leg] as { returnPercent: number }).returnPercent
   })))
-  const mismatches = (scenario: Scenario): readonly CrossAssetReadingLeg[] =>
-    scenario.conditions.filter(value => !matches(directions[value.leg], value.direction)).map(value => value.leg)
   const selected = crossAssetReadingScenarios.find(scenario => mismatches(scenario).length === 0)
-  /** Only the scenarios that are one leg away are worth naming: two or more legs off is plainly "not it". */
-  const refuted = crossAssetReadingScenarios
-    .filter(scenario => scenario.id !== selected?.id)
-    .map(scenario => ({ scenario, mismatched: mismatches(scenario) }))
-    .filter(value => value.mismatched.length === 1)
-    .slice(0, crossAssetReadingPolicy.maximumRefuted)
-    .map(value => Object.freeze({ scenario: value.scenario.id, leg: value.mismatched[0]! }))
-  if (!selected) return Object.freeze({ state: 'undetermined', reason: 'no-match', refuted: Object.freeze(refuted), legs: legReadings })
+  const refuted = nearMisses(selected?.id)
+  if (!selected) return Object.freeze({ state: 'undetermined', reason: 'no-match', refuted, legs: legReadings })
   return Object.freeze({
     state: 'judged', window: crossAssetReadingPolicy.window, scenario: selected.id,
     legs: legReadings,
-    refuted: Object.freeze(refuted), relativeReturns: input.relativeReturns,
+    refuted,
+    relativeReturns: input.relativeReturns,
     // The horizon travels with the number: the correlation is always the 24h/5m one, and the sentence must
     // be able to say so rather than leave the reader to assume it belongs to whatever window they are on.
     correlation: input.correlation.state === 'available'

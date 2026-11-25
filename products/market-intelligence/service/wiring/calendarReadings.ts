@@ -10,7 +10,11 @@ import { createStandardMonthPageReader } from '../intelligence/macro-calendar/ma
 import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt } from '../intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
 import { zeroXRouterCalendarSchedulerFeeds, zeroXRouterCalendarSchedulerPolicy }
   from '../intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
-import { createNarwhalCalendarBriefingRefresh } from '../intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
+import { createMarketCalendarBriefingRefresh } from '../intelligence/macro-calendar/macroCalendarBriefingCatchUp'
+import { createCalendarInterpretationGenerator } from '../intelligence/macro-calendar/interpretation/calendarEventInterpretationGenerator'
+import { createMacroCalendarInterpretationService, type MacroCalendarInterpretationService }
+  from '../intelligence/macro-calendar/macroCalendarEventInterpretationService'
+import { registerCalendarEventInterpretationBackfill } from '../intelligence/macro-calendar/interpretation/calendarEventInterpretationBackfillJob'
 import { registerCalendarEventReminder } from '../intelligence/macro-calendar/registerCalendarEventReminder'
 import { registerCalendarIntegrityJob } from '../intelligence/macro-calendar/marketCalendarIntegrityJob'
 import { latestCurrentWriteFailure, type CalendarStandardWriteLayer }
@@ -105,7 +109,7 @@ export function wireCalendarReadings(input: Readonly<{
       const pick = input.database.prepare(`select descriptor_id, attempted_at, state
         from mi_macro_calendar_market_refresh_attempts where descriptor_id = ?
         order by attempted_at desc limit 1`)
-      return marketCalendarPublicPolicy.descriptors.map((descriptorId) => {
+      return marketCalendarPublicPolicy.collectionFeeds.map((descriptorId) => {
         const row = pick.get(descriptorId) as { attempted_at?: string; state?: string } | undefined
         return { descriptorId, ...(row?.attempted_at === undefined || row.state === undefined
           ? {} : { latestAttempt: { attemptedAt: row.attempted_at, state: row.state } }) }
@@ -145,11 +149,11 @@ export function wireCalendarReadings(input: Readonly<{
   // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
   // A command, not a query — it opens network requests and writes attempts — so it is injected
   // separately from the read surface above, and the brief never constructs a client of its own.
-  // 日报的「跑一次采集」＝排一次 Narwhal tick（与 `triggerCollection` 同一条路）。
-  // 旧源那条 `refreshNow` 会随它一起删；语义没变：排上作业才算触发，排不上就如实说失败。
+  // 日报的「跑一次采集」＝按 `sourceIds` 逐个排 0xRouter 三路的作业（与 `triggerCollection` 同一条路）。
+  // 语义没变：排上作业才算触发，排不上就如实说失败。
   // 「排上了」不等于「采到了」：排完等作业到终态（最多 20 秒），按终态回答；超时就是超时，
   // 不写成失败。判 `collected` 与 `unchanged` 看**数据有没有真的写进来**，不看作业跑没跑。
-  input.intelligenceModule.bindBriefingCalendarRefresh(createNarwhalCalendarBriefingRefresh({
+  input.intelligenceModule.bindBriefingCalendarRefresh(createMarketCalendarBriefingRefresh({
     jobRuntime: input.jobRuntime,
     // **补采必须按**下发名单**排**（不是写死一路）：名单来自 `listSchedules()`，这里给出
     // sourceId → 作业定义的映射；名单里没有的源跳过，删源时这份映射自然变短。
@@ -162,4 +166,40 @@ export function wireCalendarReadings(input: Readonly<{
   }))
 
   return Object.freeze({ standardCalendarReader, calendarReminder })
+}
+
+/**
+ * 装配「事件解读」（R36 #34 第二半）：用哪份库、哪个模型实例、哪个读口。
+ *
+ * 放在这里而不是 `bootstrap.ts`：主装配文件已经过 500 行，接线上限只许降；
+ * 判据与文案都不在这里（`macroCalendarEventInterpretationService` 负责）。
+ * **模型实例共用情报模块那一个**：`maxConcurrent` 是每实例的闸，另建一份会让两条线互相看不见。
+ */
+export function wireMacroCalendarEventInterpretation(deps: Readonly<{
+  repository: Pick<import('../intelligence/macro-calendar/macroCalendarRepository').MacroCalendarRepository, 'getEffectiveEventAsOf' | 'listEffectiveMonthAsOf'>
+  database: DatabaseSync
+  invoke: Parameters<typeof createCalendarInterpretationGenerator>[0]['invoke']
+  now?: () => string
+  /** 用量计数落一行结构化日志（仓库里没有用量报告设施，报告按这个 marker 聚合）。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  /** 高档自动补生成：没有作业运行时就不注册（测试与演示装配可以不排作业）。 */
+  jobRuntime?: Parameters<typeof registerCalendarEventInterpretationBackfill>[0]
+  readLocale?: () => Promise<'zh-CN' | 'en-US'>
+}>): MacroCalendarInterpretationService {
+  const now = deps.now ?? (() => new Date().toISOString())
+  const interpretation = createMacroCalendarInterpretationService({
+    repository: deps.repository, database: deps.database,
+    generator: createCalendarInterpretationGenerator({
+      database: deps.database, now, invoke: deps.invoke,
+      count: (line) => deps.log?.('info', 'MI_CALENDAR_INTERPRETATION_USAGE', { ...line })
+    }),
+    now
+  })
+  // 「实际值落库后自动生成一次」的自动那半：按轮扫已发布的高档行，一轮有上限。
+  if (deps.jobRuntime !== undefined && deps.readLocale !== undefined) {
+    registerCalendarEventInterpretationBackfill(deps.jobRuntime, {
+      repository: deps.repository, interpretation, now, readLocale: deps.readLocale
+    })
+  }
+  return interpretation
 }

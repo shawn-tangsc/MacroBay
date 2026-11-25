@@ -211,6 +211,164 @@ describe('intelligencePipeline', () => {
     expect(pipeline.listSentimentAggregates().map((aggregate) => aggregate.aggregateId)).toEqual(['neighbor-only'])
   })
 
+  it('keeps normalizing after one record throws, so a bad record cannot starve the queue', async () => {
+    /* 2026-11-21 事故：`defillama-tvl` 每半小时抛一次 `missing TVL total`，而待办是按追加顺序取的，
+       它一直排在最前面——后面的新闻记录永远轮不到归一化，enrich/score 从 11-19 起再没触发过，
+       而每个采集任务都显示「成功」。一条坏记录只准记日志、留在待办里重试，不许挡住整队。 */
+    const rawRecordStore = createRawRecordStore()
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore
+    })
+    const badRecord = rawRecordStore.appendRawRecord({
+      sourceId: 'defillama-tvl', runId: 'run-bad', sourceDedupeKey: 'tvl-bad', payloadFormat: 'json',
+      payloadRefType: 'inline', payloadBody: '[]', payloadHash: 'hash-bad', parserVersion: 'fixture-v1'
+    })
+    await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-news', fixtureText: loadFixture('rss-sample.xml') })
+
+    const result = await pipeline.normalizeRawRecords({})
+
+    expect(result.failedCount).toBe(1)
+    expect(result.processedCount).toBe(2)
+    expect(result.queuedJobs).toContain('market-intelligence.enrichNewsDocuments')
+    // 坏的记录转 `failed` 离开待办，原因码留在记录上：只隔离不挪队头的话，一轮 100 条全失败时
+    // 下一轮捞回来的还是这 100 条，第 101 条永远轮不到。
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(0)
+    const failedRecord = rawRecordStore.getRawRecord(badRecord!.rawRecordId)
+    expect(failedRecord?.processingState).toBe('failed')
+    expect(failedRecord?.errorMessage).toBe('MI_NORMALIZE_RECORD_FAILED')
+  })
+
+  it('persists a source normalize failure streak across rounds and collection successes', async () => {
+    /* `normalize-failing` 判据读的是同源连续失败。采集成功会整份换 checkpoint；如果这里不把
+       streak 带过去，每 30 分钟一次成功就把它清零，判据永远不可能成立。 */
+    const rawRecordStore = createRawRecordStore({ readPayload: () => ({ state: 'missing' as const }) })
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore,
+      runtimeStateSnapshot: [runtimeState({ resourceId: 'sec-rss' })]
+    })
+    for (let round = 0; round < 3; round += 1) {
+      // 每轮一条新的坏记录：失败的记录已经离开待办（见上一条用例），生产里也是每 30 分钟新来一条。
+      rawRecordStore.appendRawRecord({
+        sourceId: 'sec-rss', runId: `run-gone-${round}`, sourceDedupeKey: `sec-gone-${round}`, payloadFormat: 'rss-item',
+        payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash', parserVersion: 'rss-v1'
+      })
+      await pipeline.normalizeRawRecords({ sourceId: 'sec-rss' })
+    }
+
+    const checkpointOf = () =>
+      pipeline.listRuntimeStates().find((state) => state.resourceId === 'sec-rss')?.checkpoint as
+        | Record<string, unknown>
+        | undefined
+    expect(checkpointOf()?.normalizeFailureStreak).toBe(3)
+    expect(checkpointOf()?.firstNormalizeFailureAt).toEqual(expect.any(String))
+    const firstFailureAt = checkpointOf()?.firstNormalizeFailureAt
+
+    await pipeline.collectSource({ sourceId: 'sec-rss', runId: 'run-ok', fixtureText: loadFixture('rss-sample.xml') })
+
+    expect(checkpointOf()?.normalizeFailureStreak).toBe(3)
+    expect(checkpointOf()?.firstNormalizeFailureAt).toBe(firstFailureAt)
+    // 新 checkpoint 确实写进去了（不是保留旧整份），只是归一化字段被带过来。
+    expect(checkpointOf()?.parserVersion).toEqual(expect.any(String))
+  })
+
+  it('reads externalized payloads back before parsing, so file-ref records normalize (2026-11-21)', async () => {
+    /* 原文外置后正文只在内容寻址文件里。读路径以前把 `payloadBody`（undefined）直接交给适配器，
+       三个源以「解析失败」收场：`No RSS items found` / `HTML parser not implemented` /
+       `missing TVL total`。夹具是当时库里的真实响应正文，不是按解析器口味拼的结构。 */
+    const bodies: Record<string, string> = {
+      'sec.bin': loadFixture('sec-rss-item-sample.json'),
+      'binance.bin': loadFixture('binance-announcement-item-sample.json'),
+      'defillama.bin': loadFixture('defillama-chains-sample.json')
+    }
+    const readPayload = vi.fn(({ fileRef }: { fileRef: string }) => ({ state: 'found' as const, body: bodies[fileRef]! }))
+    const rawRecordStore = createRawRecordStore({ readPayload })
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore
+    })
+    const append = (sourceId: string, key: string, fileRef: string, payloadFormat: 'rss-item' | 'json', parserVersion: string) =>
+      rawRecordStore.appendRawRecord({
+        sourceId, runId: `run-${key}`, sourceDedupeKey: key, payloadFormat,
+        payloadRefType: 'file', payloadFileRef: fileRef, payloadHash: `${key}-hash`, parserVersion
+      })
+
+    append('sec-rss', 'sec-1', 'sec.bin', 'rss-item', 'rss-v1')
+    append('binance-announcements', 'binance-1', 'binance.bin', 'json', 'binance-announcements-v1')
+    append('defillama-tvl', 'defillama-1', 'defillama.bin', 'json', 'metric-rest-api-v1')
+
+    const result = await pipeline.normalizeRawRecords({})
+
+    expect(result.failedCount).toBe(0)
+    // 三个源都不再以解析失败收场；DefiLlama 是指标线（产出 metric event），新闻两条各成条目。
+    expect(result.processedCount).toBeGreaterThanOrEqual(2)
+    // 三条都过了解析：新闻条目带真实标题，DefiLlama 的 TVL 总和不再为 0。
+    const titles = pipeline.listItems().map(item => item.title)
+    // 解析这一步三条都过了；SEC 那条随后按产品规则被判 ignore（不进情报条目），不是解析失败。
+    expect(titles).toEqual(expect.arrayContaining([
+      expect.stringContaining('Binance Alpha Trading Competition'),
+      'Chain TVL Total'
+    ]))
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(0)
+    expect(pipeline.listMetricEvents().some(event => event.sourceId === 'defillama-tvl')).toBe(true)
+  })
+
+  it('drains the queue after a whole round fails, so round two reaches the record behind it', async () => {
+    /* 只把记录标成 failed 不够，要证「下一轮能捞到第 101 条」：一百条坏记录 + 一条排在最旧的好记录，
+       第一轮把这 100 条按失败移出待办，第二轮就该轮到那条好记录。 */
+    const rawRecordStore = createRawRecordStore({ readPayload: () => ({ state: 'missing' as const }) })
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore
+    })
+    // 五个源各 20 条，正好填满一轮（每源每轮上限 20 见 `normalizationBatchSelection`）。
+    const badSources = ['binance-spot-market', 'alternative-fear-greed', 'defillama-tvl', 'fred-rates-liquidity', 'okx-api-announcements']
+    for (const [sourceIndex, sourceId] of badSources.entries()) {
+      for (let index = 0; index < 20; index += 1) {
+        rawRecordStore.appendRawRecord({
+          sourceId, runId: `run-bad-${sourceId}-${index}`, sourceDedupeKey: `bad-${sourceIndex}-${index}`,
+          payloadFormat: 'json', payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash',
+          parserVersion: 'metric-rest-api-v1',
+          detectedAt: `2026-11-21T07:${String(sourceIndex * 10 + index).padStart(2, '0')}:00.000Z`
+        })
+      }
+    }
+    rawRecordStore.appendRawRecord({
+      sourceId: 'sec-rss', runId: 'run-good', sourceDedupeKey: 'sec-good', payloadFormat: 'rss-item',
+      payloadRefType: 'inline', payloadBody: loadFixture('sec-rss-item-sample.json'), payloadHash: 'good-hash',
+      parserVersion: 'rss-v1', detectedAt: '2026-11-19T20:14:59.000Z'
+    })
+
+    const firstRound = await pipeline.normalizeRawRecords({})
+    expect(firstRound.failedCount).toBe(100)
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(1)
+
+    const secondRound = await pipeline.normalizeRawRecords({})
+    expect(secondRound.failedCount).toBe(0)
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(0)
+  })
+
+  it('counts an unreadable externalized payload as failed and never parses an empty body', async () => {
+    const rawRecordStore = createRawRecordStore({ readPayload: () => ({ state: 'missing' as const }) })
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore
+    })
+    const goneRecord = rawRecordStore.appendRawRecord({
+      sourceId: 'sec-rss', runId: 'run-gone', sourceDedupeKey: 'sec-gone', payloadFormat: 'rss-item',
+      payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash', parserVersion: 'rss-v1'
+    })
+
+    const result = await pipeline.normalizeRawRecords({})
+
+    expect(result.failedCount).toBe(1)
+    expect(result.processedCount).toBe(0)
+    // 不把「读不到原文」当成「解析成功但 0 条」：记录转 failed 并带上原因码，不再占待办名额。
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(0)
+    expect(rawRecordStore.getRawRecord(goneRecord!.rawRecordId)?.errorMessage).toBe('MI_NORMALIZE_PAYLOAD_UNREADABLE')
+  })
+
   it('writes raw records before parsing and avoids duplicate items', async () => {
     const pipeline = createPipeline()
     const fixture = loadFixture('rss-sample.xml')
@@ -446,6 +604,20 @@ describe('intelligencePipeline', () => {
     expect(failed.queuedJobs).toEqual([])
   })
 
+  it('counts fetched bytes as UTF-8 bytes, not string length', async () => {
+    // 2026-11-21 排查被带偏两轮：日志写 `30562 byte(s)`，实际数的是 `body.length`（字符）。
+    // 同一条正文里有多字节字符时，字节数必须大于字符数。
+    const xml = '<?xml version="1.0"?><rss><channel><item><guid>g-utf8</guid><link>https://example.test/a</link>'
+      + '<title>中文标题</title><pubDate>Sat, 21 Nov 2026 06:16:42 +0000</pubDate></item></channel></rss>'
+    const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
+    const pipeline = createIntelligencePipeline({ profileStore, fetchText: async () => xml })
+
+    const result = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-bytes' })
+
+    expect(result.counts.fetchedBytes).toBe(Buffer.byteLength(xml, 'utf8'))
+    expect(result.counts.fetchedBytes).toBeGreaterThan(xml.length)
+  })
+
   it('creates clusters and revisions while queueing downstream work', async () => {
     const pipeline = createPipeline()
     const fixture = loadFixture('rss-sample.xml')
@@ -581,6 +753,72 @@ describe('intelligencePipeline', () => {
     expect(metric?.metricKey).toBe('ETHUSDT_24H_TICKER')
     const item = pipeline.listItems()[0]
     expect(JSON.parse(item?.symbolsJson ?? '[]')).toContain('ETH')
+  })
+
+  it('stores old fear-greed days as backfill: created, pending, and out of the queues', async () => {
+    const pipeline = createPipeline()
+    await pipeline.collectSource({
+      sourceId: 'alternative-fear-greed',
+      runId: 'fg-window',
+      fixtureText: JSON.stringify({ data: [
+        { value: '24', timestamp: '1795046400' },
+        { value: '40', timestamp: '1790899200' },
+        { value: '38', timestamp: '1790812800' }
+      ] })
+    })
+
+    const result = await pipeline.normalizeRawRecords({ sourceId: 'alternative-fear-greed' })
+
+    expect(result.newItemIds).toHaveLength(3)
+    expect(result.backfillItemIds).toHaveLength(2)
+    const labelsByDay = new Map(pipeline.listItems().map((item) => [item.publishedAt?.slice(0, 10), JSON.parse(item.processingLabelsJson ?? '{}')]))
+    expect(labelsByDay.get('2026-11-19')?.assessmentStatus).toBe('queued')
+    expect(labelsByDay.get('2026-10-02')?.assessmentStatus).toBe('pending')
+    expect(labelsByDay.get('2026-10-01')?.assessmentStatus).toBe('pending')
+    expect(labelsByDay.get('2026-10-02')?.isBackfill).toBe(true)
+  })
+
+  it('keeps one fear-greed point per day and lets the latest same-day pull win without rolling back', async () => {
+    const pipeline = createPipeline()
+    const pull = (days: Array<{ value: string; timestamp: string }>): string => JSON.stringify({ data: days })
+
+    await pipeline.collectSource({
+      sourceId: 'alternative-fear-greed',
+      runId: 'fg-1',
+      fixtureText: pull([
+        { value: '22', timestamp: '1795046400' },
+        { value: '31', timestamp: '1794960000' }
+      ])
+    })
+    await pipeline.normalizeRawRecords({ sourceId: 'alternative-fear-greed' })
+    expect(pipeline.listMetricEvents().map((event) => event.period)).toEqual(['2026-11-19', '2026-11-18'])
+    expect(pipeline.listRevisions()).toHaveLength(2)
+
+    // The source revises the 19th (22 -> 24) with a later release that same day: the point is
+    // replaced, not duplicated.
+    await pipeline.collectSource({
+      sourceId: 'alternative-fear-greed',
+      runId: 'fg-2',
+      fixtureText: pull([
+        { value: '24', timestamp: '1795089600' },
+        { value: '31', timestamp: '1794960000' }
+      ])
+    })
+    await pipeline.normalizeRawRecords({ sourceId: 'alternative-fear-greed' })
+    const revised = pipeline.listMetricEvents()
+    expect(revised.filter((event) => event.period === '2026-11-19')).toHaveLength(1)
+    expect(revised.find((event) => event.period === '2026-11-19')?.actual).toBe(24)
+    // Only the revised day earns a new revision: the untouched day's own hash decides, not the payload's.
+    expect(pipeline.listRevisions()).toHaveLength(3)
+
+    // A late payload carrying the earlier release of the same day must not undo the revision.
+    await pipeline.collectSource({
+      sourceId: 'alternative-fear-greed',
+      runId: 'fg-3',
+      fixtureText: pull([{ value: '22', timestamp: '1795046400' }])
+    })
+    await pipeline.normalizeRawRecords({ sourceId: 'alternative-fear-greed' })
+    expect(pipeline.listMetricEvents().find((event) => event.period === '2026-11-19')?.actual).toBe(24)
   })
 
   it('stores layer breakdown on sentiment aggregates after impact assessment', async () => {

@@ -5,9 +5,10 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import type { NotificationRequest } from '../contracts/notificationContracts'
+import type { NotificationRecord, NotificationRequest } from '../contracts/notificationContracts'
 import {
   acknowledgeNotification,
+  normalizeNotificationRecord,
   createNotificationFromRequest,
   dismissNotification,
   expireDueNotifications,
@@ -43,6 +44,104 @@ describe('rendered-only records survive a round trip (two-shape contract)', () =
     expect(once.records).toHaveLength(1)
     const twice = normalizeNotificationStoreState(JSON.parse(JSON.stringify(once)))
     expect(twice.records).toHaveLength(1)
+  })
+})
+
+describe('归一化：写进去的契约字段必须读得回来', () => {
+  /**
+   * 真实事故（2026-11-24 架构师核出）：`normalizeNotificationRecord` 逐字段重建记录，`edition`、
+   * `editionPoster`、`appliedLevels` 三个契约字段没被复制。每次启动「读 → 归一化 → 回写」就把它们
+   * 静默抹掉：新记录重启后又变成「没有 edition」，不进中心的事件重新算成进中心，海报重投永远报版次不符。
+   *
+   * 这条按「整份契约」判，不逐个列名字——将来契约加字段、归一化忘了抄，它一样红。
+   */
+  // `Required<NotificationRecord>`：契约加字段时**编译期**就逼着这里补上，夹具不会悄悄落后于契约。
+  const FULL: Required<NotificationRecord> = {
+    id: 'notification-edition-1',
+    owner: 'product' as const,
+    productId: 'market-intelligence',
+    sourceId: 'market-intelligence.briefing.ready',
+    eventTypeId: 'market-intelligence.briefing.ready',
+    mergedEventTypes: ['market-intelligence.briefing.ready'],
+    delivery: { push: { state: 'sent-accepted' as const, messageId: 'm-1', at: '2026-11-23T12:01:04.232Z' } },
+    rendered: { 'en-US': { title: 'Daily brief is ready', body: 'The edition is ready', reason: 'You subscribed.' } },
+    titleKey: 'notification.taskFailed.title' as never,
+    titleParams: { count: '1' },
+    bodyKey: 'notification.taskFailed.body' as never,
+    bodyParams: { count: '1' },
+    reasonKey: 'notification.taskFailed.body' as never,
+    reasonParams: { count: '1' },
+    appliedLevels: ['center', 'desktop', 'channel'] as const,
+    severity: 'info' as const,
+    priority: 'normal' as const,
+    channels: ['center' as const, 'desktop' as const],
+    state: 'unread' as const,
+    deeplink: { scope: 'product' as const, productId: 'market-intelligence', pageId: 'daily-briefing' },
+    actions: [{ id: 'open-briefing', kind: 'open' as const, labelRef: { scope: 'platform' as const, key: 'k' } as never }],
+    dedupeKey: 'brief-done:2026-11-23:zh-CN',
+    correlationId: 'corr-1',
+    safeMetadata: { note: 'ok' },
+    edition: { editionId: '2026-11-23:en-US:period_1', locale: 'en-US' },
+    editionPoster: { contentHash: '1cb80bea36d77b1d' },
+    editionPosterRow: { status: 'ready' as const, contentHash: '1cb80bea36d77b1d', failureCode: null },
+    occurrenceCount: 2,
+    collapsedCount: 3,
+    createdAt: '2026-11-23T12:01:04.228Z',
+    updatedAt: '2026-11-23T12:01:04.228Z',
+    readAt: '2026-11-23T13:00:00.000Z',
+    acknowledgedAt: '2026-11-23T13:00:00.000Z',
+    dismissedAt: '2026-11-23T13:10:00.000Z',
+    snoozedUntil: '2026-11-23T14:00:00.000Z',
+    expiresAt: '2026-12-23T12:01:04.228Z'
+  }
+
+  it('契约里每个字段都留在归一化结果里，且**值不是 undefined**（新增字段忘了抄 / 抄了键没抄值 → 这条红）', () => {
+    const normalized = normalizeNotificationRecord(FULL)
+    expect(normalized).not.toBeNull()
+    // 不能只判 `in`：`bodyKey: … : undefined` 这类是「键留、值丢」，`in` 照样为真。
+    const lost = Object.entries(FULL)
+      .filter(([key, value]) => (normalized as unknown as Record<string, unknown>)[key] === undefined && value !== undefined)
+      .map(([key]) => key)
+    expect(lost).toEqual([])
+  })
+
+  it('三个真丢过的字段按原值回来', () => {
+    const normalized = normalizeNotificationRecord(FULL)!
+    expect(normalized.edition).toEqual({ editionId: '2026-11-23:en-US:period_1', locale: 'en-US' })
+    expect(normalized.editionPoster).toEqual({ contentHash: '1cb80bea36d77b1d' })
+    expect(normalized.appliedLevels).toEqual(['center', 'desktop', 'channel'])
+  })
+
+  it('海报行（#46）的 `null` 与缺席不合并：读回来仍是 null，老记录仍是 undefined', () => {
+    // `null` 是「那一刻表里没有行」这个事实；被归一化吞成 undefined 就变成「不知道」，
+    // 详情页会把「这一版没有图」藏起来——那是把说过的话收回。
+    const noRow = normalizeNotificationRecord({ ...FULL, editionPosterRow: null })!
+    expect(noRow.editionPosterRow).toBeNull()
+    const legacy = normalizeNotificationRecord({ ...FULL, editionPosterRow: undefined })!
+    expect(legacy.editionPosterRow).toBeUndefined()
+    // 失败行带着原因码回来；`ready` 没 hash 说不通，整项丢掉而不是留半截。
+    expect(normalizeNotificationRecord({ ...FULL, editionPosterRow: { status: 'timeout', contentHash: null, failureCode: 'poster-render-timeout' } })!.editionPosterRow)
+      .toEqual({ status: 'timeout', contentHash: null, failureCode: 'poster-render-timeout' })
+    expect(normalizeNotificationRecord({ ...FULL, editionPosterRow: { status: 'ready', contentHash: '  ', failureCode: null } })!.editionPosterRow)
+      .toBeUndefined()
+  })
+
+  it('认不出的值整项丢掉，不返回半截脏数据', () => {
+    const normalized = normalizeNotificationRecord({
+      ...FULL,
+      appliedLevels: ['center', 'nonsense'],
+      edition: { editionId: '   ', locale: 'zh-CN' },
+      editionPoster: { contentHash: '' }
+    })!
+    expect(normalized.appliedLevels).toEqual(['center'])
+    expect(normalized.edition).toBeUndefined()
+    expect(normalized.editionPoster).toBeUndefined()
+  })
+
+  it('appliedLevels 一项都不剩时按「不知道」处理，不返回空数组', () => {
+    // 空数组的意思是「哪一档都没排上」，与「老记录没有这一项」是两件事，读侧的推断只认后者。
+    const normalized = normalizeNotificationRecord({ ...FULL, appliedLevels: ['nonsense'] })!
+    expect(normalized.appliedLevels).toBeUndefined()
   })
 })
 

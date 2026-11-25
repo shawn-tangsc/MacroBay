@@ -12,7 +12,7 @@ async function render(onOpenChange = vi.fn()) {
   document.body.append(host)
   const root = createRoot(host)
   const click = async (selector: string) => act(async () => host.querySelector<HTMLButtonElement>(selector)!.click())
-  await act(async () => root.render(<AgentFloatingControl text={text} onOpenChange={onOpenChange}><p data-agent-body>对话</p></AgentFloatingControl>))
+  await act(async () => root.render(<AgentFloatingControl closeKey="close-agent" resolveText={(key) => key} text={text} onOpenChange={onOpenChange}><p data-agent-body>对话</p></AgentFloatingControl>))
   const escape = async () => act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
   return { host, click, escape, onOpenChange }
 }
@@ -56,7 +56,7 @@ it('uses the copy the caller passes, with no text of its own', async () => {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
-  await act(async () => root.render(<AgentFloatingControl text={{ open: 'OPEN-ME', close: 'CLOSE-ME', title: 'TITLE-ME', clear: 'CLEAR-ME' }}><p data-agent-body>对话</p></AgentFloatingControl>))
+  await act(async () => root.render(<AgentFloatingControl closeKey="CLOSE-ME" resolveText={(key) => key} text={{ open: 'OPEN-ME', close: 'CLOSE-ME', title: 'TITLE-ME', clear: 'CLEAR-ME' }}><p data-agent-body>对话</p></AgentFloatingControl>))
   expect(host.querySelector('[data-agent-floating-button]')?.getAttribute('aria-label')).toBe('OPEN-ME')
   await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
   expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('TITLE-ME')
@@ -200,7 +200,7 @@ it('offers a clear action in the panel header when the caller provides one', asy
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
-  await act(async () => root.render(<AgentFloatingControl onClear={onClear} text={text}><p data-agent-body>对话</p></AgentFloatingControl>))
+  await act(async () => root.render(<AgentFloatingControl closeKey="close-agent" onClear={onClear} resolveText={(key) => key} text={text}><p data-agent-body>对话</p></AgentFloatingControl>))
   await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
   const clear = host.querySelector<HTMLButtonElement>('.mi-agent-floating__clear')!
   expect(clear.textContent).toBe('清空')
@@ -232,4 +232,86 @@ it('colours the direction tag from the stylesheet, with fallbacks for scopes wit
     expect(rule(direction)).toContain(`var(${token}, #`)
   }
   expect(rule('undecided')).toContain('var(--muted-strong, var(--muted, #')
+})
+
+/**
+ * 窄档：底部上滑聊天框（用户 2026-11-24 拍板 v3，原型 `2026-11-24-pad-edge-handle-v3.html`）。
+ *
+ * 钉的是四件事，每一件都能把实现改坏单独打红：
+ * ① 聊天框开着时圆钮**不渲染**（不是压上去）；
+ * ② 遮罩盖住整页（看板不可点）——没有遮罩就等于两栏共存；
+ * ③ Esc / 点遮罩都能关，关掉后焦点回圆钮；
+ * ④ 聊天框里不出现第二层浮窗（浮窗面板在窄档根本不渲染）。
+ */
+async function renderCompact() {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  const onOpenChange = vi.fn()
+  await act(async () => root.render(<AgentFloatingControl closeKey="close-agent" compact onOpenChange={onOpenChange} resolveText={(key) => key} text={text}><p data-agent-body>对话</p></AgentFloatingControl>))
+  const click = async (selector: string) => act(async () => host.querySelector<HTMLElement>(selector)!.click())
+  return { host, click, onOpenChange }
+}
+
+it('opens the sheet on a narrow workspace with a scrim, and does not render the round button on top', async () => {
+  const { host, click } = await renderCompact()
+  // 第一次打开之前抽屉还没有内容可挂；打开之后就一直留在树上（关掉只是不可见）。
+  expect(host.querySelector('[data-agent-sheet]')).toBeNull()
+  await click('[data-agent-floating-button]')
+  expect(host.querySelector('[data-agent-sheet]')?.getAttribute('data-open')).toBe('true')
+  expect(host.querySelector('[data-agent-sheet] [data-agent-body]')?.textContent).toBe('对话')
+  // 遮罩在：看板被盖住、点不动（没有它就成了「两栏共存」的错觉）。
+  expect(host.querySelector('[data-agent-sheet-scrim]')).not.toBeNull()
+  // 圆钮不渲染——不是压在上面。
+  expect(host.querySelector('[data-agent-floating-button]')).toBeNull()
+  // 抽屉里不许再长出一层：浮窗面板在窄档根本不渲染。
+  expect(host.querySelector('.mi-agent-floating')).toBeNull()
+  expect(host.querySelectorAll('[data-agent-sheet]')).toHaveLength(1)
+})
+
+it('closes on escape and puts focus back on the round button', async () => {
+  const { host, click } = await renderCompact()
+  await click('[data-agent-floating-button]')
+  expect(document.activeElement).toBe(host.querySelector('.mi-agent-floating__close, .icon-button'))
+  await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+  expect(host.querySelector('[data-agent-sheet]')?.getAttribute('data-open')).toBe('false')
+  expect(host.querySelector('[data-agent-sheet-scrim]')).toBeNull()
+  expect(document.activeElement).toBe(host.querySelector('[data-agent-floating-button]'))
+})
+
+it('closes when the reader clicks the scrim', async () => {
+  const { host, click } = await renderCompact()
+  await click('[data-agent-floating-button]')
+  await click('[data-agent-sheet-scrim]')
+  expect(host.querySelector('[data-agent-sheet]')?.getAttribute('data-open')).toBe('false')
+  expect(host.querySelector('[data-agent-floating-button]')).not.toBeNull()
+})
+
+it('hides the round button while another modal layer is open', async () => {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  await act(async () => root.render(<AgentFloatingControl closeKey="close-agent" compact resolveText={(key) => key} suppressed text={text}><p data-agent-body>对话</p></AgentFloatingControl>))
+  // 时间轴 / 事件详情 / 设置开着时圆钮不渲染：它 z=1100，压在那几层（1000/1150/1200）上面就是第二层入口。
+  expect(host.querySelector('[data-agent-floating-button]')).toBeNull()
+})
+
+it('sizes the chat sheet 40–70dvh (dvh, so the keyboard shrinks it) under the round button', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const css = readFileSync(join(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css'), 'utf8')
+  const sheet = css.slice(css.indexOf('.mi-agent-sheet {'), css.indexOf('\n}', css.indexOf('.mi-agent-sheet {')) + 2)
+  // 40 起、70 封顶，中间随内容长：输入框贴视口底，长高不会让它上下跳。
+  expect(sheet).toContain('min-height: 40dvh')
+  expect(sheet).toContain('max-height: 70dvh')
+  expect(sheet).toContain('height: auto')
+  // `dvh` 不是 `vh`：软键盘弹起时框跟着缩，输入框不会被键盘吃掉（pad 上必须）。
+  expect(sheet.match(/\d+d?vh/g)).toEqual(['40dvh', '70dvh'])
+  expect(sheet).toContain('bottom: 0')
+  expect(sheet).toContain('border-radius: 12px 12px 0 0')
+  // 遮罩与聊天框都压在 antd 的 1000 之下（996 / 997）：否则从图标栏打开设置抽屉会被它们盖住。
+  const scrim = css.slice(css.indexOf('.mi-agent-sheet__scrim {'), css.indexOf('\n}', css.indexOf('.mi-agent-sheet__scrim {')) + 2)
+  expect(scrim).toContain('inset: 0')
+  expect(scrim).toContain('z-index: 996')
+  expect(sheet).toContain('z-index: 997')
 })

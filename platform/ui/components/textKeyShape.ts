@@ -24,3 +24,52 @@ export const TEXT_KEY_SHAPE = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+(-[A-Za-z0-9]+)*
 export function looksLikeTextKey(value: string): boolean {
   return TEXT_KEY_SHAPE.test(value)
 }
+
+/** 同文件里 `const NAME = '普通字符串'` 的值；不是字符串常量就返回 `null`。 */
+function sameFileStringConstant(source: string, name: string): string | null {
+  const pattern = new RegExp(
+    `(?:const|let)\\s+${name}\\s*(?::[^=]+)?=\\s*(?:'([^'\\n]*)'|"([^"\\n]*)"|\`([^\`]*)\`)\\s*(?:as\\s+const)?`,
+    'u'
+  )
+  const match = pattern.exec(source)
+  if (match === null) return null
+  const value = match[1] ?? match[2] ?? match[3]
+  if (value === undefined) return null
+  // 常量本身又是模板 / 带插值：不展开，交给「跳过」。
+  return value.includes('${') ? null : value
+}
+
+/**
+ * **先展开、再判**：把同文件里 `const NAME = '普通字符串'` 的值代进 `${NAME}`。
+ *
+ * 返回 `null` = 展开不了（不是同文件字符串常量、还有别的表达式、常量本身带插值）。
+ * 这一档与「传的是变量」同级：**跳过，不判红**——`textKeyShape` 的口径本来就是
+ * 「不判是不是字面量，正则看不进变量，传参交给类型」。
+ */
+export function expandSameFileConstants(source: string, candidate: string): string | null {
+  if (!candidate.includes('${')) return candidate
+  let expanded = candidate
+  // 上限只为防有人写出互相引用的常量环；正常一两次就够。
+  for (let round = 0; round < 10; round += 1) {
+    const match = /\$\{([A-Za-z_$][\w$]*)\}/.exec(expanded)
+    if (match === null) break
+    const name = match[1] ?? ''
+    const value = sameFileStringConstant(source, name)
+    if (value === null) return null
+    expanded = expanded.replace(match[0], value)
+  }
+  // 还剩别的表达式（函数调用、成员访问、嵌套模板）→ 展开不了，跳过。
+  return expanded.includes('${') ? null : expanded
+}
+
+/**
+ * 一条候选值的结论：`pass` 形状合格、`reject` 形状不合格（要报）、`skip` 判不了（不报）。
+ *
+ * 守卫统一调这一个，避免各自再写「含 `${` 就放行」之类的偷懒判据——那等于放行任何人
+ * 拼一句话进来。
+ */
+export function judgeTextKey(source: string, candidate: string): 'pass' | 'reject' | 'skip' {
+  const expanded = expandSameFileConstants(source, candidate)
+  if (expanded === null) return 'skip'
+  return looksLikeTextKey(expanded) ? 'pass' : 'reject'
+}

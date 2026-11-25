@@ -1017,6 +1017,10 @@
      整行 44 高、各子项都居中，谁都不许被 margin 顶偏。 */
   align-items: center;
   min-height: 44px;
+  /* 说明行与上面那条的间距走主档 4（界面设计 2026-11-21：原先是 1.5px 的行盒余量，等于没有）。
+     只给 row-gap，不用 margin——margin 会在以后加第三行时再算一次。
+     没有说明行时栅格只有一行（第二行轨道只有在有子项时才生成），行高仍是 44。 */
+  row-gap: 4px;
   padding: 10px 12px;
   /* 边框用 inset 阴影画：`border` 会把内容再往里挤 1px，下面那张表单的第一列就对不齐了。
      视觉完全一样（1px 细线 + 圆角），但内容左缘与表单行同为 12（主档）。 */
@@ -1151,6 +1155,74 @@
   font-size: var(--font-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * 采集**产出**状态（用户 2026-11-21：健康那一行要把这两个状态显示出来）。整行宽、排在名字与
+ * meta 之下——`grid-column: 1 / -1` 让它落到第二行，栅格列数不变，行尾状态文字与 ⓘ 的位置
+ * 一个都不动（写库失败那颗 ⓘ 也仍在它自己那一列）。
+ *
+ * 颜色不染状态色：药丸才是状态色，这里是一句说明。两句话同时为真时上下各一行，不合并。
+ * 字号/行高都走既有 token（`--font-meta` / `--line-meta`），没有新档。
+ */
+/*
+ * 第一行固定三格：内容 / 两颗 ⓘ（合成一格，见 JSX 里的 `row-notes`）/ 行尾那一格。
+ *
+ * 机制是**放置游标**：说明行跨列放到第二行之后，游标停在第二行末尾，DOM 里排在它后面的子项就被
+ * 顺到第三行（实测 tail 比 main 低 34.7～53px）。
+ *
+ * 承重的是下面那条 `.row-stale { grid-row: 2 }`：把说明行显式钉在第二行，游标不再越位。
+ * **单独撤掉它时不是「掉到第三行」，而是说明行与内容区重叠**（行高 44、两行字压在一起）——
+ * 这种坏状态最容易被当成「看着还行」，比掉行更难发现。
+ * 这颗 `grid-row: 1` 是第二道防线——单独撤掉它结果不变（说明行已钉住），但别再往下清：
+ * 两层一起撤掉时 tail 会掉 +42.5px（探针 60.0 → 80.5）。**用例量不到布局**，撤掉不会红，
+ * 这类改动只能靠探针量：`/tmp/probe-row3.html`（界面设计）或同形的静态页 + 仓库这份 CSS。
+ * 顺序要紧：它写在说明行之前，说明行用子选择器（多一层特异性）盖回第二行。
+ *
+ * 两颗 ⓘ 收进一格是**结构简化**（不是放置稳定的原因）：这一行恒定三格，以后再加子项只会横向
+ * 挤成隐式列，不会掉行。包一层的守卫在 `SourceEnabledRow.staleReason.test.tsx`。
+ */
+.source-provider-detail__row > * {
+  grid-row: 1;
+}
+
+.source-provider-detail__row > .source-provider-detail__row-stale {
+  display: grid;
+  grid-column: 1 / -1;
+  /* 第二行，**承重**。撤掉它有**两种**失败形态，都实测过（界面设计 2026-11-21，探针 640 宽）：
+     - 只撤这一行：说明行**重叠**到第一行（行高 44，两行字压在一起）——看着「没缺东西」，最难发现；
+     - 连同上面的 `grid-row: 1` 一起撤：放置游标停在说明行末尾，tail 被顺到第三行（+42.5px）。
+     用例量不到布局，撤掉都不会红；要判定只能探针量。 */
+  grid-row: 2;
+  gap: 2px;
+  color: var(--text-secondary);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+  overflow-wrap: anywhere;
+}
+
+/* 两颗 ⓘ 同一格：横排、间距主档 4。栅格列数不变，行尾不会被挤走。 */
+.source-provider-detail__row-notes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/*
+ * 三格**连列一起钉死**：内容 → 第 1 列（吃满剩余），ⓘ → 第 2 列，行尾 → 第 3 列。
+ * 只钉行、靠自动列序时，没有 ⓘ 的那一行会让行尾落到第 2 列、第 3 列空着——今天看
+ * 不出差别（空列宽 0），但谁把列宽改了，行尾就会从右缘塌进去。钉死之后放置完全确定。
+ */
+.source-provider-detail__row > .source-provider-detail__main {
+  grid-column: 1;
+}
+
+.source-provider-detail__row > .source-provider-detail__row-notes {
+  grid-column: 2;
+}
+
+.source-provider-detail__row > .source-provider-detail__row-tail {
+  grid-column: 3;
 }
 
 .source-provider-detail__main {
@@ -1774,8 +1846,12 @@
    内容再长也不会被裁掉；两种形态行高相同，并排的卡片才不会高高低低。 */
 .business-card__preset {
   display: flex;
+  /* 放不下时**整条读数换到第二行**，而不是把汉字一个字一个字折成竖排（用户 2026-11-22）。
+     宽度下限在读数那头（`min-width: 6ch`）：只要容器还有 6 个字的位置，就不可能出现一字一行。 */
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  row-gap: 4px;
   min-height: 24px;
   min-width: 0;
 }
@@ -1889,7 +1965,13 @@
   align-items: start;
 }
 
-.business-card[data-business-card] {
+/* 模块卡占几列 = `--module-span`（上限 3）。**判定不靠属性、靠结构**：放进
+   `.business-module-grid` 的卡就是模块卡。
+   原来写的是 `.business-card[data-business-card]`——核心指标那一屏漏了这个属性，组卡就落回
+   `grid-column: auto` 只占 1/3，而 `--module-span: 3` 还在喂组内的 `business-cell-grid`，
+   于是指标卡只剩 1/9 宽、频率读数 11px（正好一个字）一字一行折下去（用户 2026-11-22 截图）。
+   属性留着（`SourcesSettingsPane` 用它做定位滚动），但**宽度不再依赖它记得写**。 */
+.business-module-grid > .business-card {
   grid-column: span var(--module-span, 3);
 }
 

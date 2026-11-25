@@ -3,6 +3,8 @@ import { Button } from 'antd'
 import type { CrossAssetId, CrossAssetMacroProxyId, CrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
 import type { CrossAssetEventLine } from './crossAssetEventLines'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /**
  * 图上能画的线。行 id 与线 id 在这五条上同名，是刻意的：一格关掉，那一行与那条线一起消失。
@@ -89,6 +91,9 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
   onSelectEvent?: (line: CrossAssetEventLine) => void
 }): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  const timeZone = useShellTimeZone()
+  /** 轴刻度用紧凑口径：同日 `HH:mm`、跨日 `MM-DD HH:mm`，不带时区——五个刻度各印一遍 `GMT+8` 会互相压字。 */
+  const formatTick = (instant: string): string => formatShellClock(instant, { timeZone }) ?? formatTime(instant)
   const policy = crossAssetChartPolicy
   /**
    * A line is listed once it has points, and hidden only when the reader hides it.
@@ -100,6 +105,14 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
   const [hidden, setHidden] = useState<readonly LineId[]>([])
   const [hover, setHover] = useState<{ index: number; tooltipLeft: number; tooltipTop: number }>()
   const plotRef = useRef<HTMLDivElement>(null)
+  /**
+   * 浮层的定位与高度都以**图那一栏**（图框 + 刻度）为准，不是以绘图区为准。
+   *
+   * 绘图区只有 104–171 高（行高 44 之后），而五条线的浮层要 140 出头：按绘图区算
+   * `max-height` 会把五行裁 3、四行 25、三行 27 像素并长出一条滚动条（用户 2026-11-23 真机）。
+   * 挂在这一栏上，三、四行时浮层可以压到刻度那一行上，仍不越过图例。
+   */
+  const chartAreaRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   /** Macro lines are drawn only when the wire carried them, and only when they have a curve at all. */
   const listed: readonly LineId[] = [...policy.assets, ...policy.macroProxies.filter(proxy => (macroCurves?.[proxy]?.length ?? 0) > 0)]
@@ -151,13 +164,22 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
   function inspect(index: number, mouseY: number) {
     const box = plotRef.current?.getBoundingClientRect()
     if (!box || !inspectionTimes.length) return
+    /**
+     * 高度按**那一栏**算，横向仍按绘图区算：栏比绘图区多出纵轴与间距，横向放进去浮层会压到
+     * 轴标签上。取不到栏（单测里没铺版）时退回绘图区，行为与原来一致。
+     */
+    const area = chartAreaRef.current?.getBoundingClientRect()
+    const measured = area !== undefined && area.height > 0
+    const bounds = measured ? area : box
+    const offsetLeft = measured ? box.left - area.left : 0
+    const offsetTop = measured ? box.top - area.top : 0
     const tooltip = tooltipRef.current?.getBoundingClientRect()
     const width = Math.min(tooltip?.width || policy.tooltipWidth, Math.max(0, box.width - 2 * policy.inset))
-    const height = Math.min(tooltip?.height || policy.tooltipHeight, Math.max(0, box.height - 2 * policy.inset))
+    const height = Math.min(tooltip?.height || policy.tooltipHeight, Math.max(0, bounds.height - 2 * policy.inset))
     const anchorX = x(inspectionTimes[index]) / policy.width * box.width
     const preferred = anchorX + policy.offset + width <= box.width - policy.inset ? anchorX + policy.offset : anchorX - policy.offset - width
-    setHover({ index, tooltipLeft: Math.max(policy.inset, Math.min(preferred, box.width - width - policy.inset)),
-      tooltipTop: Math.max(policy.inset, Math.min(mouseY + policy.offset, box.height - height - policy.inset)) })
+    setHover({ index, tooltipLeft: offsetLeft + Math.max(policy.inset, Math.min(preferred, box.width - width - policy.inset)),
+      tooltipTop: Math.max(policy.inset, Math.min(offsetTop + mouseY + policy.offset, bounds.height - height - policy.inset)) })
   }
   return <div className="mi-cross-asset__chart">
     <div className="mi-cross-asset__legend">{listed.map(id => (
@@ -171,61 +193,68 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
         : <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
             onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}</Button>
     ))}</div>
-    <div className="mi-cross-asset__chart-frame">
-      <div className="mi-cross-asset__y-axis">{(max === min ? [0] : [max, 0, min].filter((value, index, all) => all.indexOf(value) === index)).map(value => <span key={value} style={{ top: `${y(value) / policy.height * 100}%` }}>{percent(value)}</span>)}</div>
-      <div ref={plotRef} data-cross-asset-plot className="mi-cross-asset__plot" role="group" aria-label={text.chart} tabIndex={0}
-        onMouseLeave={() => setHover(undefined)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setHover(undefined) }}
-        onMouseMove={event => {
-          const box = event.currentTarget.getBoundingClientRect()
-          const localX = event.clientX - box.left
-          if (localX < 0 || localX > box.width) { setHover(undefined); return }
-          const at = start + Math.max(0, Math.min(1, localX / box.width)) * (end - start)
-          let index = 0
-          inspectionTimes.forEach((time, candidate) => { if (Math.abs(time - at) < Math.abs(inspectionTimes[index] - at)) index = candidate })
-          inspect(index, event.clientY - box.top)
-        }}
-        onKeyDown={event => {
-          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-          event.preventDefault()
-          inspect(event.key === 'End' ? inspectionTimes.length - 1 : event.key === 'Home' ? 0 : Math.max(0, Math.min(inspectionTimes.length - 1, (hover?.index ?? 0) + (event.key === 'ArrowLeft' ? -1 : 1))), 0)
-        }}>
-        <svg aria-hidden="true" viewBox={`0 0 ${policy.width} ${policy.height}`} preserveAspectRatio="none">
-          <line className="mi-cross-asset__zero" x1="0" x2={policy.width} y1={y(0)} y2={y(0)} />
-          {visible.map(id => <path key={id} data-asset-line={id} d={path(id)} />)}
-          {visible.map(id => {
-            const tail = formingOf(id); const last = pointsOf(id).at(-1)
-            return tail && last?.returnPercent !== null && last ? <g key={id} data-forming-line={id} aria-label={text.forming}><title>{text.forming}</title><path d={`M${x(Date.parse(last.at))},${y(last.returnPercent)} L${x(Date.parse(tail.at))},${y(tail.returnPercent)}`} /><circle cx={x(Date.parse(tail.at))} cy={y(tail.returnPercent)} r="3" /></g> : null
-          })}
-        </svg>
-        {/*
-          The calendar's own events, drawn over the curves: a line answers "when", the shape beside it
-          answers "how much", and a reader looking at a step at 14:05 needs both to say what happened.
-          Solid once something in that minute was published, dashed while it is all still ahead — only
-          the first kind explains a move that has already happened. HTML rather than SVG so they are
-          focusable and announce themselves the way every other control here does.
+    <div ref={chartAreaRef} className="mi-cross-asset__chart-area">
+      <div className="mi-cross-asset__chart-frame">
+        <div className="mi-cross-asset__y-axis">{(max === min ? [0] : [max, 0, min].filter((value, index, all) => all.indexOf(value) === index)).map(value => <span key={value} style={{ top: `${y(value) / policy.height * 100}%` }}>{percent(value)}</span>)}</div>
+        <div ref={plotRef} data-cross-asset-plot className="mi-cross-asset__plot" role="group" aria-label={text.chart} tabIndex={0}
+          onMouseLeave={() => setHover(undefined)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setHover(undefined) }}
+          onMouseMove={event => {
+            const box = event.currentTarget.getBoundingClientRect()
+            const localX = event.clientX - box.left
+            if (localX < 0 || localX > box.width) { setHover(undefined); return }
+            const at = start + Math.max(0, Math.min(1, localX / box.width)) * (end - start)
+            let index = 0
+            inspectionTimes.forEach((time, candidate) => { if (Math.abs(time - at) < Math.abs(inspectionTimes[index] - at)) index = candidate })
+            inspect(index, event.clientY - box.top)
+          }}
+          onKeyDown={event => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+            event.preventDefault()
+            inspect(event.key === 'End' ? inspectionTimes.length - 1 : event.key === 'Home' ? 0 : Math.max(0, Math.min(inspectionTimes.length - 1, (hover?.index ?? 0) + (event.key === 'ArrowLeft' ? -1 : 1))), 0)
+          }}>
+          <svg aria-hidden="true" viewBox={`0 0 ${policy.width} ${policy.height}`} preserveAspectRatio="none">
+            <line className="mi-cross-asset__zero" x1="0" x2={policy.width} y1={y(0)} y2={y(0)} />
+            {visible.map(id => <path key={id} data-asset-line={id} d={path(id)} />)}
+            {visible.map(id => {
+              const tail = formingOf(id); const last = pointsOf(id).at(-1)
+              return tail && last?.returnPercent !== null && last ? <g key={id} data-forming-line={id} aria-label={text.forming}><title>{text.forming}</title><path d={`M${x(Date.parse(last.at))},${y(last.returnPercent)} L${x(Date.parse(tail.at))},${y(tail.returnPercent)}`} /><circle cx={x(Date.parse(tail.at))} cy={y(tail.returnPercent)} r="3" /></g> : null
+            })}
+          </svg>
+          {/*
+            The calendar's own events, drawn over the curves: a line answers "when", the shape beside it
+            answers "how much", and a reader looking at a step at 14:05 needs both to say what happened.
+            Solid once something in that minute was published, dashed while it is all still ahead — only
+            the first kind explains a move that has already happened. HTML rather than SVG so they are
+            focusable and announce themselves the way every other control here does.
 
-          例外（用户 2026-11-09 定）：这条竖线是**图上的可视标记**，不是控件。它的可点区域本来就是一块
-          透明、可聚焦、有名字的元素（`aria-label` 写明时刻与事件名，`:hover` / `:focus-visible` 各加深
-          竖线并露出标签），换成平台按钮会把一个 12px 宽、绝对定位的图形层包成一枚按钮，图形就散了。
-          保留并登记，别硬改。
-        */}
-        {(events ?? []).map(line => <button
-          aria-label={`${text.eventLine} ${formatTime(new Date(line.atMs).toISOString(), 'second')}：${line.label}${line.identityUnconfirmed ? ` · ${text.eventLineIdentityUnconfirmed}` : ''}`}
-          className="mi-cross-asset__event-line"
-          data-event-line={line.atMs}
-          data-identity={line.identityUnconfirmed ? 'unconfirmed' : 'confirmed'}
-          data-published={line.published ? 'true' : 'false'}
-          key={line.atMs}
-          onClick={() => onSelectEvent?.(line)}
-          style={{ left: `${x(line.atMs) / policy.width * 100}%` }}
-          type="button"
-        ><i aria-hidden="true" /><span className="mi-cross-asset__event-line-label">{line.label}</span></button>)}
-        {eventsCollapsed && eventsCollapsed > 0
-          ? <p className="mi-cross-asset__event-line-note">{text.eventsCollapsed.replace('{count}', String(eventsCollapsed))}</p>
-          : null}
-        {hover && inspectedAt !== undefined ? <>
-          <i data-crosshair className="mi-cross-asset__crosshair" style={{ left: `${x(inspectedAt) / policy.width * 100}%` }} />
-          <div ref={tooltipRef} role="tooltip" className="mi-cross-asset__tooltip" style={{ left: hover.tooltipLeft, top: hover.tooltipTop }}>
+            例外（用户 2026-11-09 定）：这条竖线是**图上的可视标记**，不是控件。它的可点区域本来就是一块
+            透明、可聚焦、有名字的元素（`aria-label` 写明时刻与事件名，`:hover` / `:focus-visible` 各加深
+            竖线并露出标签），换成平台按钮会把一个 12px 宽、绝对定位的图形层包成一枚按钮，图形就散了。
+            保留并登记，别硬改。
+          */}
+          {(events ?? []).map(line => <button
+            aria-label={`${text.eventLine} ${formatTime(new Date(line.atMs).toISOString(), 'second')}：${line.label}${line.identityUnconfirmed ? ` · ${text.eventLineIdentityUnconfirmed}` : ''}`}
+            className="mi-cross-asset__event-line"
+            data-event-line={line.atMs}
+            data-identity={line.identityUnconfirmed ? 'unconfirmed' : 'confirmed'}
+            data-published={line.published ? 'true' : 'false'}
+            key={line.atMs}
+            onClick={() => onSelectEvent?.(line)}
+            style={{ left: `${x(line.atMs) / policy.width * 100}%` }}
+            type="button"
+          ><i aria-hidden="true" /><span className="mi-cross-asset__event-line-label">{line.label}</span></button>)}
+          {eventsCollapsed && eventsCollapsed > 0
+            ? <p className="mi-cross-asset__event-line-note">{text.eventsCollapsed.replace('{count}', String(eventsCollapsed))}</p>
+            : null}
+          {hover && inspectedAt !== undefined
+            ? <i data-crosshair className="mi-cross-asset__crosshair" style={{ left: `${x(inspectedAt) / policy.width * 100}%` }} />
+            : null}
+        </div>
+      </div>
+      <div className="mi-cross-asset__ticks" style={{ '--mi-cross-asset-tick-count': policy.tickSlots } as CSSProperties}>{tickLabels.map(({ index, anchor, left }) => <time key={index} style={{ left: `${anchor / policy.width * 100}%`, transform: `translateX(${(left - anchor) / tickWidth * 100}%)`, textAlign: left === 0 ? 'left' : left + tickWidth === policy.width ? 'right' : 'center' }}>{formatTick(curves.index[index].at)}</time>)}</div>
+      {/* 浮层挂在这一栏上，**不挂绘图区**：`max-height: 100%` 分辨率的是这里的栏高。 */}
+      {hover && inspectedAt !== undefined
+        ? <div ref={tooltipRef} role="tooltip" className="mi-cross-asset__tooltip" style={{ left: hover.tooltipLeft, top: hover.tooltipTop }}>
             <time>{formatTime(new Date(inspectedAt).toISOString(), 'second')}</time>
             {inspectedForming ? <small>{text.forming}</small> : null}
             {visible.map(id => {
@@ -234,9 +263,7 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
               return <span key={id} data-asset={id}><i />{labelOf(id)}<b>{value == null ? text.noData : percent(value)}</b></span>
             })}
           </div>
-        </> : null}
-      </div>
+        : null}
     </div>
-    <div className="mi-cross-asset__ticks" style={{ '--mi-cross-asset-tick-count': policy.tickSlots } as CSSProperties}>{tickLabels.map(({ index, anchor, left }) => <time key={index} style={{ left: `${anchor / policy.width * 100}%`, transform: `translateX(${(left - anchor) / tickWidth * 100}%)`, textAlign: left === 0 ? 'left' : left + tickWidth === policy.width ? 'right' : 'center' }}>{formatTime(curves.index[index].at)}</time>)}</div>
   </div>
 }

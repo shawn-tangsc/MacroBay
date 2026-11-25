@@ -87,6 +87,47 @@ export const germanSourceMetricMappings: Readonly<Record<string, Readonly<{ metr
   '215001': { metricKey: 'DE.GDP.NSA.YOY', periodRule: 'month' },
   '215002': { metricKey: 'DE.GDP.SA.QOQ', periodRule: 'month' },
   '215037': { metricKey: 'DE.GFK_CONSUMER_CONFIDENCE.NONE.LEVEL', periodRule: 'month' },
+  '10141': { metricKey: 'DE.CPI.NSA.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 10月消费者物价指数初值(月率) | 11月消费者物价指数初值(月率)
+  '10143': { metricKey: 'DE.CPI.NSA.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 9月消费者物价指数终值(月率) | 10月消费者物价指数终值(月率)
+  '10144': { metricKey: 'DE.CPI.NSA.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 10月消费者物价指数初值(年率) | 11月消费者物价指数初值(年率)
+  '10146': { metricKey: 'DE.CPI.NSA.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 9月消费者物价指数终值(年率) | 10月消费者物价指数终值(年率)
+  '10147': { metricKey: 'DE.HARMONIZED_CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 10月调和消费者物价指数初值(月率) | 11月调和消费者物价指数初值(月率)
+  '10149': { metricKey: 'DE.HARMONIZED_CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 9月调和消费者物价指数终值(月率) | 10月调和消费者物价指数终值(月率)
+  '10150': { metricKey: 'DE.HARMONIZED_CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 10月调和消费者物价指数初值(年率) | 11月调和消费者物价指数初值(年率)
+  '10152': { metricKey: 'DE.HARMONIZED_CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 9月调和消费者物价指数终值(年率) | 10月调和消费者物价指数终值(年率)
+  '10237': { metricKey: 'DE.GDP.SA.QOQ', periodRule: 'quarter' },  // R45 #4 · 1 行 · 第三季度季调后GDP初值(季率)
+  '10238': { metricKey: 'DE.GDP.SA.QOQ', periodRule: 'quarter' },  // R45 #4 · 1 行 · 第三季度季调后GDP修正值(季率)
+  '10273': { metricKey: 'DE.MARKIT_BME_COMPOSITE_PURCHASING.NONE.LEVEL', periodRule: 'month' },  // R45 #4 · 2 行 · 10月综合采购经理人指数初值 | 11月综合采购经理人指数初值
+  '10275': { metricKey: 'DE.MARKIT_BME_COMPOSITE_PURCHASING.NONE.LEVEL', periodRule: 'month' },  // R45 #4 · 2 行 · 9月综合采购经理人指数终值 | 10月综合采购经理人指数终值
+  '4131': { metricKey: 'DE.IFO_BUSINESS_CLIMATE.NONE.LEVEL', periodRule: 'current_month' },  // R45 #4 · 2 行 · 10月IFO商业景气指数 | 11月IFO商业景气指数
+  '4138': { metricKey: 'DE.UNEMPLOYMENT.SA.RATE', periodRule: 'month' },  // R45 #4 · 2 行 · 10月季调后失业率(官方) | 11月季调后失业率(官方)
+  '9022': { metricKey: 'DE.TOTAL_NUMBER_UNEMPLOYED_PEOPLE.SA.COUNT', periodRule: 'month' },  // R45 #4 · 2 行 · 10月季调后失业总人数(万人) | 11月季调后失业总人数(万人)
+  '9375': { metricKey: 'DE.ACTUAL_RETAIL_SALES.NONE.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 9月实际零售销售(年率) | 10月实际零售销售(年率)
+  '9376': { metricKey: 'DE.ACTUAL_RETAIL_SALES.NONE.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 9月实际零售销售(月率) | 10月实际零售销售(月率)
+  '9378': { metricKey: 'DE.ZEW_ECONOMIC_STATUS.NONE.LEVEL', periodRule: 'current_month' },  // R45 #4 · 3 行 · 9月ZEW经济现况指数 | 10月ZEW经济现况指数
+  '9379': { metricKey: 'DE.ZEW_ECONOMIC_SENTIMENT.NONE.LEVEL', periodRule: 'current_month' },  // R45 #4 · 2 行 · 10月ZEW经济景气指数 | 11月ZEW经济景气指数
+  '9380': { metricKey: 'DE.IFO_BUSINESS_STATUS.NONE.LEVEL', periodRule: 'current_month' },  // R45 #4 · 2 行 · 10月IFO商业现况指数 | 11月IFO商业现况指数
+  '9381': { metricKey: 'DE.IFO_BUSINESS_EXPECTATIONS.NONE.LEVEL', periodRule: 'current_month' },  // R45 #4 · 2 行 · 10月IFO商业预期指数 | 11月IFO商业预期指数
+  '9547': { metricKey: 'DE.TOTAL_NUMBER_UNEMPLOYED_PEOPLE_NOT.NSA.COUNT', periodRule: 'month' },  // R45 #4 · 2 行 · 10月未季调失业总人数(万人) | 11月未季调失业总人数(万人)
+  '9548': { metricKey: 'DE.UNADJUSTED_MANUFACTURING_ORDERS.NONE.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 8月未季调制造业订单(年率) | 9月未季调制造业订单(年率)
+  '9553': { metricKey: 'DE.WHOLESALE_PRICE.NONE.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 9月批发物价指数(年率) | 10月批发物价指数(年率)
+  '9554': { metricKey: 'DE.WHOLESALE_PRICE.NONE.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 9月批发物价指数(月率) | 10月批发物价指数(月率)
+  '9555': { metricKey: 'DE.PRODUCER_PRICE.NONE.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 9月生产者物价指数(月率) | 10月生产者物价指数(月率)
+  '9556': { metricKey: 'DE.PRODUCER_PRICE.NONE.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 9月生产者物价指数(年率) | 10月生产者物价指数(年率)
+  '9557': { metricKey: 'DE.GFK_CONSUMER_CONFIDENCE.NONE.LEVEL', periodRule: 'current_month' },  // R45 #4 · 2 行 · 11月GfK消费者信心指数 | 12月GfK消费者信心指数
+  '9558': { metricKey: 'DE.IMPORTS_PRICE.NONE.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 9月进口物价指数(月率) | 10月进口物价指数(月率)
+  '9559': { metricKey: 'DE.IMPORTS_PRICE.NONE.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 9月进口物价指数(年率) | 10月进口物价指数(年率)
+  '9560': { metricKey: 'DE.EXPORTS_PRICE.NONE.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 9月出口物价指数(月率) | 10月出口物价指数(月率)
+  '9773': { metricKey: 'DE.IMPORTS.SA.MOM', periodRule: 'month' },  // R45 #4 · 2 行 · 8月季调后进口(月率) | 9月季调后进口(月率)
+  '9774': { metricKey: 'DE.EXPORTS.SA.MOM', periodRule: 'month' },  // R45 #4 · 3 行 · 6月季调后出口(月率) | 8月季调后出口(月率)
+  '9775': { metricKey: 'DE.MANUFACTURING_ORDERS.SA.MOM', periodRule: 'month' },  // R45 #4 · 3 行 · 6月季调后制造业订单(月率) | 8月季调后制造业订单(月率)
+  '9776': { metricKey: 'DE.INDUSTRIAL_OUTPUT.SA.MOM', periodRule: 'month' },  // R45 #4 · 3 行 · 6月季调后工业产出(月率) | 8月季调后工业产出(月率)
+  '9787': { metricKey: 'DE.EXPORTS_PRICE.NONE.YOY', periodRule: 'month' },  // R45 #4 · 2 行 · 9月出口物价指数(年率) | 10月出口物价指数(年率)
+  '9886': { metricKey: 'DE.MARKIT_BME_CONSTRUCTION_PURCHASING.NONE.LEVEL', periodRule: 'month' },  // R45 #4 · 2 行 · 9月建筑业采购经理人指数 | 10月建筑业采购经理人指数
+  '9979': { metricKey: 'DE.MARKIT_BME_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'current_month' },  // R45 #4 · 2 行 · 10月制造业采购经理人指数初值 | 11月制造业采购经理人指数初值
+  '9981': { metricKey: 'DE.MARKIT_BME_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'current_month' },  // R45 #4 · 2 行 · 9月制造业采购经理人指数终值 | 10月制造业采购经理人指数终值
+  '9982': { metricKey: 'DE.MARKIT_BME_SERVICES_PURCHASING.NONE.LEVEL', periodRule: 'month' },  // R45 #4 · 2 行 · 10月服务业采购经理人指数初值 | 11月服务业采购经理人指数初值
+  '9984': { metricKey: 'DE.MARKIT_BME_SERVICES_PURCHASING.NONE.LEVEL', periodRule: 'month' },  // R45 #4 · 2 行 · 9月服务业采购经理人指数终值 | 10月服务业采购经理人指数终值
 })
 
 /**
@@ -103,6 +144,10 @@ export const germanSourceMetricMappings: Readonly<Record<string, Readonly<{ metr
  *   截断会截在词中间，还会留下不平衡的括号。
  */
 export const germanMetricNames: Readonly<Record<string, Readonly<{ zhFull: string; zhShort: string; enFull: string; enShort: string }>>> = Object.freeze({
+  'DE.HARMONIZED_CONSUMER_PRICE.NONE.MOM': { zhFull: '调和消费者物价指数(月率)', zhShort: '调和消费者物价指数(月率)', enFull: 'Harmonized Consumer Price Index (MoM)', enShort: 'Harmonized Consumer Price Index (MoM)' },
+  'DE.HARMONIZED_CONSUMER_PRICE.NONE.YOY': { zhFull: '调和消费者物价指数(年率)', zhShort: '调和消费者物价指数(年率)', enFull: 'Harmonized Consumer Price Index (YoY)', enShort: 'Harmonized Consumer Price Index (YoY)' },
+  'DE.TOTAL_NUMBER_UNEMPLOYED_PEOPLE.SA.COUNT': { zhFull: '季调后失业总人数(万人)', zhShort: '季调后失业总人数(万人)', enFull: 'Seasonally adjusted total number of unemployed people (10,000 people)', enShort: 'Seasonally adjusted total number of unemployed people (10,000 people)' },
+  'DE.TOTAL_NUMBER_UNEMPLOYED_PEOPLE_NOT.NSA.COUNT': { zhFull: '未季调失业总人数(万人)', zhShort: '未季调失业总人数(万人)', enFull: 'Total number of unemployed people not adjusted seasonally (10,000 people)', enShort: 'Total number of unemployed people not adjusted seasonally (10,000 people)' },
   'DE.ACTUAL_RETAIL_SALES.NONE.MOM': { zhFull: '实际零售销售（月率）', zhShort: '实际零售销售', enFull: 'Actual Retail Sales (MoM)', enShort: 'German Retail Sales MoM' },
   'DE.ACTUAL_RETAIL_SALES.NONE.YOY': { zhFull: '实际零售销售（年率）', zhShort: '实际零售销售', enFull: 'Actual Retail Sales (YoY)', enShort: 'German Retail Sales YoY' },
   'DE.ADJUSTED_TRADE_BALANCE.SA.LEVEL': { zhFull: '季调后贸易帐（十亿欧元）', zhShort: '季调后贸易帐', enFull: 'Seasonally Adjusted Trade Balance (billion EUR)', enShort: 'German Trade Balance SA' },

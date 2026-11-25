@@ -17,6 +17,7 @@ function event(overrides: Partial<EconomicCalendarEventView> = {}): EconomicCale
     eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10',
     eventFamily: 'employment-situation',
     titleKey: 'nonfarm-payrolls',
+    countryCode: 'US',
     periodKey: '2026-M10',
     lifecycleState: 'released',
     coverage: 'available',

@@ -139,7 +139,8 @@ describe('provider registry contract', () => {
   })
 
   it('derives the crypto card group count instead of hardcoding it', () => {
-    expect(countAgentGroups('crypto')).toBe(7)
+    // 8 = 原来 7 组 + 2026-11-22 给合并卡右半开的 `options-skew`（最弱一档 `optional`）。
+    expect(countAgentGroups('crypto')).toBe(8)
     expect(countAgentGroups('stocks')).toBe(0)
     expect(countAgentGroups('futures')).toBe(0)
   })
@@ -234,7 +235,9 @@ describe('source projections', () => {
       'kraken-system-status',
       'solana-status',
       // 直连回 403 但那是边缘拦截，接口要经代理才通（读者 2026-11-12 确认）。
-      '0xrouter-aggregate-provider'
+      '0xrouter-aggregate-provider',
+      // 2026-11-19 实测：解析到 198.27.124.186，直连 6 s 超时 http=000（与群里报的 31.13.87.34 属时点差异）。
+      'deribit-options'
     ]
     for (const sourceId of blocked) {
       expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBe(true)
@@ -259,7 +262,7 @@ describe('source projections', () => {
       expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBeUndefined()
     }
     expect(providerRegistry.filter((provider) => provider.sources.some((source) => source.requiresProxy)).map((provider) => provider.providerId))
-      .toEqual(['policy-path', 'binance', 'okx', 'coingecko', 'coindesk', 'ethereum-foundation', '0xrouter', 'coinbase', 'kraken', 'solana'])
+      .toEqual(['policy-path', 'binance', 'okx', 'coingecko', 'deribit', 'coindesk', 'ethereum-foundation', '0xrouter', 'coinbase', 'kraken', 'solana'])
   })
 
   it('names the provider credential source even in a panel that does not list it', () => {

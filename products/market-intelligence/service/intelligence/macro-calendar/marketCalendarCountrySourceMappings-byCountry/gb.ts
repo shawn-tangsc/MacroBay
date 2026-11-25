@@ -117,4 +117,66 @@ export const mapping_GB: Readonly<Record<string, Readonly<{ metricKey: string; p
   '215046': { metricKey: 'GB.CBI_RETAIL_SALES_EXPECTATION.NONE.LEVEL', periodRule: 'month' },
   '215402': { metricKey: 'GB.CBI_INDUSTRIAL_ORDERS_EXPECTED_DIFFERENCE.NONE.LEVEL', periodRule: 'month' },
   '215403': { metricKey: 'GB.CBI_INDUSTRIAL_OUTPUT_EXPECTED_DIFFERENCE.NONE.LEVEL', periodRule: 'month' },
+  '10066': { metricKey: 'GB.GDP.NONE.QOQ', periodRule: 'quarter' },  // 1 行 · 第三季度GDP初值(季率)
+  '10069': { metricKey: 'GB.GDP.NONE.YOY', periodRule: 'quarter' },  // 2 行 · 第二季度GDP初值(年率) | 第三季度GDP初值(年率)
+  '10138': { metricKey: 'GB.TOTAL_BUSINESS_INVESTMENT.NONE.YOY', periodRule: 'quarter' },  // 2 行 · Total business investment (YoY)(Preliminary)
+  '4127': { metricKey: 'GB.UNEMPLOYMENT.NONE.RATE', periodRule: 'month' },  // 2 行 · 9月失业率 | 10月失业率
+  '8801': { metricKey: 'GB.CBI_INDUSTRIAL_ORDERS_EXPECTED_DIFFERENCE.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月CBI工业订单预期差值 | 11月CBI工业订单预期差值
+  '8802': { metricKey: 'GB.CBI_RETAIL_SALES_DIFFERENCE.NONE.LEVEL', periodRule: 'current_month' },  // 3 行 · CBI retail sales difference(Aug) | 10月CBI零售销
+  '8803': { metricKey: 'GB.TRANSMUTATION_NUMBER_UNEMPLOYMENT_K_APPLICATIONS.NONE.COUNT', periodRule: 'month' },  // 2 行 · 9月失业金申请人数变化(千人) | 10月失业金申请人数变化(千人)
+  '8804': { metricKey: 'GB.THREE_MONTH_AVERAGE_ILO_UNEMPLOYMENT.NONE.RATE', periodRule: 'month' },  // 2 行 · 至8月三个月ILO失业率 | 至9月三个月ILO失业率
+  '8805': { metricKey: 'GB.THREE_MONTH_CHANGE_ILO_UNEMPLOYMENT.NONE.COUNT', periodRule: 'month' },  // 2 行 · 至8月三个月ILO失业人数变化(千人) | 至9月三个月ILO失业人数变化(千人)
+  '8806': { metricKey: 'GB.THREE_MONTH_AVERAGE_TOTAL_PAY_INCLUDING_BONUSES.NONE.YOY', periodRule: 'month' },  // 2 行 · 至8月三个月包括红利的平均工资(年率) | 至9月三个月包括红利的平均工资(年率)
+  '8807': { metricKey: 'GB.THREE_MONTH_AVERAGE_REGULAR_PAY_EXCLUDING_BONUSES.NONE.YOY', periodRule: 'month' },  // 2 行 · 至8月三个月不包括红利的平均工资(年率) | 至9月三个月不包括红利的平均工资(年率)
+  '8808': { metricKey: 'GB.CORE_CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月核心消费者物价指数(月率) | 10月核心消费者物价指数(月率)
+  '8814': { metricKey: 'GB.MERCHANDISE_TRADE_ACCOUNT.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 8月商品贸易帐(百万英镑) | 9月商品贸易帐(百万英镑)
+  '9114': { metricKey: 'GB.CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 3 行 · Consumer Price Index (YoY)(Jul) | 9月消费者物价指数(
+  '9115': { metricKey: 'GB.CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月消费者物价指数(月率) | 10月消费者物价指数(月率)
+  '9136': { metricKey: 'GB.RETAIL_SALES.SA.YOY', periodRule: 'month' },  // 2 行 · 9月季调后零售销售(年率) | 10月季调后零售销售(年率)
+  '9137': { metricKey: 'GB.RETAIL_SALES.SA.MOM', periodRule: 'month' },  // 2 行 · 9月季调后零售销售(月率) | 10月季调后零售销售(月率)
+  '9333': { metricKey: 'GB.INDUSTRIAL_OUTPUT.NONE.YOY', periodRule: 'month' },  // 3 行 · 6月工业产出(年率) | 8月工业产出(年率)
+  '9334': { metricKey: 'GB.INDUSTRIAL_OUTPUT.NONE.MOM', periodRule: 'month' },  // 2 行 · 8月工业产出(月率) | 9月工业产出(月率)
+  '9340': { metricKey: 'GB.MANUFACTURING_OUTPUT.NONE.YOY', periodRule: 'month' },  // 3 行 · 6月制造业产出(年率) | 8月制造业产出(年率)
+  '9341': { metricKey: 'GB.MANUFACTURING_OUTPUT.NONE.MOM', periodRule: 'month' },  // 2 行 · 8月制造业产出(月率) | 9月制造业产出(月率)
+  '9342': { metricKey: 'GB.TRADE_ACCOUNT_EU.NONE.LEVEL', periodRule: 'month' },  // 3 行 · 6月对欧盟贸易帐(亿英镑) | 8月对欧盟贸易帐(亿英镑)
+  '9343': { metricKey: 'GB.TRADE_ACCOUNT_EU.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 8月对非欧盟贸易帐(百万英镑) | 9月对非欧盟贸易帐(百万英镑)
+  '9344': { metricKey: 'GB.PRODUCER_INPUT_PRICE.NSA.YOY', periodRule: 'month' },  // 2 行 · 9月未季调生产者输入物价指数(年率) | 10月未季调生产者输入物价指数(年率)
+  '9345': { metricKey: 'GB.PRODUCER_INPUT_PRICE.NSA.MOM', periodRule: 'month' },  // 2 行 · 9月未季调生产者输入物价指数(月率) | 10月未季调生产者输入物价指数(月率)
+  '9350': { metricKey: 'GB.CORE_PRODUCER_OUTPUT_PRICE_NOT.NSA.YOY', periodRule: 'month' },  // 2 行 · 9月未季调核心生产者输出物价指数(年率) | 10月未季调核心生产者输出物价指数(年率)
+  '9356': { metricKey: 'GB.PRODUCER_OUTPUT_PRICE.NSA.MOM', periodRule: 'month' },  // 2 行 · 9月未季调生产者输出物价指数(月率) | 10月未季调生产者输出物价指数(月率)
+  '9358': { metricKey: 'GB.PRODUCER_OUTPUT_PRICE.NSA.YOY', periodRule: 'month' },  // 2 行 · 9月未季调生产者输出物价指数(年率) | 10月未季调生产者输出物价指数(年率)
+  '9362': { metricKey: 'GB.CORE_CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月核心消费者物价指数(年率) | 10月核心消费者物价指数(年率)
+  '9363': { metricKey: 'GB.CORE_RETAIL_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月核心零售物价指数(年率) | 10月核心零售物价指数(年率)
+  '9365': { metricKey: 'GB.RETAIL_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月零售物价指数(年率) | 10月零售物价指数(年率)
+  '9366': { metricKey: 'GB.RETAIL_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月零售物价指数(月率) | 10月零售物价指数(月率)
+  '9367': { metricKey: 'GB.CBI_RETAIL_SALES_EXPECTATION.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月CBI零售销售预期指数 | 11月CBI零售销售预期指数
+  '9512': { metricKey: 'GB.MARKIT_CIPS_CONSTRUCTION_PURCHASING_MANAGERS.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 9月建筑业采购经理人指数 | 10月建筑业采购经理人指数
+  '9514': { metricKey: 'GB.M4_MONEY_SUPPLY.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月M4货币供给(年率) | 10月M4货币供给(年率)
+  '9515': { metricKey: 'GB.M4_MONEY_SUPPLY.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月M4货币供给(月率) | 10月M4货币供给(月率)
+  '9516': { metricKey: 'GB.CONSUMER_CREDIT.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 9月消费信贷(十亿英镑) | 10月消费信贷(十亿英镑)
+  '9517': { metricKey: 'GB.CENTRAL_BANK_MORTGAGE_CHANGES.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 9月央行抵押贷款变动(十亿英镑) | 10月央行抵押贷款变动(十亿英镑)
+  '9518': { metricKey: 'GB.CENTRAL_BANK_MORTGAGE_LOAN_LICENSES.NONE.COUNT', periodRule: 'month' },  // 2 行 · 9月央行抵押贷款许可(千件) | 10月央行抵押贷款许可(千件)
+  '9519': { metricKey: 'GB.HALIFAX_HOUSE_PRICE.SA.MOM', periodRule: 'month' },  // 2 行 · 9月Halifax季调后房价指数(月率) | 10月Halifax季调后房价指数(月率)
+  '9520': { metricKey: 'GB.HALIFAX_HOUSE_PRICE.SA.YOY', periodRule: 'month' },  // 2 行 · 9月Halifax季调后房价指数(年率) | 10月Halifax季调后房价指数(年率)
+  '9521': { metricKey: 'GB.BRC_SAME_STORE_RETAIL_SALES.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月BRC同店零售销售(年率) | 10月BRC同店零售销售(年率)
+  '9522': { metricKey: 'GB.BRC_OVERALL_RETAIL_SALES.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月BRC总体零售销售(年率) | 10月BRC总体零售销售(年率)
+  '9525': { metricKey: 'GB.NIESR_THREE_MONTH_GDP_ESTIMATE.NONE.YOY', periodRule: 'month' },  // 2 行 · NIESR至8月三个月GDP预估(年率) | NIESR至9月三个月GDP预估(年率)
+  '9526': { metricKey: 'GB.RICS_HOUSE_PRICE.NONE.LEVEL', periodRule: 'month' },  // 2 行 · 至9月三个月RICS房价指数 | 至10月三个月RICS房价指数
+  '9527': { metricKey: 'GB.DCLG_HOUSE_PRICE.NONE.YOY', periodRule: 'month' },  // 1 行 · 9月DCLG房价指数(年率)
+  '9528': { metricKey: 'GB.RIGHTMOVE_AVERAGE_HOUSE_ASKING_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 10月Rightmove平均房屋要价指数(月率) | 11月Rightmove平均房屋要
+  '9529': { metricKey: 'GB.RIGHTMOVE_AVERAGE_HOME_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 10月Rightmove平均房屋要价指数(年率) | 11月Rightmove平均房屋要
+  '9530': { metricKey: 'GB.CBI_INDUSTRIAL_OUTPUT_EXPECTED_DIFFERENCE.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月CBI工业产出预期差值 | 11月CBI工业产出预期差值
+  '9533': { metricKey: 'GB.SHORT_BALANCE_GOVERNMENT_REVENUE_EXPENDITURE.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 9月政府收支短差(十亿英镑) | 10月政府收支短差(十亿英镑)
+  '9534': { metricKey: 'GB.PUBLIC_DEPARTMENT_NET_BORROWING.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 9月公共部门净借款(十亿英镑) | 10月公共部门净借款(十亿英镑)
+  '9540': { metricKey: 'GB.NATIONWIDE_HOUSE_PRICE.NONE.YOY', periodRule: 'month' },  // 3 行 · 9月Nationwide房价指数(年率) | 10月Nationwide房价指数(年率)
+  '9541': { metricKey: 'GB.NATIONWIDE_HOUSE_PRICE.NONE.MOM', periodRule: 'month' },  // 3 行 · 9月Nationwide房价指数(月率) | 10月Nationwide房价指数(月率)
+  '9544': { metricKey: 'GB.GFK_CONSUMER_CONFIDENCE.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月GFK消费者信心指数 | 11月GFK消费者信心指数
+  '9804': { metricKey: 'GB.CORE_RETAIL_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月核心零售物价指数(月率) | 10月核心零售物价指数(月率)
+  '9844': { metricKey: 'GB.CORE_RETAIL_SALES.SA.YOY', periodRule: 'month' },  // 2 行 · 9月季调后核心零售销售(年率) | 10月季调后核心零售销售(年率)
+  '9845': { metricKey: 'GB.CORE_RETAIL_SALES.SA.MOM', periodRule: 'month' },  // 2 行 · 9月季调后核心零售销售(月率) | 10月季调后核心零售销售(月率)
+  '9900': { metricKey: 'GB.GDP.NONE.MOM', periodRule: 'month' },  // 2 行 · 8月GDP(月率) | 9月GDP(月率)
+  '9964': { metricKey: 'GB.CIPS_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月制造业采购经理人指数(初值) | 11月制造业采购经理人指数(初值)
+  '9966': { metricKey: 'GB.CIPS_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 9月制造业采购经理人指数(终值) | 10月制造业采购经理人指数(终值)
+  '9967': { metricKey: 'GB.CIPS_SERVICES_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月服务业采购经理人指数(初值) | 11月服务业采购经理人指数(初值)
+  '9969': { metricKey: 'GB.CIPS_SERVICES_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 9月服务业采购经理人指数 | 10月服务业采购经理人指数
 })

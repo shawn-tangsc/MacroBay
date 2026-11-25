@@ -10,6 +10,7 @@ import {
 } from '../../../../contracts/macro/marketCalendarSurprise'
 import { formatReadableAnalysisValue } from '../../../../contracts/marketAnalysisReadableText'
 import type { EconomicCalendarText } from './economicCalendarText'
+import { calendarEventExplanation } from './calendarEventExplanation'
 import { calendarCountryLabel } from './calendarCountryLabel'
 import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayModel'
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
@@ -107,6 +108,12 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
   const shownSource: MarketCalendarSource = sourceAgrees
     ? source
     : { eventType: event.eventType, status: 'success', sourceObservedAt: event.sourceObservedAt }
+  /**
+   * 事件说明（R36 #34）：按指标码的族取概念键，取不到就整段不画。
+   * 未登记的族（中档、非美国、没有身份的行）读者看到的就是没有这一段——那是产品定的形态，
+   * 不补一句「暂无说明」去替它兜底。
+   */
+  const explanation = calendarEventExplanation(event.eventNameKey, text.explanations)
   return <aside className="mi-economic-calendar__inspector mi-market-calendar__inspector" aria-live="polite">
     <p>{sourceLabel(text, event.source)} · {text.market.kinds[event.eventType]}</p><h2>{event.title}</h2>
     <p><MarketCalendarSourceStatus source={shownSource} text={text} variant="full" /></p>
@@ -127,6 +134,15 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
         ? text.market.missingValue
         : text.market.importance[event.importance as 'high' | 'medium' | 'low']}</dd></div>
     </dl>
+    {/* 事件说明（R36 #34）：固定文案，按指标码的族取概念键；同一指标每次打开逐字相同。
+        **取不到键整段不渲染**——不留空标题、不写「暂无说明」、不拿别的族的文案顶上。
+        它和后面的 AI 解读是两段东西：这里永远是我们写的，那边带生成时刻与依据范围。 */}
+    {explanation === undefined ? null : <section className="mi-calendar-explanation" data-calendar-explanation
+      /* 静态参考，不进播报：宿主 `<aside>` 是 aria-live="polite"，不关这一层的话，
+         读者每选一条事件就会被整段说明朗读一遍（≈500 字）。子层 off，宿主那行不动。 */
+      aria-live="off">
+      {explanation.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+    </section>}
     {/* 各来源记录（#47）：一个来源一块，narwhal 与 0xrouter 各写什么并排看，不拼成一条。 */}
     {sourceWrites?.state === 'available'
       ? <EventSourceWritesBlocks rows={sourceWrites.rows} text={text} />

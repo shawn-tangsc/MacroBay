@@ -92,6 +92,49 @@ describe('the automatic publish notice', () => {
     expect(notices.filter((notice) => notice.kind === 'failed')).toHaveLength(0)
   })
 
+  it('carries the poster hash on the notice when the poster was rendered', async () => {
+    // 顺序是语义：出图在提交之前，所以记录里那一次提交本身就带着这一版的图。
+    await publishDailyBriefingEdition({
+      document: document('导读。'),
+      store: { put: async () => undefined, prune: async () => undefined },
+      attempts: { build: () => ({ id: 'a-1' }), settle: async () => undefined },
+      run: { settle: async () => undefined },
+      recorder: { begin: () => undefined, end: () => undefined, complete: () => trace() },
+      now: () => '2026-11-07T00:30:00.000Z',
+      noticeSubmit: (async () => ({ kind: 'created', recordId: 'r-1' })) as never,
+      renderPoster: async () => ({ ok: true, contentHash: 'abcdef0123456789' }),
+      date: '2026-11-07', periodId: 'default', locale: 'zh-CN', deliver: true
+    } as never)
+
+    const notice = (notifyDailyBriefing.mock.calls as unknown as { 1: { kind: string; editionPoster?: { contentHash: string }; editionPosterRow?: unknown } }[])
+      .map((call) => call[1]).filter((entry) => entry.kind === 'ready').at(-1)
+    expect(notice?.editionPoster).toEqual({ contentHash: 'abcdef0123456789' })
+    // 同一份事实也冻结到记录上（#46）：详情页读它，不按 editionId 回查。
+    expect(notice?.editionPosterRow).toEqual({ status: 'ready', contentHash: 'abcdef0123456789', failureCode: null })
+  })
+
+  it('still submits the notice without a poster when rendering failed', async () => {
+    // 裁决 A 在提交时的那一半：图挂了，记录照建、正文照发——不是「没有图就不发通知」。
+    await publishDailyBriefingEdition({
+      document: document('导读。'),
+      store: { put: async () => undefined, prune: async () => undefined },
+      attempts: { build: () => ({ id: 'a-1' }), settle: async () => undefined },
+      run: { settle: async () => undefined },
+      recorder: { begin: () => undefined, end: () => undefined, complete: () => trace() },
+      now: () => '2026-11-07T00:30:00.000Z',
+      noticeSubmit: (async () => ({ kind: 'created', recordId: 'r-1' })) as never,
+      renderPoster: async () => ({ ok: false, status: 'timeout', code: 'poster-render-timeout' }),
+      date: '2026-11-07', periodId: 'default', locale: 'zh-CN', deliver: true
+    } as never)
+
+    const ready = (notifyDailyBriefing.mock.calls as unknown as { 1: { kind: string; editionPoster?: unknown; editionPosterRow?: unknown } }[])
+      .map((call) => call[1]).filter((entry) => entry.kind === 'ready')
+    expect(ready).toHaveLength(1)
+    expect(ready[0]?.editionPoster).toBeUndefined()
+    // 出图失败/超时要落一行（带原因码）：只靠「没带 hash」判，详情页会把失败显示成「没有」。
+    expect(ready[0]?.editionPosterRow).toEqual({ status: 'timeout', contentHash: null, failureCode: 'poster-render-timeout' })
+  })
+
   it('submits exactly one failed notice when the editorial never landed', async () => {
     // 失败那期也必须有且只有一条，且带上"哪一期"的身份，否则读者只看到一句没有对象的失败。
     await abandonDailyBriefingEditorial({

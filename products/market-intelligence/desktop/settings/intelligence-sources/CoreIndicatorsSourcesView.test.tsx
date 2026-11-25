@@ -8,9 +8,9 @@ import { join } from 'node:path'
 
 import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
-import { CORE_INDICATOR_METRIC_COPY_KEYS, CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
+import { CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
 
-import { MACRO_INDICATOR_GROUP_METRIC_KEYS, MACRO_INDICATOR_GROUPS }
+import { MACRO_INDICATOR_CARD_KEYS, MACRO_INDICATOR_GROUPS }
   from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
 import { valueSourcesForMetric } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
 
@@ -53,7 +53,9 @@ describe('core indicator source page', () => {
       MACRO_INDICATOR_GROUPS.map((group) => group.id))
     const cards = [...host.querySelectorAll<HTMLElement>('[data-core-indicator]')]
     expect(cards.map((card) => card.getAttribute('data-core-indicator')))
-      .toEqual([...MACRO_INDICATOR_GROUP_METRIC_KEYS])
+      .toEqual([...MACRO_INDICATOR_CARD_KEYS])
+    /* 用户看得见的那个数是 12：卡行数与分组表一起派生，删一行这里当场少一张。 */
+    expect(cards).toHaveLength(12)
     // 每一格都必须有名字：漏一条文案键就是一格空白标题（中英都要有，见下面的用例）。
     for (const card of cards) {
       expect(card.querySelector('.business-cell__title')?.textContent?.trim(), String(card.dataset.coreIndicator))
@@ -146,7 +148,7 @@ describe('列数：两条腿并排，不上下叠', () => {
   it('sets both column variables to the number of legs on every card', async () => {
     const host = await render()
     const cards = [...host.querySelectorAll<HTMLElement>('[data-core-indicator]')]
-    expect(cards).toHaveLength(MACRO_INDICATOR_GROUP_METRIC_KEYS.length)
+    expect(cards).toHaveLength(MACRO_INDICATOR_CARD_KEYS.length)
     for (const card of cards) {
       const items = card.querySelector<HTMLElement>('.business-cell__items')!
       const label = card.getAttribute('data-core-indicator') ?? ''
@@ -216,7 +218,7 @@ describe('三组十二项：文案齐全、不另设计布局', () => {
       const host = await render({ resolveText: resolve })
       const titles = [...host.querySelectorAll<HTMLElement>('[data-core-indicator] .business-cell__title')]
         .map((node) => node.textContent?.trim() ?? '')
-      expect(titles, language).toHaveLength(MACRO_INDICATOR_GROUP_METRIC_KEYS.length)
+      expect(titles, language).toHaveLength(MACRO_INDICATOR_CARD_KEYS.length)
       for (const title of titles) expect(title, language).not.toBe('')
       expect(new Set(titles).size, `${language} 有重名`).toBe(titles.length)
 
@@ -232,20 +234,75 @@ describe('三组十二项：文案齐全、不另设计布局', () => {
    * 兜底会让换码演练永远看起来绿，而旧路还活着。
    */
   /**
-   * 改名演练的前提（Chief 2026-11-14）：设置页这 12 条**名称映射**是改名后允许改的唯一一处消费者，
-   * 所以它的键集合必须与卡片 12 行**完全相等**。漏一条不会报错，只会渲染成一张没名字的卡
-   * ——今晚已经出现过一次这个形状，所以要红在这里。
+   * 12 个码在设置页**没有第二份清单**：显示名跟着分组行走（`metricNameKey`），码本身从分组表派生。
+   *
+   * 这条挡两件事：① 有人再在设置页列一遍 12 个码（改名时必漏一处，今晚出现过）；② 某行名键
+   * 在文案表里没有对应句子——那会渲染成一张空白标题的卡，读者看不出来但它就是坏的。
+   * 中英两套都要有：只补一套时另一种语言下那一格是空的。
    */
-  it('maps exactly the twelve card codes to copy keys, no more and no fewer', () => {
-    expect(Object.keys(CORE_INDICATOR_METRIC_COPY_KEYS).sort())
-      .toEqual([...MACRO_INDICATOR_GROUP_METRIC_KEYS].sort())
-    for (const key of Object.values(CORE_INDICATOR_METRIC_COPY_KEYS)) expect(key.trim()).not.toBe('')
+  it('takes the twelve display names from the group rows, in both languages', () => {
+    for (const language of Object.keys(productText) as Array<keyof typeof productText>) {
+      const names = productText[language].settings.intelligenceSources.coreIndicators.metricNames
+      for (const group of MACRO_INDICATOR_GROUPS) {
+        for (const row of group.rows) {
+          const name = (names as Record<string, string | undefined>)[row.metricNameKey]
+          expect(name, `${language}: ${row.metricKey} → ${row.metricNameKey}`).toBeTruthy()
+        }
+      }
+      expect(Object.keys(names), language).toHaveLength(MACRO_INDICATOR_CARD_KEYS.length)
+    }
+    /* 反向：设置页自己不再按码建表——源码里出现码字面量就是又一份清单。 */
+    const view = readFileSync(join(__dirname, 'CoreIndicatorsSourcesView.tsx'), 'utf8')
+    for (const key of MACRO_INDICATOR_CARD_KEYS) expect(view, key).not.toContain(`'${key}'`)
   })
 
   it('reads the legs from the catalog and never derives them itself', () => {
     const view = readFileSync(join(__dirname, 'CoreIndicatorsSourcesView.tsx'), 'utf8')
     expect(view).toContain('metricCatalog()')
     expect(view).not.toContain('valueSourcesForMetric(')
+  })
+
+  /**
+   * 宽度从哪里来（2026-11-22 用户截图：这一屏每个指标卡被压成窄条、频率一字一行）。
+   *
+   * 模块卡占几列由 `.business-module-grid > .business-card { grid-column: span var(--module-span) }`
+   * 决定——**靠结构，不靠属性**。原来的选择器是 `.business-card[data-business-card]`，这一屏漏了
+   * 那个属性，组卡就落回 1 列（1/3 宽），而 `--module-span: 3` 还在喂组内的 cell-grid，
+   * 结果是每张指标卡只剩 1/9 宽。两条一起钉：
+   * 1. 结构：每张组卡必须是 `.business-module-grid` 的**直接子元素**（中间加一层就红）；
+   * 2. 规则：占列的判据是结构选择器，属性选择器不许回来（改回属性就红）。
+   */
+  it('keeps each group card a direct child of the module grid', async () => {
+    const host = await render()
+    const groups = [...host.querySelectorAll<HTMLElement>('[data-core-indicator-group]')]
+    expect(groups.length).toBeGreaterThan(0)
+    for (const group of groups) {
+      expect(group.className, String(group.dataset.coreIndicatorGroup)).toContain('business-card')
+      expect(group.parentElement?.className, String(group.dataset.coreIndicatorGroup)).toContain('business-module-grid')
+    }
+  })
+
+  it('takes the module width from the structure, not from a data attribute', () => {
+    const css = readFileSync(join(__dirname, 'intelligence-sources.css'), 'utf8')
+    expect(css).toContain('.business-module-grid > .business-card {')
+    /* 属性选择器不许再承担宽度：它今天还兼着「跳到某个模块」的定位，但**宽度**只能来自结构。 */
+    expect(css).not.toContain('.business-card[data-business-card] {')
+  })
+
+  it('cannot make the frequency readout collapse into a column of single characters', () => {
+    /* 一字一行不是「不好看」，是坏状态：容器窄到 11px 时 `overflow-wrap: anywhere` 会逐字折。
+       结构上禁掉它——父级可换行、读数有 6ch 下限，于是放不下时整条读数落到第二行。 */
+    const layout = readFileSync(join(__dirname, 'intelligence-sources.css'), 'utf8')
+    const preset = layout.slice(layout.indexOf('.business-card__preset {'))
+    const presetRule = preset.slice(0, preset.indexOf('}'))
+    expect(presetRule).toContain('flex-wrap: wrap')
+    expect(presetRule).toContain('row-gap: 4px')
+
+    const readout = readFileSync(join(__dirname, 'frequencyReadout.css'), 'utf8')
+    const scoped = readout.slice(readout.indexOf('.business-card__preset > .business-card__preset-readout {'))
+    const scopedRule = scoped.slice(0, scoped.indexOf('}'))
+    expect(scopedRule).toContain('min-width: 6ch')
+    expect(scopedRule).toContain('flex: 1 1 6ch')
   })
 
   it('carries no layout rule the dashboard does not have', () => {

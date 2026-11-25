@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import { readCalendarCodeTable } from './marketCalendarCodeTableRead'
+import { codeTableReasonSets } from '../marketCalendarCodeTable'
 
 /**
  * 码表页签的读口（用户 2026-11-17：弹框只留「码表 / 未映射」两个页签）。
@@ -28,11 +29,18 @@ describe('码表读口', () => {
     expect(read.counts.withOfficialSource + read.counts.pendingOfficialSource).toBe(read.counts.total)
     for (const row of read.rows) {
       const source = row.officialSource
-      if ('pending' in source) expect(source.reason).toBe('official-source-todo')
+      // 待补必须带**闭集里的**理由（成员资格，不是写死某一个值）：todo＝我们还没核到，
+      // not-public＝机构不公开此页。两个值都合法，但不许出现闭集外的自由文本。
+      if ('pending' in source) {
+        expect(codeTableReasonSets.pending as readonly string[]).toContain(source.reason)
+      }
       // 机构页有 http 的（密歇根大学的老站就是 http），不能一律要求 https——那是格式洁癖，
       // 真正要断的是「有页就必须有 URL」，不是协议。
       else expect(/^https?:\/\//.test(source.url)).toBe(true)
     }
+    // 「机构不公开」这一类必须真的有人在用，否则这条理由就是空壳（A 类 17 条）。
+    expect(read.rows.filter((row) => 'pending' in row.officialSource
+      && row.officialSource.reason === 'official-source-not-public').length).toBeGreaterThan(0)
   })
 
   it('事件行没有测度与季调档（给 null，不编一个 LEVEL）', () => {

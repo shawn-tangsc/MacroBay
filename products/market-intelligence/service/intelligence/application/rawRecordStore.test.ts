@@ -118,7 +118,10 @@ describe('rawRecordStore', () => {
 
     expect(store.getRawRecord('raw-1')?.processingOwner).toBe('generic-intelligence')
     expect(generic?.processingOwner).toBe('generic-intelligence')
-    expect(store.listUnprocessed().map((record) => record.rawRecordId)).toEqual(['raw-1', generic?.rawRecordId])
+    // 待办**最新在前**（2026-11-21）：以前是追加顺序，最旧的一批永远占着窗口头部。
+    expect(store.listUnprocessed().map((record) => record.rawRecordId)).toEqual([generic?.rawRecordId, 'raw-1'])
+    // 省略 limit 时返回全部（积压诊断要数全量）；给了 limit 只返回前 N 条。
+    expect(store.listUnprocessed(1).map((record) => record.rawRecordId)).toEqual([generic?.rawRecordId])
     expect(store.listByProcessingOwner('macro-calendar', 10)).toEqual([macro])
     expect(store.listSafeSummaries().map((summary) => summary.rawRecordId)).toEqual(['raw-1', generic?.rawRecordId])
     expect(store.listSafeSummaries().map((summary) => summary.rawRecordId)).not.toContain(macro?.rawRecordId)
@@ -191,6 +194,36 @@ describe('rawRecordStore', () => {
     ])).toThrow('storage unavailable')
     expect(store.getRawRecord(first.rawRecordId)?.payloadFileRef).toBe('first.bin')
     expect(store.getRawRecord(second.rawRecordId)?.payloadFileRef).toBe('second.bin')
+  })
+})
+
+describe('rawRecordStore payload read-back after externalization', () => {
+  const append = (store: ReturnType<typeof createRawRecordStore>, key: string, overrides: Record<string, unknown>) =>
+    store.appendRawRecord({ ...baseInput(), sourceDedupeKey: key, ...overrides })!
+
+  it('reads an inline body directly and a file body through the injected reader', () => {
+    const readPayload = vi.fn(({ fileRef, expectedHash }: { fileRef: string; expectedHash?: string }) =>
+      ({ state: 'found' as const, body: `${fileRef}:${expectedHash ?? 'no-hash'}` }))
+    const store = createRawRecordStore({ readPayload })
+    const inline = append(store, 'inline', { payloadRefType: 'inline', payloadBody: '{"a":1}', payloadHash: 'h1' })
+    const file = append(store, 'file', { payloadRefType: 'file', payloadFileRef: 'f1.bin', payloadHash: 'h2' })
+
+    expect(store.readPayloadBody(inline)).toEqual({ state: 'inline', body: '{"a":1}' })
+    expect(store.readPayloadBody(file)).toEqual({ state: 'file', body: 'f1.bin:h2' })
+    // hash 一起交给读取器校验：内容被换掉时不能静默当原文。
+    expect(readPayload).toHaveBeenCalledWith({ fileRef: 'f1.bin', expectedHash: 'h2' })
+  })
+
+  it('keeps missing and hash-mismatch apart, and never guesses when there is no reader', () => {
+    const readPayload = vi.fn(({ fileRef }: { fileRef: string }) => fileRef === 'gone.bin'
+      ? { state: 'missing' as const }
+      : { state: 'hash-mismatch' as const })
+    const store = createRawRecordStore({ readPayload })
+    expect(store.readPayloadBody(append(store, 'gone', { payloadRefType: 'file', payloadFileRef: 'gone.bin' }))).toEqual({ state: 'missing' })
+    expect(store.readPayloadBody(append(store, 'bad', { payloadRefType: 'file', payloadFileRef: 'bad.bin' }))).toEqual({ state: 'hash-mismatch' })
+
+    const noReader = createRawRecordStore()
+    expect(noReader.readPayloadBody(append(noReader, 'lone', { payloadRefType: 'file', payloadFileRef: 'a.bin' }))).toEqual({ state: 'missing' })
   })
 })
 

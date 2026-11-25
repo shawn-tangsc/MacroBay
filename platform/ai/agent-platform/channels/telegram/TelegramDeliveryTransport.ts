@@ -87,7 +87,7 @@ export class TelegramDeliveryTransport implements ChannelDeliveryTransport, Chan
       })
       if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
     }
-    if (!response.ok) return mapFailure(response.code, response.providerDetail)
+    if (!response.ok) return mapFailure(response.code, response.providerDetail, response.retryAfterMs)
     return {
       kind: 'delivered',
       ...(response.value.messageId === null ? {} : { detail: JSON.stringify({ telegramMessageId: response.value.messageId }) })
@@ -114,8 +114,16 @@ export function telegramChatId(providerConversationKey: string): string | null {
   return /^-?\d+$/.test(candidate) ? candidate : null
 }
 
-function mapFailure(code: string, detail?: string): ChannelDeliveryTransportResult {
-  if (code === 'telegram-rate-limited') return { kind: 'failed', code: 'delivery-rate-limited', ...(detail ? { detail } : {}) }
+function mapFailure(code: string, detail?: string, retryAfterMs?: number): ChannelDeliveryTransportResult {
+  if (code === 'telegram-rate-limited') {
+    // 上游的 `parameters.retry_after` 一直有解析，以前在这里被丢掉——调用点也就无法「等一次再发」。
+    return {
+      kind: 'failed',
+      code: 'delivery-rate-limited',
+      ...(detail ? { detail } : {}),
+      ...(retryAfterMs === undefined ? {} : { retryAfterMs })
+    }
+  }
   if (code === 'telegram-provider-rejected') return { kind: 'failed', code: 'delivery-provider-rejected', ...(detail ? { detail } : {}) }
   if (code === 'telegram-network-unavailable' || code === 'telegram-proxy-unavailable') {
     return { kind: 'unknown-after-send', ...(detail ? { detail } : {}) }

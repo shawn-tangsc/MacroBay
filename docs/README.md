@@ -141,6 +141,7 @@ time. See [Status and limitations](reference/status-and-limitations.md).
 - [Structured text](./development/structured-text.md)
 - [Disabled controls and their reason](./development/disabled-hint.md)
 - [Closing a container that holds unsaved input](./development/unsaved-changes.md)
+- [Charts](./development/charts.md)
 
 ## License
 

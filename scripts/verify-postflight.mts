@@ -25,7 +25,7 @@ const touched = countTouchedSince(start.at)
 const { verdict, attributable, reason } = compareSamples(start, end, touched < 0 ? 0 : touched)
 
 console.log(
-  `verify-postflight head=${end.head} dirty=${end.dirty < 0 ? 'unknown' : end.dirty} started_at=${start.at} ended_at=${end.at} touched=${touched < 0 ? 'unknown' : touched} result=${verdict} attributable=${attributable ? 'yes' : 'no'}`
+  `verify-postflight head=${end.head} tree=${end.tree} start_tree=${start.tree} dirty=${end.dirty < 0 ? 'unknown' : end.dirty} started_at=${start.at} ended_at=${end.at} touched=${touched < 0 ? 'unknown' : touched} result=${verdict} attributable=${attributable ? 'yes' : 'no'}`
 )
 
 if (verdict === 'invalid') {

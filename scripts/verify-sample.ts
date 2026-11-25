@@ -16,6 +16,12 @@ import { join } from 'node:path'
 
 export type TreeSample = {
   head: string
+  /**
+   * 提交对象的 tree 哈希。**内容身份**由它决定，不是 `head`：一笔空提交（改说明、改认领）
+   * 会让 `HEAD` 前进而树一个字节没变，按 `head` 判就会把一次真正有效的运行判成 `invalid`
+   * （2026-11-20 真撞上：跑中落了一笔空提交，代码逐字节相同）。
+   */
+  tree: string
   /** 未提交路径数；`-1` 表示不是 git 仓库（快照/CI tarball），无法见证。 */
   dirty: number
   at: string
@@ -118,13 +124,14 @@ function git(args: readonly string[]): string {
 export function sampleTree(now: () => Date = () => new Date()): TreeSample {
   try {
     const head = git(['rev-parse', '--short', 'HEAD'])
+    const tree = git(['rev-parse', '--short', 'HEAD^{tree}'])
     // `-uall`：默认会把未跟踪目录折叠成 `?? dir/` 一行，跑中有人往这个目录里再加文件时
     // 计数不变——漂移就漏了。今天这棵树恰好两种计数一样，是留给下一次的。
     const porcelain = git(['status', '--porcelain', '-uall'])
     const dirty = countDirty(porcelain)
-    return { head, dirty, at: now().toISOString() }
+    return { head, tree, dirty, at: now().toISOString() }
   } catch {
-    return { head: 'no-git', dirty: -1, at: now().toISOString() }
+    return { head: 'no-git', tree: 'no-git', dirty: -1, at: now().toISOString() }
   }
 }
 
@@ -150,11 +157,17 @@ export type Comparison = { verdict: Verdict; attributable: boolean; reason: stri
  * 所以报告行两个都打——只打一个词，就一定有人只读那一个词。
  */
 export function compareSamples(start: TreeSample, end: TreeSample, touchedSinceStart = 0): Comparison {
-  if (start.head === 'no-git' || end.head === 'no-git') {
+  // `head` 或 `tree` 任一为 no-git 都算「看不到这棵树」：两者在非 git 环境里一起缺失。
+  if (start.head === 'no-git' || end.head === 'no-git' || start.tree === 'no-git' || end.tree === 'no-git') {
     return { verdict: 'unknown', attributable: false, reason: 'not a git checkout, so the tree state cannot be attested' }
   }
-  if (start.head !== end.head) {
-    return { verdict: 'invalid', attributable: false, reason: `HEAD moved during the run: ${start.head} → ${end.head}` }
+  // 判据是**内容**：tree 变了才算跑了两个不同的东西。只有 HEAD 前进（空提交、改说明）不算。
+  if (start.tree !== end.tree) {
+    return {
+      verdict: 'invalid',
+      attributable: false,
+      reason: `the checked-out content changed during the run: tree ${start.tree} → ${end.tree} (HEAD ${start.head} → ${end.head})`
+    }
   }
   if (start.dirty !== end.dirty) {
     return { verdict: 'invalid', attributable: false, reason: `the working tree changed during the run: dirty ${start.dirty} → ${end.dirty}` }
@@ -171,5 +184,12 @@ export function compareSamples(start: TreeSample, end: TreeSample, touchedSinceS
       reason: `${touchedSinceStart} tracked file(s) were written during the run and the count came back to ${start.dirty} — the tree was not the same tree`
     }
   }
-  return { verdict: 'valid', attributable: true, reason: 'same commit, clean tree at both samples, nothing written during the run' }
+  const sameHead = start.head === end.head
+  return {
+    verdict: 'valid',
+    attributable: true,
+    reason: sameHead
+      ? `same commit and tree (${start.tree}), clean at both samples, nothing written during the run`
+      : `same tree ${start.tree} at both samples (HEAD moved ${start.head} → ${end.head} by an empty/annotation commit), clean and nothing written — the content verified is identical`
+  }
 }

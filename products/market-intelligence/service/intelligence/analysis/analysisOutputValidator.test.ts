@@ -503,6 +503,48 @@ function validOutput() {
   }
 }
 
+describe('catalyst calendar references', () => {
+  const CALENDAR_REF = 'macro-calendar:macro-calendar-bls:US.CPI.RELEASE.2026-M08'
+  const calendarSnapshot = (): TestSnapshot => {
+    const base = frozenSnapshot()
+    const calendarFact = {
+      ...base.facts[0]!, factId: 'mi-fact-calendar-cpi', evidenceRefId: CALENDAR_REF,
+      domain: 'macro' as const, subject: 'economic-indicator', metric: 'actual', value: '3.1', unit: 'percent',
+      sourceId: 'macro-calendar-bls', sourceLabel: 'BLS',
+      observedAt: '2026-10-30T12:30:00.000Z', asOf: '2026-10-30T12:30:00.000Z'
+    }
+    return {
+      ...base,
+      facts: [...base.facts, calendarFact],
+      evidenceRefs: [...base.evidenceRefs, { evidenceRefId: CALENDAR_REF }]
+    } as TestSnapshot
+  }
+
+  it('accepts a catalyst that names the calendar event the snapshot carries', () => {
+    // 用户 2026-11-24：后续关注要能对上日历上具体哪一场，读者才核得出这句话是不是凭空写的。
+    const output = {
+      ...validOutput(),
+      nextCatalysts: [{ statement: '关注下一次官方 CPI 发布。', evidenceRefIds: [CALENDAR_REF], calendarEventKey: 'US.CPI.RELEASE.2026-M08' }],
+      evidenceRefs: ['mi-ev-market-move', CALENDAR_REF]
+    }
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), calendarSnapshot())).toMatchObject({ ok: true })
+  })
+
+  it('rejects a catalyst that names a calendar event the snapshot does not carry', () => {
+    // 相邻的一个月：键长得像真的，但快照里没有这一场——不许当"没写键"放过。
+    const output = {
+      ...validOutput(),
+      nextCatalysts: [{ statement: '关注下一次官方 CPI 发布。', evidenceRefIds: [CALENDAR_REF], calendarEventKey: 'US.CPI.RELEASE.2026-M09' }],
+      evidenceRefs: ['mi-ev-market-move', CALENDAR_REF]
+    }
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), calendarSnapshot())).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'unknown-calendar-event'
+    })
+  })
+})
+
 describe('trigger focus', () => {
   const focus = {
     mode: 'strict' as const,

@@ -1,13 +1,13 @@
 import { sniffImageMime } from '../../ai/agent-platform/channels/channelImageDelivery'
-import type { ReadPosterOutcome, ChannelPosterEdition } from '../../storage/channelPosterOutbox'
+import type { BriefingPosterReadOutcome } from '../../ai/agent-platform/channels/briefingPosterReadRegistry'
 
 /**
  * 出站图片的**读盘入口**（主进程唯一一处）。
  *
  * 投递层只收字节，不认识路径、目录、hash：适配器保持「字节进、结果出」，测试不需要文件系统。
  * 这里做两件事，顺序不能反：
- * 1. **来源校验**：这张图必须由「这条助手消息自己带着」。`generated-images/` 里同时躺着生成结果
- *    与编辑原图（`prepare()` 写的是用户消息），按目录或按 mime 判会把编辑原图放出去；
+ * 1. **来源校验**：这张图必须是这条记录自己带着的。`generated-images/` 里同时躺着生成结果与编辑原图
+ *    （`prepare()` 写的是用户消息），按目录或按 mime 判会把编辑原图放出去；
  * 2. 读盘并嗅探真实格式（声明 mime 不可信：供应商可能声明 png 实际吐 webp）。
  *
  * 失败码分开：「图不在了」= `delivery-image-unavailable` + detail `missing`；
@@ -17,16 +17,16 @@ type MessagePart = { type?: unknown; fileName?: unknown }
 type MessageLike = { role?: unknown; status?: unknown; data?: { parts?: unknown } }
 
 /**
- * 出站图片的**来源**：判别联合，互不借用（方案 §2）。
+ * 出站图片的**来源**：判别联合，互不借用（方案 §12.3）。
  *
  * 两种来源的判据完全不同，所以用 `kind` 分开而不是「有空就看那张图」：
  * - `assistant-message`：这条助手消息自己带着这张图（`{messageId, fileName}`，行为原样）；
- * - `briefing-poster`：日报海报的暂存记录，且**版本必须就是这次发布**——调用方只能给
- *   `{date, periodId, locale}`，路径与文件名永远由主进程拼（给不出路径，也就伪造不了）。
+ * - `briefing-poster`：简报**这一版**的海报，调用方只能给出记录里的 `contentHash`——它由提交那一刻
+ *   的版次读取产生，给不出路径、也给不出「当前版次」，所以伪造不了、也配不出「正文旧、海报新」。
  */
 export type ChannelImageSourceRequest =
   | { kind: 'assistant-message'; messageId: string; fileName: string }
-  | { kind: 'briefing-poster'; edition: ChannelPosterEdition }
+  | { kind: 'briefing-poster'; contentHash: string }
 
 export type ChannelImageSourceResult =
   | { ok: true; mime: string; bytes: Uint8Array }
@@ -41,24 +41,31 @@ export function createChannelImageSource(deps: {
   read: (fileName: string) => Promise<{ bytes: Uint8Array; mime: string } | null>
   /** 消息仓储：用已有的 `messages.getById`，不新开查询。 */
   getMessage: (messageId: string) => MessageLike | null
-  /** 日报海报的暂存区读入口（主进程同一处）；没装时海报那一支一律「没有」，不猜。 */
-  readPoster?: (edition: ChannelPosterEdition) => Promise<ReadPosterOutcome>
+  /** 简报海报的只读取图入口（海报表与存储归简报线）；没装时那一支一律「没有」，不猜。 */
+  readBriefingPoster?: (contentHash: string) => Promise<BriefingPosterReadOutcome>
 }): ChannelImageSource {
   return {
     async resolve(input) {
-      // 第二种来源：按暂存记录 + 版本绑定，绝不按目录判（方案 §2 第三条）。
+      // 第二种来源：按记录里的内容 hash 取，绝不按目录、也绝不按「当前版次」（方案 §12.3）。
       if (input.kind === 'briefing-poster') {
-        if (deps.readPoster === undefined) {
-          return { ok: false, code: 'delivery-image-unavailable', detail: 'poster-outbox-unavailable' }
+        if (deps.readBriefingPoster === undefined) {
+          return { ok: false, code: 'delivery-image-unavailable', detail: 'poster-reader-unavailable' }
         }
-        const poster = await deps.readPoster(input.edition)
+        let poster: BriefingPosterReadOutcome
+        try {
+          poster = await deps.readBriefingPoster(input.contentHash)
+        } catch {
+          // 读入口自己抛了：仍是「拿不到」，不许冒充「这张图不许发」。
+          return { ok: false, code: 'delivery-image-unavailable', detail: 'read-failed' }
+        }
         if (!poster.ok) {
-          // 来源被拒（版本对不上）与「图不在了/读不出」是两种处境，码分开给。
-          return poster.code === 'delivery-image-source-not-allowed'
-            ? { ok: false, code: 'delivery-image-source-not-allowed', detail: poster.detail }
+          // 「行不在」= 这一版没有海报（来源对不上）；「行在读不出」= 图拿不到。两种处境两种码。
+          return poster.code === 'poster-not-found'
+            ? { ok: false, code: 'delivery-image-source-not-allowed', detail: 'poster-not-found' }
             : { ok: false, code: 'delivery-image-unavailable', detail: poster.detail }
         }
-        return { ok: true, mime: poster.mime, bytes: poster.bytes }
+        // 真实格式以字节为准（与助手图同一口径）：认不出就交回声明值，投递层仍会按字节判。
+        return { ok: true, mime: sniffImageMime(poster.bytes) ?? poster.mime, bytes: poster.bytes }
       }
       const message = deps.getMessage(input.messageId)
       if (!message) {

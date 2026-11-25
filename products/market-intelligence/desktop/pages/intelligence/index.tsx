@@ -4,7 +4,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../shared/i18n/productText'
 import { macroEconomicCalendarClient, marketCalendarClient } from '../../features/macro/economic-calendar'
-import { intelligenceFearGreedClient } from '../../features/industry/fear-greed'
+import { intelligenceSentimentOptionsCardClient } from '../../shared/ipc/intelligenceSentimentOptionsCardClient'
 import { intelligenceFundingRateHistoryClient, intelligenceOpenInterestClient } from '../../features/industry/positioning'
 import { collectCapitalConditionsSources, intelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 import { AgentPortal } from './AgentPortal'
@@ -247,7 +247,7 @@ function IntelligencePageBody(): React.ReactElement {
           briefingEnabled={!sample.state.active}
           onOpenBriefing={() => setActiveView('briefing')}
           client={macroEconomicCalendarClient}
-          fearGreedClient={intelligenceFearGreedClient}
+          sentimentOptionsClient={intelligenceSentimentOptionsCardClient}
           fundingRateClient={intelligenceFundingRateHistoryClient}
           openInterestClient={intelligenceOpenInterestClient}
           divergenceClient={marketDivergenceClient}

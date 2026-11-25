@@ -34,7 +34,7 @@ import { Drawer } from '@platform/ui/components/drawer'
 | --- | --- | --- | --- |
 | `open` | `boolean` | 是 | 是否显示。 |
 | `onClose` | `() => void` | 是 | 遮罩点击、Esc（仅 modal）与关闭键共用。 |
-| `size` | `DrawerSize` | 是 | `narrow` 420、`large` 640、`wide` 860、`full` 1040。不给默认值：每次调用回答一次。 |
+| `size` | `DrawerSize` | 是 | `narrow` 420、`large` 640、`wide` 860、`full` 1280。不给默认值：每次调用回答一次。 |
 | `mode` | `'modal' \| 'inline'` | 否，默认 `modal` | `modal` 有遮罩、锁焦点、Esc 关；`inline` 在页面流内。 |
 | `side` | `'left' \| 'right'` | 否，默认 `right` | 只对 `mode="inline"` 有意义；浮层一律右置。 |
 | `header` | `'titled' \| 'none'` | 否，默认 `titled` | 有标题栏，或整块不要。 |
@@ -46,9 +46,10 @@ import { Drawer } from '@platform/ui/components/drawer'
 | `contentPadding` | `'default' \| 'flush'` | 否，默认 `default` | 全出血内容用 `flush`。 |
 | `children` | `ReactNode` | 是 | 正文。 |
 | `className` | `string` | 否 | 只做定位，不许用它带宽度或布局。 |
+| `bodyClassName` | `string` | 否 | 正文节点上的挂载点类名，透传 antd 的 `classNames.body`。要在正文上挂 `container-type` 时用它，别挂 `.ant-drawer-body`。**只收类名，不收样式。** |
 | `resolveText` | `(key: string) => string` | 是 | 调用方的文案解析，只用于 `titleKey`。 |
 
-宽度是组件内的 `min(<档位>px, 92vw)`。没有 `width`、`style`、`styles`、`mask`、`closable`、
+宽度是组件内的 `min(<档位>px, 94vw)`。没有 `width`、`style`、`styles`、`mask`、`closable`、
 `placement`、`getContainer`——这些正是同一只抽屉长出十二种宽度的来源。
 
 ### 四档
@@ -58,7 +59,7 @@ import { Drawer } from '@platform/ui/components/drawer'
 | `narrow` | 420 | 设置面板、单列表单 |
 | `large` | 640 | 两列详情、检查器 |
 | `wide` | 860 | Agent 配置、看板面板 |
-| `full` | 1040 | 最宽的沉浸面板 |
+| `full` | 1280 | 最宽的沉浸面板 |
 
 ### 透传清单
 
@@ -79,10 +80,14 @@ import { Drawer } from '@platform/ui/components/drawer'
 - **`inline` 不进焦点这套。** 打开时**不移动焦点**（读者正在页面上操作，把他拽进面板就是丢位置）、**不锁焦点**、**没有遮罩**；打开期间在文档层听 Esc，焦点在页面别处也能关；关闭后焦点留在原处。这几条按模式写死，同样不开参数。它**也不输出 `aria-modal`**：没有遮罩、不压暗页面，对读屏说「其余内容不可用」就是假的（浮层那一档仍是 `aria-modal="true"`）。
 - **不传页脚就不渲染页脚行**，不是留一个空壳占位。
 - **头部只有两档。** `header="none"` 仍然必须给 `ariaLabelKey`：没有名字的对话框，读屏只会念「对话框」。
+- **正文类名只是挂载点，不是第二套内距。** `bodyClassName` 只给正文节点起个名字，让调用方把
+  `container-type` 挂在我们自己的类上，而不是 `.ant-drawer-body`。平台样式里对它**不写任何声明**：
+  内距仍归 `--default` / `--flush` 两条规则，滚动容器仍是 antd 的 body。给它写样式就等于允许调用方
+  改正文内距——「正文内距」的第二个来源就是这么长出来的。
 
 ## 怎么验用了它的页面
 
-1. **宽度**：DevTools 里内容容器的宽度等于该档位的像素，且不是你传进去的值；窄窗口下封顶 `92vw`。
+1. **宽度**：DevTools 里内容容器的宽度等于该档位的像素，且不是你传进去的值；窄窗口下封顶 `94vw`。
 2. **关闭**：右上角关闭键 Tab 可达，念出来是「关闭抽屉」/`Close drawer`，不是键名、也不是空。
 3. **模式**：`modal` 会压暗页面、锁焦点、Esc 可关；`inline` 没有遮罩、**打开不动焦点**、焦点在页面别处按 Esc 也能关、关掉后焦点还在原处。面板 DOM 上的 `aria-modal` 也是分档的：`inline` **没有这个属性**，`modal` 为 `"true"`。
 4. **页脚**：不传页脚的抽屉底部没有空条。

@@ -1,6 +1,5 @@
 import { Button } from 'antd'
 
-import { LoadingState } from '@platform/ui/components/loading'
 import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
@@ -11,9 +10,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Info } from 'lucide-react'
 
 import type { MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
-import type { IntelligenceFearGreedClient } from '../../features/industry/fear-greed'
 import { DivergencePanel } from '../../features/industry/divergence/DivergencePanel'
 import { PositioningPanel } from '../../features/industry/positioning/PositioningPanel'
+import { positioningDefaultWindow } from '../../features/industry/positioning/positioningWindow'
 import { useDashboardDivergence } from './useDashboardDivergence'
 import { useDashboardOpenInterest } from './useDashboardOpenInterest'
 import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
@@ -21,8 +20,6 @@ import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../con
 import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 import type { DashboardCapitalCellAvailability, DashboardCapitalCellOff } from '../../features/industry/capital-conditions/CapitalConditionsPanel'
 
-import type { DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
-import type { DashboardFearGreedState } from './dashboardFearGreedModel'
 import { projectPositioningCells } from './dashboardPositioningSourceState'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
 import {
@@ -38,11 +35,11 @@ import {
   type SourceEnabledMap
 } from './dashboardCellEnabled'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
-import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
 
 import './cryptoDashboard.css'
 import { CrossAssetObservationPanel } from '../../features/industry/cross-asset/CrossAssetObservationPanel'
+import { UstYieldCurveSection } from '../../features/industry/ust-curve/UstYieldCurveSection'
 import type { CrossAssetEventLine } from '../../features/industry/cross-asset/crossAssetEventLines'
 import { useMacroMarketSnapshot } from '../../features/industry/cross-asset/useMacroMarketSnapshot'
 import { useMacroRatesSnapshot } from '../../features/industry/cross-asset/useMacroRatesSnapshot'
@@ -50,7 +47,6 @@ import type { createCrossAssetObservationClient } from '../../shared/ipc/crossAs
 import type { DashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedStatusClient'
 import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
 import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
-import { productText } from '../../shared/i18n/productText'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -62,38 +58,21 @@ import { createPortal } from 'react-dom'
 import { MacroIndicatorDrawer, type CalendarDrawerRequest } from './MacroIndicatorDrawer'
 import { useCurveReleaseEvents } from './useCurveReleaseEvents'
 import { DashboardMacroRow } from './DashboardMacroRow'
-import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
+import { SentimentOptionsCard } from '../../features/industry/market-sentiment/SentimentOptionsCard'
+import { defensivePremiumCardText } from '../../features/industry/market-sentiment/defensivePremiumCardText'
+import { useDashboardSentimentOptionsCard } from './useDashboardSentimentOptionsCard'
+import { useCoalescedRevision } from './useCoalescedRevision'
+import { intelligenceSentimentOptionsCardClient, type IntelligenceSentimentOptionsCardClient } from '../../shared/ipc/intelligenceSentimentOptionsCardClient'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { usePolicyPathReading } from './usePolicyPathReading'
 import { useMacroIndicatorFacts } from './useMacroIndicatorFacts'
 import { cellOffFor } from './dashboardCellOff'
-import { QUOTES_ROW_CELL_KEYS, quoteRowPresentation } from './dashboardQuotesRows'
+import { firstDisabledQuotesCellKey, quoteRowPresentation, quotesRowLabelCell } from './dashboardQuotesRows'
 import { useDataChangeRevision } from './useDataChangeRevision'
 import { DashboardSettingsDrawer } from './DashboardSettingsDrawer'
+import type { CryptoDashboardText } from './cryptoDashboardText'
 
-type CryptoDashboardText = {
-  workspaceLabel: string
-  title: string
-  description: string
-  configureSources: string
-  /** TODO(0.4.3-settings-drawer): 静态配置抽屉的入口标签；数据接入后连同入口一起删。 */
-  crossAsset: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
-  macroReleaseDynamics: {
-    calendarAction: string
-    sourceName: string
-    sourceStates: Record<DashboardEconomicCalendarState['state'], string>
-    manageSettings: string
-  }
-  fearGreed: { title: string; loading: string; empty: string; score: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFearGreedState['state'], string>; manageSettings: string; buckets: Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string> }
-  positioning: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['positioning']
-  divergence: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['divergence']
-  capitalConditions: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['capitalConditions']
-  policyPath: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['policyPath']
-  sentiment: { title: string; fearGreed: string; observedAt: string; gaugeMarkers: { fear: string; neutral: string; greed: string } }
-  cellState: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['cellState']
-  dailyBriefing: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['dailyBriefing']
-}
-
-type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; divergenceClient?: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onConfigureSources: () => void
+type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; divergenceClient?: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; sentimentOptionsClient?: Pick<IntelligenceSentimentOptionsCardClient, 'query'>; now: () => Date; onConfigureSources: () => void
   /**
    * 「管理这个来源」的去处。**可以带屏内位置**：资金面/持仓这些卡片知道自己是哪一格，
    * 不带就跟以前一样落在采集与数据的第一屏。
@@ -108,7 +87,7 @@ type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEn
   /** 「接下来要看的」那块（layout 用同一次 cardData 构造后注入），透传给抽屉。 */
   calendarBlock?: React.ReactNode }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, openIndicatorDrawerRequest, calendarBlock, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readCalendarMonth, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo, onOpenProcessingSettings }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, sentimentOptionsClient, now, onConfigureSources, onManageSource, openIndicatorDrawerRequest, calendarBlock, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readCalendarMonth, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo, onOpenProcessingSettings, onModalLayerChange }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -142,6 +121,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   initialDrawerSection?: Readonly<{ menu: ConfigDrawerMenu; section: string }>
   initialSourceFilter?: SourceFilter
   openSettingsRequest?: number
+  /** 本层开的模态抽屉（设置 / 关键指标 / 政策详情）开着没有，报给布局：圆钮 z 比它们高，不报就是第二层入口。 */
+  onModalLayerChange?: (open: boolean) => void
 }): React.ReactElement {
   const resolveProductKey = useProductTextKey()
   const formatTime = useShellTimeFormat()
@@ -153,6 +134,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    * 那层换算在发射端按来源注册表做。
    */
   const dataRevision = useDataChangeRevision({ panel: 'dashboard' })
+  /** 只有这张卡吃的合并 revision：5 秒合并、30 秒上限、隐藏不发、回前台补一次；共用源不动。 */
+  const cardRevision = useCoalescedRevision(dataRevision)
   const readGates = resolveDashboardReadGates(cellState.cells)
   /** 启用表读完之前一处都不读：否则关掉的格在首帧仍会发一次请求。 */
   const readsReady = cellState.ready
@@ -207,12 +190,20 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const { rowStates, rowStateLabels } = quoteRowPresentation({
     decisionsUsable,
     decide,
-    cellLabel: (row) => cellLabel('quotes', QUOTES_ROW_CELL_KEYS[row]),
+    cellLabel: (row) => cellLabel('quotes', quotesRowLabelCell(row)),
     sourceName: (sourceId) => resolveProductKey(`settings.intelligenceSources.sourceNames.${sourceId}`)
   })
-  const firstDisabledQuotesCell = Object.entries(QUOTES_ROW_CELL_KEYS).find(([row]) => rowStates[row as keyof typeof QUOTES_ROW_CELL_KEYS] === 'disabled')
+  const firstDisabledQuotesCell = firstDisabledQuotesCellKey(rowStates)
   const calendarState = useDashboardEconomicCalendar({ client, now })
-  const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readable('fear-greed', 'index'), now, revision: dataRevision })
+  const timeZone = useShellTimeZone()
+  /**
+   * 恐惧与防跌溢价卡：两半走**同一条**复合查询，刷新与数据事件都从这一个口进。启用表没读完之前
+   * 一次都不读；格级关掉时的请求拦截随后跟着旧情绪格一起落。
+   */
+  const sentimentOptions = useDashboardSentimentOptionsCard({
+    client: sentimentOptionsClient ?? intelligenceSentimentOptionsCardClient,
+    now, timeZone, disabled: !readsReady, revision: cardRevision
+  })
   // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
   const [fundingReloadKey, setFundingReloadKey] = useState(0)
   /**
@@ -230,9 +221,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     disabled: decisionsUsable && positioningDecisions.funding.kind !== 'read',
     now, reloadKey: fundingReloadKey, revision: dataRevision
   })
-  // Positioning is read per window rather than reshaped in the browser: the fold and
-  // the liquidation lookback belong to the query, so switching windows is one more read.
-  const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
+  // 默认窗口见 `positioningDefaultWindow`：查询按窗口读，换窗口就是再读一次。
+  const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>(positioningDefaultWindow)
   // TODO(0.4.3-settings-drawer): 数据接入后删除——静态版配置抽屉的临时开关。
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
   // 页面层的入口（日报页 / 日历 / 门户）通过计数请求打开某��屏：计数一变就打开一次。
@@ -276,8 +266,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, disabled: !anyReadable(['capital', 'stablecoin'], ['capital', 'etf']), now, reloadKey: capitalReloadKey, revision: dataRevision })
   // One macro read feeds two readers: the 市场状态 table inside the panel and the 来源状态 strip
   // below, so the strip cannot disagree with the figures it is describing.
-  // 美元格选了源就按选的那条读；没选过（缺键）与今天一样，走默认主源。
-  const dollarSourceId = selectedDollarSourceId(cellState.selections)
+  // 美元格按「启用的那一格」选的源读：主格关掉就看备用格（两格同属美元这一行，见 `QUOTES_STATUS_ROW_CELLS`）；没选过走默认主源。
+  const dollarSourceId = selectedDollarSourceId(cellState.selections, cellState.cells)
   const macroView = useMacroMarketSnapshot({
     client: macroMarketClient,
     disabled: !anyReadable(['quotes', 'usd'], ['quotes', 'gold']),
@@ -285,7 +275,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   })
   // The two rate rows read FRED's official daily closes through their own door: a daily reading cannot
   // ride the fifteen-minute macro snapshot without being repainted as if it were intraday.
-  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !anyReadable(['quotes', 'ust10y']) })
+  // 紧张的是「同一份快照多读一次」，不是「多开一条读路径」：刷新换 token，表与图一起重读。
+  const [ratesRefreshToken, setRatesRefreshToken] = useState(0)
+  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !anyReadable(['quotes', 'ust10y']), refreshToken: ratesRefreshToken })
   // The policy row reads one assembled object: the meeting date, the official facts and the odds
   // history are joined in the main process, so this dashboard never builds a second opinion.
   /**
@@ -312,6 +304,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   useEffect(() => {
     if ((openIndicatorDrawerRequest?.seq ?? 0) > 0) setIndicatorDrawerOpen(true)
   }, [openIndicatorDrawerRequest])
+  // 这三层是本层开的：任一开着就报给布局（圆钮压在上面就是第二层入口）。
+  const dashboardModalOpen = settingsDrawerOpen || indicatorDrawerOpen || policyDrawer.open
+  useEffect(() => { onModalLayerChange?.(dashboardModalOpen) }, [dashboardModalOpen, onModalLayerChange])
   // 抽屉的「现在」在**每次打开时**取一次：每渲染都取会让按月的读跟着重读同一份快照。
   const drawerNow = useMemo(() => now().toISOString(), [now, indicatorDrawerOpen])
   // 曲线事件标注的输入：只用页面原有的那个日历读（按月、按 asOf），不新开取数通道。
@@ -423,8 +418,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         crossAssetReadingEnabled={anyReadable(['quotes', 'ndx'], ['quotes', 'btc'], ['quotes', 'eth'])}
         macroSnapshot={macroView.snapshot}
         macroState={macroView.state}
-        rates={macroRatesView.snapshot}
-        ratesState={macroRatesView.state}
         // The panel reads the same calendar this dashboard already reads, rather than reaching for a
         // second client of its own: one month query per window, one source of truth for the events.
         calendar={client}
@@ -433,9 +426,13 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
         {...(firstDisabledQuotesCell === undefined ? {} : {
-          onEnableData: () => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', firstDisabledQuotesCell[1]) })
+          onEnableData: () => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', firstDisabledQuotesCell) })
         })}
         text={crossAssetText} /> : null}
+      <UstYieldCurveSection view={macroRatesView} settled={readsReady} enabled={anyReadable(['quotes', 'ust10y'])}
+        resolveText={resolveProductKey} timeZone={timeZone} locale={locale}
+        refresh={() => setRatesRefreshToken((token) => token + 1)}
+        onEnable={() => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', 'ust10y') })} />
       {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源没有启用」+ 去启用；
           读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}
       {readsReady ? (() => {
@@ -456,15 +453,18 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         {...(readCalendarMonth ? { readCalendarMonth } : {})}
         onOpenPolicyDetail={policyDrawer.openFrom} onConfigure={onConfigureSources}
         onClose={() => setIndicatorDrawerOpen(false)} />}
-      {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
-          beside the perpetual card, where it read as part of the funding reading. */}
+      {/* 恐惧与防跌溢价：整行一条带，落在「同一起点收益率」之后、资金面之前（界面定稿落法 A）。
+          卡里左半就是原来资金面带里那副仪表：读口、组件、锚点都只此一份。 */}
+      <div className="mi-crypto-dashboard__defensive-premium-row">
+        <SentimentOptionsCard state={sentimentOptions.state} text={defensivePremiumCardText(text)}
+          onRefresh={sentimentOptions.reload} onViewSource={() => onManageSource()}
+          {...(fearGreedCellOff === undefined ? {} : { cellOff: fearGreedCellOff })} />
+      </div>
+      {/* 阅读顺序：同一起点收益率 → 恐惧与防跌溢价 → 资金面 → 杠杆。情绪不再并进资金面那一带：
+          它已经是上面那张整行卡的一半，和资金面是两件事。资金面自己占满整行，不留左列。 */}
       <div className="mi-crypto-dashboard__capital-positioning-row">
-        {readsReady
-          ? <SentimentPanel fearGreedState={fearGreedState} text={text} onRetry={reloadFearGreed}
-              {...(fearGreedCellOff === undefined ? {} : { cellOff: fearGreedCellOff })} />
-          : <LoadingState label={text.fearGreed.loading} minHeight={120} />}
-        {/* 资金面卡自己逐格标「没配置 / 没启用」（`ef952ba`），宿主只把两格的状态传进去，
-            不再用「两格都能读」决定画不画卡——那正是用户骂的整卡隐藏。 */}
+        {/* 资金面卡逐格标「没配置 / 没启用」（`ef952ba`），宿主只把两格的状态传进去，
+            不用「两格都能读」决定画不画卡——那正是用户骂的整卡隐藏。 */}
         <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
           onRefresh={() => void refreshCapitalConditions()}
           refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed}

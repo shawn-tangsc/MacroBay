@@ -35,7 +35,13 @@ const EXEMPT_LOG_ONLY: Readonly<Record<string, string>> = {
   'delivery-image-unsupported': '这一版/这个通道发不了这类图：终态，理由留在尝试行',
   'delivery-image-unavailable': '图取不到（missing / read-failed）：读者动作在来源侧（重新生成）',
   'delivery-image-source-not-allowed': '来源不是「这条助手消息自己带着这张图」：调用方缺陷，不给读者看',
-  'delivery-caption-too-long': 'caption 超限：生产者应改发两条，读者无需动作'
+  'delivery-caption-too-long': 'caption 超限：生产者应改发两条，读者无需动作',
+  // 简报海报的**取图入口内部码**（方案 §12.3）：只活在 `briefingPosterReadRegistry` 与
+  // `channelImageSource` 之间，进读者的永远是它翻译后的投递码（`delivery-image-source-not-allowed` /
+  // `delivery-image-unavailable`）。这两条存在的意义正是**在翻译之前**把「这一版没有图」与
+  // 「图读不出来」分开，所以不能合并成一个码。
+  'poster-not-found': '简报海报表里没有这一行＝这一版没出过图；进读者前已翻译成 delivery-image-source-not-allowed',
+  'read-failed': '简报海报行在、文件缺失或读不出；进读者前已翻译成 delivery-image-unavailable（detail 再分 missing/read-failed）'
 }
 
 const CODE_PATTERN = /(?:code|stableErrorCode|runtimeReason)\s*:\s*'([a-z][a-z0-9-]*)'/gu

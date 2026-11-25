@@ -79,6 +79,22 @@ describe('macroEconomicCalendarQueryService', () => {
     expect(JSON.stringify(result)).not.toMatch(/evidenceRefs|sourceUrl|evidenceHash|rawRecordId|secret|sqlite/i)
   })
 
+  it('读侧只读 importance_grade：源给的 importance 不采用，没有档就不出这个字段', () => {
+    const repository = createRepository({ detail: revision({ eventKey: 'US.GDP.2026-Q3.ADVANCE',
+      providerId: 'macro-calendar-bea', descriptorId: 'macro-calendar-bea-schedule',
+      importance: 'high', importanceGrade: 'medium' }) })
+    const graded = createMacroEconomicCalendarQueryService({ repository })
+      .getEventDetail({ eventKey: 'US.GDP.2026-Q3.ADVANCE', asOf })
+    expect(graded.state === 'available' && graded.event.importance).toBe('medium')
+
+    repository.detail = revision({ eventKey: 'US.GDP.2026-Q3.ADVANCE',
+      providerId: 'macro-calendar-bea', descriptorId: 'macro-calendar-bea-schedule', importance: 'high' })
+    const ungraded = createMacroEconomicCalendarQueryService({ repository })
+      .getEventDetail({ eventKey: 'US.GDP.2026-Q3.ADVANCE', asOf })
+    // 未分级：字段不出现（不是 low，也不拿源写的 high 顶）。
+    expect(ungraded.state === 'available' && Object.hasOwn(ungraded.event, 'importance')).toBe(false)
+  })
+
   it('passes a valid caller month limit to the repository and returns no more events than requested', () => {
     const repository = createRepository({ month: [revision(), revision({ revisionId: 'revision-2' })] })
     const result = createMacroEconomicCalendarQueryService({ repository }).queryMonth({ month: '2026-08', asOf, maxEvents: 1 })

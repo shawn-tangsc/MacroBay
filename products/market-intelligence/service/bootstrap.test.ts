@@ -376,6 +376,9 @@ describe('market-intelligence product bootstrap', () => {
     expect(macroMethods).toEqual([
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.queryMonth,
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getEventDetail,
+      // AI 解读（R36 #34）：读已有那一份、没有才生成一次；两条一起注册、一起封版。
+      MACRO_ECONOMIC_CALENDAR_IPC_METHODS.readEventInterpretation,
+      MACRO_ECONOMIC_CALENDAR_IPC_METHODS.requestEventInterpretation,
       // The reader's own release time: the editor's two writes, registered and declared together.
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.setReleaseTime,
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.clearReleaseTime,
@@ -399,6 +402,8 @@ describe('market-intelligence product bootstrap', () => {
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.importManualBlsIcs,
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.previewManualBlsIcs,
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.queryMonth,
+      MACRO_ECONOMIC_CALENDAR_IPC_METHODS.readEventInterpretation,
+      MACRO_ECONOMIC_CALENDAR_IPC_METHODS.requestEventInterpretation,
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.setReleaseTime,
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.clearReleaseTime,
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.refreshBlsEmploymentRelease,

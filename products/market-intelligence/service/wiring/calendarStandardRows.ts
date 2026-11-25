@@ -11,6 +11,7 @@ import { recomputeUnmappedReasons } from '../intelligence/macro-calendar/marketC
 import { normalizeSourcePeriods, normalizeSourcePeriodsByShape } from '../intelligence/macro-calendar/marketCalendarSourcePeriodMigration'
 import { backfillObservationCountries } from '../intelligence/macro-calendar/marketCalendarObservationCountryBackfill'
 import { fillObservationCountriesByName } from '../intelligence/macro-calendar/marketCalendarObservationCountryNameFill'
+import { correctSourceRecordedCountries } from '../intelligence/macro-calendar/marketCalendarSourceCountryCorrection'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
 import { markCrossSourceConflicts } from '../intelligence/macro-calendar/marketCalendarCrossSourceConflictAudit'
@@ -23,6 +24,7 @@ import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/mar
 import { fillStandardSeriesIds } from '../intelligence/macro-calendar/marketCalendarStandardSeriesIdFill'
 import { auditCalendarIntegrity, calendarIntegrityGaps } from '../intelligence/macro-calendar/marketCalendarIntegrityAudit'
 import { normalizeCalendarStandardRows } from '../intelligence/macro-calendar/marketCalendarStartupNormalization'
+import { backfillCalendarImportanceGrades } from '../intelligence/macro-calendar/marketCalendarImportanceGradeBackfill'
 import type { CalendarStandardWriteLayer } from '../intelligence/macro-calendar/calendarStandardWriteLayer'
 
 /**
@@ -123,6 +125,13 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
         report(`[macro-calendar] 过期发布状态对账：扫描 ${reconciled.scanned} 行、改写 ${reconciled.updated} 行`
           + `、方向 ${JSON.stringify(delta)}、现状 ${JSON.stringify(reconciled.after)}`)
       }
+      /**
+       * **顺序钉住：官方历史回放必须早于启动规范化**（架构师 2026-11-24 复核）。
+       *
+       * 回放现在会补两类缺口（值缺、期次写坏），补的时候带 `preserveProvenance` 只更新值、不改来源；
+       * 被旧回放写坏的期次（`SECOND` 这类）留给本函数末尾那次启动规范化收尾。两者颠倒就对不上：
+       * 规范化先跑会把那行收掉、回放再去补也补不出正确期次。**别调换这两处的位置。**
+       */
       ensureOfficialHistoryReplayed(database)
       // 「这一行是什么」与重要性回填（迁移 16）：以前没存，读侧只能靠前缀猜（423 行被猜成经济指标）。
       // 跨源同名合并（迁移 17）：同一次发布两家各报一份不该是两行；值冲突的那组两条都留。
@@ -191,6 +200,18 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       if (observationCountries.updated > 0) {
         report(`[macro-calendar] 观测国家补齐：补 ${observationCountries.updated} 条`
           + `（${observationCountries.indicatorIds} 个 indicatorId）、补不了 ${observationCountries.unresolvable} 条`)
+      }
+      /**
+       * **源把南非记成 `SA` 的纠正**（0xrouter 作用域，2026-11-25）：源给 `SA` + `南非` 时以名为准。
+       * 必须排在观测名补齐之后（名字是判据）、标准表国家码归一之前（改出来的是两位码，不用再归一）。
+       */
+      const sourceCountries = correctSourceRecordedCountries(database)
+      if (sourceCountries.pending > 0) {
+        report(`[macro-calendar] 源内国家纠正：待改 ${sourceCountries.pending} 条、观测 ${sourceCountries.observations} 行、`
+          + `标准表 ${sourceCountries.events} 行、台账 ${sourceCountries.ledger} 条`
+          + (sourceCountries.collisions.length > 0
+            ? `、撞主键未合并 ${sourceCountries.collisions.length} 条（${sourceCountries.collisions.slice(0, 3).join('；')}）`
+            : ''))
       }
       // **观测表国家码归一（迁移 26）**：UK/JPN/FRA… 这些别名与三位写法归成两位（Chief 2026-11-18）。
       // 幂等、跑前备份；`EMU` 不动。放在标准表国家归一之前：观测是上游，先把它洗干净。
@@ -271,10 +292,33 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     report(`[macro-calendar] 启动规范化：重算 ${normalized.valueStateToPresent + normalized.valueStateToMissing} 行`
       + `（转 present ${normalized.valueStateToPresent} / 转 missing ${normalized.valueStateToMissing}）、`
       + `并值 ${normalized.mergedRows} 行、解析期次 ${normalized.periodsResolved} 条、删重复 `
-      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、`
-      + `跨源冲突保留 ${normalized.conflictGroupsKept} 组、耗时 ${elapsedMs}ms`)
+      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、耗时 ${elapsedMs}ms`
+      // **改名的原值必须上日志**：只写「解析 N 条」看不出是哪种形状没被认出来，也看不出谁被改了名。
+      + (normalized.renamedToUnknown > 0
+        ? `；改名 unknown ${normalized.renamedToUnknown} 行（原期次 ${
+          normalized.renamedFromPeriods.map((period) => JSON.stringify(period)).join('、') || '—'}`
+          + `${normalized.renamedFromDistinct > normalized.renamedFromPeriods.length
+            ? ` 等 ${normalized.renamedFromDistinct} 种` : ''}）`
+        : '')
+      // 撞车不再抛，但要看得见：它说明同一发布已经有了一条同名 unknown 行。
+      + (normalized.renameCollisions > 0 ? `；改名撞车并入 ${normalized.renameCollisions} 行` : ''))
   } catch (error) {
     report(`[macro-calendar] 启动规范化失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
+  }
+  /**
+   * **重要性档的一次性回填**（Chief 2026-11-24）：`importance_grade` 是后加的列，写入端从今天起
+   * 每次重写都重判，但**不在采集窗口里的未来行**不会被重写——它们会一直 `NULL`（＝未分级，
+   * 日历不标档、提醒一律不推）。所以每次启动把仍是 `NULL` 的行按同一张表补一遍：
+   * 只填空、不覆盖，判不出就留空。幂等：第二遍只剩「本来就没有族」的那批。
+   *
+   * 放在规范化之后：先让重复行合掉，再给留下来的行补档，避免给马上要删的行白写一次。
+   */
+  try {
+    const grades = backfillCalendarImportanceGrades(input.database)
+    report(`[macro-calendar] 重要性档回填：扫 ${grades.scanned} 行、补上 ${grades.filled} 行、`
+      + `仍无族 ${grades.stillUngraded} 行（未分级）`)
+  } catch (error) {
+    report(`[macro-calendar] 重要性档回填失败（已忽略，下次启动重试）：${(error as Error)?.message ?? 'unknown'}`)
   }
   /**
    * **跨源冲突：采集批次这一侧也要扫**（Chief 2026-11-21）。启动链只覆盖「启动时有」的那批；
@@ -283,14 +327,16 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
    */
   try {
     const conflicts = markCrossSourceConflicts(input.database)
-    if (conflicts.recorded > 0 || conflicts.incomparable > 0 || conflicts.sameValueDifferentText > 0) {
+    if (conflicts.recorded > 0 || conflicts.incomparable > 0 || conflicts.sameValueDifferentText > 0
+      || conflicts.periodIncomparable > 0) {
       // **「冲突 0 条」必须能被区分**：按展示串判的、同值不同写法的、某家这一格没给的，各自计数，
       // 不能被读成「两家完全一致」。**按展示串判的那一类必须标注「未经数值校验」**——它只比了
       // 源给的原始串，没按数算过，别让读的人以为它和数值判定同一可信度。
       report(`[macro-calendar] 跨源数值冲突：记 ${conflicts.groups} 组（身份×字段）、本次新写 `
         + `${conflicts.recorded} 条；其中按展示串比较 ${conflicts.displayCompared} 组（未经数值校验）、`
         + `同值不同写法 ${conflicts.sameValueDifferentText} 组（不记冲突）、`
-        + `不可比 ${conflicts.incomparable} 组（某家这一格没给）`)
+        + `不可比 ${conflicts.incomparable} 组（某家这一格没给）、`
+        + `不可比·来源没有给统计期 ${conflicts.periodIncomparable} 组（不判冲突，与「没给值」是两件事）`)
     }
   } catch (error) {
     report(`[macro-calendar] 跨源冲突扫描失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)

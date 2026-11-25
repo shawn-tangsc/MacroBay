@@ -24,6 +24,12 @@ import { pickReadoutWidth, placeReadout, READOUT_TIP_WIDTH } from './readoutPlac
  */
 const L = 52
 const RM = 12
+/**
+ * 绘图区在卡片里的左右内距：**只有这一份**。
+ * 卡片本身还给 12 内距（见 `cryptoDashboard.css` 的 `.mk-dash-expectation`），左边那份**不许再给一遍**——
+ * 用户 2026-11 反馈「图在卡片里两边有好多空」，就是 52 在容器与图里各出现了一次。
+ */
+export const EXPECTATION_PLOT_INSET = Object.freeze({ left: L, right: RM })
 const T0 = 16
 const B = 34
 /** 面板与光标之间的距离：横向留出的这段空隙，才是「不遮住那一点」的保证。 */

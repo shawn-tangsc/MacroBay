@@ -54,7 +54,8 @@ describe('the macro-market snapshot', () => {
 
   it('reads only the source the reader chose for the dollar cell, never both', () => {
     // 同一格不许同时读主备两个源：选了十二数据就只取合成那条（哪怕真实那条更新），选了 RealMarketAPI
-    // 就只取真实那条（哪怕合成那条更新）。缺键仍按今天的规则走（见下面那条既有用例）。
+    // 就只取真实那条（哪怕合成那条更新）——**前提是那条读得出数**；读不出或被永久拒绝时换另一条兜底，
+    // 见下面两条用例（用户 2026-11-24）。缺键仍按今天的规则走。
     const directory = mkdtempSync(join(tmpdir(), 'macro-snapshot-')); directories.push(directory)
     const store = createMacroMarketStore(join(directory, 'macro-market.sqlite'))
     const series = macroMarketPolicy.series
@@ -79,17 +80,54 @@ describe('the macro-market snapshot', () => {
     store.close()
   })
 
-  it('shows nothing for an explicitly chosen source that has no reading, instead of borrowing the other', () => {
-    // 显式选了 B、B 没数据：不许拿 A 的数顶上去（三态里的「读不到」由卡片说，数据层就是没有）。
+  it('falls back to the other dollar series when the chosen one has no reading at all', () => {
+    // 用户 2026-11-24：「没有美元的数据源，就用兜底的合成美元指数；有数据源的时候再替换。」
+    // 所以「钉住的源这一格一条读数都没有」不再等于「这一格什么都没有」——换另一条读，标签跟着那条走。
     const directory = mkdtempSync(join(tmpdir(), 'macro-snapshot-')); directories.push(directory)
     const store = createMacroMarketStore(join(directory, 'macro-market.sqlite'))
     const series = macroMarketPolicy.series
     store.append([{ series: series.dollarIndexReal, atMs: at(60), value: 99.5, observedAtMs: at(60) }])
     const query = createMacroMarketSnapshotQuery({ store, now: () => at(60) })
     const chosenSynthetic = query.snapshot({ dollarSourceId: 'twelve-data-market' })
-    expect(chosenSynthetic.readings.filter(reading => reading.seriesId.includes('dxy'))).toEqual([])
+    const dollar = chosenSynthetic.readings.find(reading => reading.seriesId.includes('dxy'))
+    // 换的是真实那条，所以**不许**挂合成标记：标签只跟着它描述的那个数。
+    expect(dollar).toMatchObject({ seriesId: series.dollarIndexReal, level: 99.5 })
+    expect(dollar?.synthetic).toBeUndefined()
     // 不选的时候仍按原规则取到真实那条。
     expect(query.snapshot().readings.find(reading => reading.seriesId.includes('dxy'))?.seriesId).toBe(series.dollarIndexReal)
+    store.close()
+  })
+
+  it('uses the synthesis when the licensed index the reader chose is permanently refused', () => {
+    // 真机 2026-11-24：美元格钉在 RealMarketAPI，供应商对 DXY 回 symbol-not-supported，真实那条停在 11-13。
+    // 钉住的源**被永久拒绝**时，这一格换成合成那条（带标记 + caveat），而不是一格「来源未提供」——
+    // 按用户口径，没有美元数据源就用兜底的合成指数。
+    const directory = mkdtempSync(join(tmpdir(), 'macro-snapshot-')); directories.push(directory)
+    const store = createMacroMarketStore(join(directory, 'macro-market.sqlite'))
+    const series = macroMarketPolicy.series
+    store.append([
+      { series: series.dollarIndexReal, atMs: at(0), value: 101.674, observedAtMs: at(0) },
+      { series: series.dollarIndex, atMs: at(60), value: 102.4, observedAtMs: at(60) }
+    ])
+    store.note(relNotes.lastSymbolFailures, 'DXY:symbol-not-supported')
+    const query = createMacroMarketSnapshotQuery({ store, now: () => at(60) })
+    const pinned = query.snapshot({ dollarSourceId: 'realmarketapi-market' })
+    const dollar = pinned.readings.find(reading => reading.seriesId.includes('dxy'))
+    expect(dollar).toMatchObject({ seriesId: series.dollarIndex, level: 102.4, synthetic: true })
+    expect(dollar?.sourceFailure).toBeUndefined()
+    expect(pinned.caveats).toContain(macroMarketPolicy.caveats.syntheticDollarIndex)
+    // 没选源时同样：被拒的真实那条不算可用读数，照样走兜底。
+    expect(query.snapshot().readings.find(reading => reading.seriesId.includes('dxy')))
+      .toMatchObject({ seriesId: series.dollarIndex, synthetic: true })
+    store.close()
+  })
+
+  it('still shows nothing when neither dollar series has a reading', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'macro-snapshot-')); directories.push(directory)
+    const store = createMacroMarketStore(join(directory, 'macro-market.sqlite'))
+    store.note(relNotes.lastSymbolFailures, 'DXY:symbol-not-supported')
+    const snapshot = createMacroMarketSnapshotQuery({ store, now: () => at(60) }).snapshot({ dollarSourceId: 'realmarketapi-market' })
+    expect(snapshot.readings).toEqual([])
     store.close()
   })
 

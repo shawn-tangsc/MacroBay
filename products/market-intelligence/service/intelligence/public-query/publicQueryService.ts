@@ -35,6 +35,8 @@ import {
   type EvidenceExcerptQueryInput,
   type FearGreedSnapshotQueryInput,
   type FearGreedSnapshotResult,
+  type SentimentOptionsCardQueryInput,
+  type SentimentOptionsCardResult,
   type EvidenceExcerptResult,
   type ImpactTimelineData,
   type MarketIntelligenceQueryCaveat,
@@ -58,6 +60,7 @@ import {
   parseJsonRecord
 } from './publicQueryDataBuilders'
 import { queryFearGreedSnapshot } from './fearGreedSnapshotQuery'
+import { querySentimentOptionsCard } from './sentimentOptionsCardQuery'
 import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
 import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
@@ -89,6 +92,7 @@ import type { MarketCalendarPage } from '../../../contracts/macro/marketCalendar
 import type { MarketCalendarFreshness } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { createMarketCalendarReadSurface, type MarketCalendarBinding } from './marketCalendarReadSurface'
 import type { PolicyPathContextRead } from '../policy-path/policyPathQueryService'
+import type { OptionSkewStoreRead } from '../option-skew/optionSkewPointStore'
 
 export type MarketIntelligencePublicQueryService = {
   querySentimentSnapshot: (
@@ -110,6 +114,8 @@ export type MarketIntelligencePublicQueryService = {
     input: EvidenceExcerptQueryInput
   ) => Promise<MarketIntelligenceQueryResult<EvidenceExcerptResult>>
   queryFearGreedSnapshot: (input: FearGreedSnapshotQueryInput) => Promise<FearGreedSnapshotResult>
+  /** The card's one read: both halves, each with its own state; the skew half reads "not connected" until its store exists. */
+  querySentimentOptionsCard: (input: SentimentOptionsCardQueryInput) => Promise<SentimentOptionsCardResult>
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
   queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
   queryMarketDivergence: (input: { asOf: string }) => Promise<MarketDivergenceResult>
@@ -186,6 +192,12 @@ export type MarketIntelligencePublicQueryService = {
    */
   queryPolicyPath: (input: { asOf: string }) => Promise<PolicyPathContextRead>
   setPolicyPathQuery: (query: { read: (input: { asOf: string }) => Promise<PolicyPathContextRead> } | undefined) => void
+  /**
+   * The stored option-skew days. Late-bound like the other readers: the point store is built in
+   * bootstrap after this service exists. Absent means "not wired yet", which the card reports as a
+   * collect failure rather than as an empty series.
+   */
+  setOptionSkewReader: (reader: (() => OptionSkewStoreRead) | undefined) => void
 }
 
 type MacroEconomicCalendarQuery = {
@@ -226,6 +238,7 @@ export function createMarketIntelligencePublicQueryService(
   let macroRatesSnapshotQuery: MacroRatesSnapshotQuery | undefined
   let macroHistoryAsOfQuery: Pick<MacroHistoryAsOfQuery, 'read'> | undefined
   let policyPathContextQuery: { read: (input: { asOf: string }) => Promise<PolicyPathContextRead> } | undefined
+  let optionSkewReader: (() => OptionSkewStoreRead) | undefined
 
   const service = {
     querySentimentSnapshot: (queryInput) =>
@@ -338,6 +351,11 @@ export function createMarketIntelligencePublicQueryService(
       })
     },
     queryFearGreedSnapshot: async (queryInput) => queryFearGreedSnapshot({ ...queryInput, pipeline: input.pipeline }),
+    querySentimentOptionsCard: async (queryInput) => querySentimentOptionsCard({
+      ...queryInput,
+      pipeline: input.pipeline,
+      ...(optionSkewReader === undefined ? {} : { readOptionSkew: optionSkewReader })
+    }),
     queryFundingRateHistory: async (queryInput) => input.fundingRateHistoryStore
       ? queryFundingRateHistoryAsync({ ...queryInput, store: input.fundingRateHistoryStore })
       : { state: 'unavailable', failureCode: 'funding-rate-history-query-unavailable' },
@@ -428,6 +446,9 @@ export function createMarketIntelligencePublicQueryService(
     },
     setPolicyPathQuery(query) {
       policyPathContextQuery = query
+    },
+    setOptionSkewReader(reader) {
+      optionSkewReader = reader
     }
   } as MarketIntelligencePublicQueryService
 

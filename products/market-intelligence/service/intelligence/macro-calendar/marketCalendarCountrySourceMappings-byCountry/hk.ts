@@ -22,4 +22,14 @@ export const mapping_HK: Readonly<Record<string, Readonly<{ metricKey: string; p
   '215040': { metricKey: 'HK.TRADE_BALANCE.NONE.LEVEL', periodRule: 'month' },
   '215041': { metricKey: 'HK.EXPORTS.NONE.YOY', periodRule: 'month' },
   '215042': { metricKey: 'HK.IMPORTS.NONE.YOY', periodRule: 'month' },
+  '10201': { metricKey: 'HK.REAL_GDP.NONE.YOY', periodRule: 'quarter' },  // 1 行 · 第三季度实际GDP(年率)初值
+  '10203': { metricKey: 'HK.REAL_GDP.NONE.YOY', periodRule: 'quarter' },  // 1 行 · 第三季度实际GDP(年率)终值
+  '4164': { metricKey: 'HK.THREE_MONTH_UNEMPLOYMENT.NONE.RATE', periodRule: 'month' },  // 2 行 · 至9月的三个月失业率 | 至10月的三个月失业率
+  '9649': { metricKey: 'HK.FOREIGN_EXCHANGE_RESERVES.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 9月外汇储备(十亿美元) | 10月外汇储备(十亿美元)
+  '9650': { metricKey: 'HK.IMPORTS.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月进口(年率) | 10月进口(年率)
+  '9651': { metricKey: 'HK.EXPORTS.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月出口(年率) | 10月出口(年率)
+  '9652': { metricKey: 'HK.MONEY_SUPPLY_M3.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月货币供给M3(年率) | 10月货币供给M3(年率)
+  '9653': { metricKey: 'HK.RETAIL_SALES.NONE.YOY', periodRule: 'month' },  // 2 行 · 8月零售销售量(年率) | 9月零售销售量(年率)
+  '9654': { metricKey: 'HK.RETAIL_SALES.NONE.YOY', periodRule: 'month' },  // 2 行 · 8月零售销售额(年率) | 9月零售销售额(年率)
+  '9814': { metricKey: 'HK.COMPOSITE_CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月综合消费者物价指数(年率) | 10月综合消费者物价指数(年率)
 })

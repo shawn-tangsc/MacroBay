@@ -65,41 +65,58 @@ describe('channel image source', () => {
   })
 })
 
-describe('the second source: briefing poster', () => {
-  /** 海报那一支只认暂存记录 + 版本：给不出路径，也就伪造不了。 */
-  function posterHarness(readPoster: (edition: { date: string; periodId: string; locale: string }) => Promise<unknown>) {
+describe('the second source: briefing poster (record-anchored)', () => {
+  /** 海报那一支只认**记录里的内容 hash**：给不出路径、也给不出「当前版次」，所以伪造不了。 */
+  function posterHarness(readBriefingPoster: (contentHash: string) => Promise<unknown>) {
     const source = createChannelImageSource({
       read: async () => null,
       getMessage: () => null,
-      readPoster: readPoster as never
+      readBriefingPoster: readBriefingPoster as never
     })
     return { source }
   }
 
-  it('reads the stored poster for exactly this edition', async () => {
-    const edition = { date: '2026-11-12', periodId: 'default', locale: 'zh-CN' }
-    const { source } = posterHarness(async () => ({ ok: true, bytes: PNG, mime: 'image/png', record: {} }))
-    await expect(source.resolve({ kind: 'briefing-poster', edition })).resolves.toMatchObject({ ok: true, mime: 'image/png' })
+  it('reads the poster by the content hash the record carries', async () => {
+    const seen: string[] = []
+    const { source } = posterHarness(async (contentHash) => {
+      seen.push(contentHash)
+      return { ok: true, bytes: PNG, mime: 'image/png' }
+    })
+    const resolved = await source.resolve({ kind: 'briefing-poster', contentHash: 'abc123def456abcd' })
+    expect(resolved).toMatchObject({ ok: true, mime: 'image/png' })
+    // 取图走的就是记录里那个 hash，不查「当前版次」。
+    expect(seen).toEqual(['abc123def456abcd'])
   })
 
-  it('does not borrow the assistant path: no message lookup, and no path input exists', async () => {
-    // 版本对不上（上一个版本/残留）→ 来源被拒，detail 说清是版本问题。
-    const { source } = posterHarness(async () => ({ ok: false, code: 'delivery-image-source-not-allowed', detail: 'edition-mismatch' }))
-    await expect(source.resolve({ kind: 'briefing-poster', edition: { date: '2026-11-11', periodId: 'default', locale: 'zh-CN' } }))
-      .resolves.toEqual({ ok: false, code: 'delivery-image-source-not-allowed', detail: 'edition-mismatch' })
+  it('trusts the bytes over the declared mime (a mislabelled poster must not be sent as png)', async () => {
+    const { source } = posterHarness(async () => ({ ok: true, bytes: PNG, mime: 'image/webp' }))
+    await expect(source.resolve({ kind: 'briefing-poster', contentHash: 'abc123def456abcd' }))
+      .resolves.toMatchObject({ ok: true, mime: 'image/png' })
   })
 
-  it('keeps "gone" and "cannot read" apart on the poster branch too', async () => {
-    for (const detail of ['missing', 'expired', 'read-failed']) {
-      const { source } = posterHarness(async () => ({ ok: false, code: 'delivery-image-unavailable', detail }))
-      await expect(source.resolve({ kind: 'briefing-poster', edition: { date: '2026-11-12', periodId: 'default', locale: 'zh-CN' } }))
+  it('says "this edition has no poster" differently from "the file cannot be read"', async () => {
+    // 没有这一行（这一版从没出过图 / 已被保留期删掉）→ 来源不成立。
+    const notFound = posterHarness(async () => ({ ok: false, code: 'poster-not-found', detail: 'no-row' }))
+    await expect(notFound.source.resolve({ kind: 'briefing-poster', contentHash: 'abc123def456abcd' }))
+      .resolves.toEqual({ ok: false, code: 'delivery-image-source-not-allowed', detail: 'poster-not-found' })
+
+    // 行在、文件不在 / 读不出来 → 拿不到，两种 detail 都要能分辨。
+    for (const detail of ['missing', 'read-failed'] as const) {
+      const broken = posterHarness(async () => ({ ok: false, code: 'read-failed', detail }))
+      await expect(broken.source.resolve({ kind: 'briefing-poster', contentHash: 'abc123def456abcd' }))
         .resolves.toEqual({ ok: false, code: 'delivery-image-unavailable', detail })
     }
   })
 
-  it('says unavailable (not allowed) when the outbox is not wired', async () => {
+  it('treats a throwing reader as "cannot read" (never as "not allowed")', async () => {
+    const { source } = posterHarness(async () => { throw new Error('EIO') })
+    await expect(source.resolve({ kind: 'briefing-poster', contentHash: 'abc123def456abcd' }))
+      .resolves.toEqual({ ok: false, code: 'delivery-image-unavailable', detail: 'read-failed' })
+  })
+
+  it('says unavailable when the poster reader is not wired at all', async () => {
     const source = createChannelImageSource({ read: async () => null, getMessage: () => null })
-    await expect(source.resolve({ kind: 'briefing-poster', edition: { date: '2026-11-12', periodId: 'default', locale: 'zh-CN' } }))
-      .resolves.toEqual({ ok: false, code: 'delivery-image-unavailable', detail: 'poster-outbox-unavailable' })
+    await expect(source.resolve({ kind: 'briefing-poster', contentHash: 'abc123def456abcd' }))
+      .resolves.toEqual({ ok: false, code: 'delivery-image-unavailable', detail: 'poster-reader-unavailable' })
   })
 })

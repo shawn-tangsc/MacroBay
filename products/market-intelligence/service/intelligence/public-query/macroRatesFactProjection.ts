@@ -87,17 +87,29 @@ export function projectMacroRates(
   }
   // The four series the block reads, in its order: the 10-year headline, its real counterpart, and
   // the two legs of the extras. A series the store cannot answer contributes nothing at all.
+  //
+  // **The curve's other tenors are deliberately absent.** The snapshot carries 3M/5Y/30Y and a
+  // 10Y−3M spread so the panel can draw the curve; they are additions to the *reading contract*, not
+  // new analysis facts. Whether the model should cite them is a separate decision (currently
+  // `exclude`: the four above plus 10Y−2Y already answer "what is the rate environment", and adding
+  // more changes the prompt budget and the wording). A future candidate, not an omission — do not
+  // "complete the list" here without that decision.
   for (const [seriesId, metric, unit, suffix] of [
     [macroRatesSnapshotPublicPolicy.series.us10y, MACRO_RATES_FACT_METRICS.us10y, 'percent', 'level'],
-    [macroRatesSnapshotPublicPolicy.series.realRate, MACRO_RATES_FACT_METRICS.realRate, 'percent', 'level'],
+    [macroRatesSnapshotPublicPolicy.series.real10y, MACRO_RATES_FACT_METRICS.realRate, 'percent', 'level'],
     [macroRatesSnapshotPublicPolicy.series.us2y, MACRO_RATES_FACT_METRICS.us2y, 'percent', 'level'],
-    [macroRatesSnapshotPublicPolicy.series.breakevenInflation, MACRO_RATES_FACT_METRICS.breakevenInflation, 'percent', 'level']
+    [macroRatesSnapshotPublicPolicy.series.breakeven10y, MACRO_RATES_FACT_METRICS.breakevenInflation, 'percent', 'level']
   ] as const) {
     const reading = bySeries.get(seriesId)
     if (reading) add(metric, reading.actual, unit, reading, suffix)
     // The day-over-day change the daily block prints beside the level, in basis points: a yield
     // difference is never stated as a percent, and it is rounded to the basis point the reader sees
-    // (`basisPointsText` in the panel) so the fact and the cell cannot state two different numbers.
+    // (`changeSet` / `buildUstRows` in `ustCurveModel`) so the fact and the cell cannot state two
+    // different numbers.
+    //
+    // 精度口径（用户 2026-11-22 确认，本版不改表里的精度）：表里四档变化按**整数 bp**——就是读者
+    // 看到的那一格；契约里的两条价差与图上起点归一按 **0.1 bp**。负号统一 `−`（U+2212），不混用
+    // ASCII 的 `-`，否则同一屏两种横线。改这三档任何一处，都要同时改这条注释与用例。
     if (reading && reading.previous !== undefined) add(`${metric}-change-1d`, basisPoints(reading.actual - reading.previous), 'bp', reading, `${suffix}-change-1d`)
   }
   const long = bySeries.get(TERM_SPREAD_LEGS.long)

@@ -4,6 +4,7 @@ import type {
 } from '../contracts/notificationEventCatalog'
 import type { NotificationCenterItem, NotificationRecord } from '../contracts/notificationContracts'
 import { toNotificationCenterItem } from './notificationCenterItem'
+import { posterEvidenceOf, type PosterChannelCapability } from './notificationPosterEvidence'
 import type { NotificationDeliveryContent } from './notificationRouting'
 
 /**
@@ -20,10 +21,18 @@ export async function projectNotificationCenterItem(input: {
   content: NotificationDeliveryContent
   category: NotificationCategory | undefined
   language: () => Promise<NotificationCopyLanguage>
+  /** 通道的显示名与图片能力（分母只数支持图片的）：由组合根注入，缺省时这一行按「不支持」计。 */
+  channelCapability?: PosterChannelCapability
 }): Promise<NotificationCenterItem> {
   const push = input.record.delivery.push
   const deliveryHint = push?.state === 'failed' && push.reason === 'push-unavailable'
     ? notificationCopyText(await input.language(), 'notification.deliveryReason.pushUnavailable')
     : undefined
-  return toNotificationCenterItem(input.record, input.content, input.category, deliveryHint)
+  return toNotificationCenterItem(
+    input.record,
+    input.content,
+    input.category,
+    deliveryHint,
+    posterEvidenceOf(input.record, input.channelCapability)
+  )
 }

@@ -33,7 +33,7 @@ import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerI
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
-import { wireCalendarReadings } from './wiring/calendarReadings'
+import { wireCalendarReadings, wireMacroCalendarEventInterpretation } from './wiring/calendarReadings'
 import { wireZeroXRouterCalendarSchedule } from './wiring/zeroXRouterCalendarSchedule'
 import { scheduleHistoricalValueFill } from './wiring/calendarStandardRows'
 import { createNarwhalStandardRowsWriter, startCalendarStandardRows } from './wiring/calendarStandardRowsNarwhal'
@@ -70,14 +70,16 @@ import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRu
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
 import { getPlatformFetch } from '@platform/network/platformFetch'
+
+import { wireOptionSkew } from './intelligence/option-skew/optionSkewWiring'
 import { allSources } from './intelligence/application/providerRegistry'
 import { syncOfficialStandardRows } from './intelligence/macro-calendar/marketCalendarOfficialSourceRows'
 import { createStandardMonthPageReader } from './intelligence/macro-calendar/marketCalendarStandardMonthPage'
 import { eventTypeNameByCode, nameByMetricKey } from './intelligence/macro-calendar/marketCalendarCodeNames'
 import { narwhalSourcePolicy } from './intelligence/application/narwhalSourcePolicy'
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
-import { createNarwhalCalendarBriefingRefresh }
-  from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
+import { createMarketCalendarBriefingRefresh }
+  from './intelligence/macro-calendar/macroCalendarBriefingCatchUp'
 import { readStandardTableLastWrittenAt }
   from './intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
@@ -131,6 +133,15 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & Product
   getNetworkSettings?: () => Promise<NetworkSettings>
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
+  /**
+   * 用隐藏窗口把一版简报画成图（自动推送带图）。入口 URL、preload、窗口纪律都在主进程那一侧，
+   * 所以由组合根注入；未注入＝不出图，那条推送退回只发正文。
+   */
+  captureBriefingPoster?: (input: Readonly<{
+    product: string
+    entry: string
+    params: Readonly<Record<string, string>>
+  }>) => Promise<import('@platform/desktop/main/window/offscreenCaptureWindow').OffscreenCaptureOutcome>
 }
 
 export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefined {
@@ -213,7 +224,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => { void narwhalCalendarAssembly?.syncSchedule() },
     // 读者一拨开关，产品自有作业就跟着排期/撤期（`sourceEnableListeners` 在下面装配时登记）。
     // 通用采集作业与宏观市场、DXY、Nasdaq 100 那几条不由这里管：它们的闸是服务里的同一处。
-    onSourceEnabledChanged: (sourceId) => { sourceEnableListeners.get(sourceId)?.() }
+    onSourceEnabledChanged: (sourceId) => { sourceEnableListeners.get(sourceId)?.() },
+    ...(deps.captureBriefingPoster === undefined ? {} : { captureBriefingPoster: deps.captureBriefingPoster })
   })
   // A reader who changes their display zone means "08:05 is my 08:05 from now on", and they will not
   // also open the briefing setting to press save. The platform tells us after the new zone is in
@@ -264,6 +276,19 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   intelligenceModule.setPolicyPathQuery(policyPathQueryService)
   policyPathRuntime.start()
   sourceEnableListeners.set('policy-path-market', () => { void policyPathRuntime.sync() })
+  // 期权偏斜（合并卡右半）：采集归产品自有作业（一小时一轮），开关一拨就排期/撤期；
+  // 探针同时接给「数据源 → Deribit 期权 → 测试连接」，失败如实报「需要代理」。
+  const optionSkewWiring = wireOptionSkew({
+    jobRuntime: deps.jobRuntime,
+    platformFetch,
+    dataDir: getIntelligenceProductDataDir(),
+    isEnabled: async () => (await intelligenceModule.sourceProfileStore.resolveProfile('deribit-options')).enabled,
+    onReady: (parts) => {
+      intelligenceModule.publicQueryService.setOptionSkewReader(() => parts.readSnapshot())
+      intelligenceModule.sourcesService.setOptionSkewProbe(() => parts.probe())
+    }
+  })
+  sourceEnableListeners.set('deribit-options', () => optionSkewWiring.sync({ collectNow: true }))
   const {
     crossAssetConfiguration, crossAssetStore, crossAssetRuntime, crossAssetIndexRuntime, crossAssetQuery
   } = wireCrossAsset({ register, deps, intelligenceModule, productDataDir: getIntelligenceProductDataDir() })
@@ -511,7 +536,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides, releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
   }, blsEmploymentMvpRefresh, blsScheduleAndLatestValues, macroCalendarBackend.fedFomcRefresh, marketCalendar,
-    { database: macroCalendarBackend.storage.database })
+    { database: macroCalendarBackend.storage.database }, wireMacroCalendarEventInterpretation({ repository: macroCalendarBackend.repository, database: macroCalendarBackend.storage.database, invoke: intelligenceModule.structuredModelInvocation.invoke, jobRuntime: deps.jobRuntime, readLocale: () => deps.getAppLanguage?.() ?? Promise.resolve('zh-CN'), ...(deps.log === undefined ? {} : { log: deps.log }) }))
   // The dashboard's 市场状态 block reads the collected macro series (synthetic dollar, gold) here.
   // Gold's 最新 cell additionally reads the live tick, which is reported beside the stored level and
   // is read by no window: the returns in this snapshot are computed from stored points alone.
@@ -523,9 +548,15 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // last outcome rather than the one line the snapshot carries. Read-only, and it re-parses its own
   // answer through the public boundary.
   registerDashboardFeedStatusIpc(register, intelligenceModule.dashboardFeedStatus)
-  // The same block's two rate rows read the FRED metric events the generic collector stored: official
-  // daily closes, so every reading carries its observation date and the `official-daily-close` caveat.
-  const macroRatesSnapshot = createMacroRatesSnapshotQuery({ listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents() })
+  // The same block's rate rows read the daily closes the collector stores: official trading-day
+  // closes, so every reading carries its observation date and the `official-daily-close` caveat, and
+  // the window each row draws comes from the same points.
+  const macroRatesSnapshot = createMacroRatesSnapshotQuery({
+    // 序列是这张表和美元指数、金价共用的那张：日频收盘写进去，窗口也从这里读。
+    store: intelligenceModule.macroMarket.store,
+    // 迁移期兜底：库里还没有这条序列时（刚升级、还没到下一次采集），用 metric 事件的单日读数。
+    listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents()
+  })
   registerMacroRatesIpc(register, { snapshot: macroRatesSnapshot.snapshot })
   // The daily brief's backfill tool reads those same two stores as of an earlier instant — the stored
   // macro-market points for the dollar and gold, and the stored FRED closes for the two 10-year yields.

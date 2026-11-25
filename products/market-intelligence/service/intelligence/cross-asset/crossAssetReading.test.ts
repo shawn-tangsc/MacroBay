@@ -105,6 +105,8 @@ it('refuses when a leg has no value, naming the first missing leg in reader orde
   const reading = resolveCrossAssetReading(input({
     legs: { ...legs({ dxy: 0.42, gold: 0.86, index: -1.12, btc: -1.84 }), gold: { state: 'unavailable', reason: 'missing' } }
   }))
+  // 剩下的三条腿（美元涨、纳指跌、BTC 跌）正好是风险偏空去掉黄金的样子：没有可排除的，
+  // 但也没有可确认的（黄金那条腿没有读数）。
   expect(reading).toEqual({ state: 'undetermined', reason: 'legs-missing', leg: 'gold', refuted: [] })
   // 没有完整腿集时不带 legs：兜底描述只能描述真的算出来的东西。
   expect(reading.state === 'undetermined' && 'legs' in reading).toBe(false)
@@ -114,7 +116,27 @@ it('refuses when a leg is stale, and separates stale from missing', () => {
   const reading = resolveCrossAssetReading(input({
     legs: { ...legs({ dxy: 0.42, gold: 0.86, index: -1.12, btc: -1.84 }), btc: { state: 'unavailable', reason: 'stale' } }
   }))
-  expect(reading).toEqual({ state: 'undetermined', reason: 'stale', leg: 'btc', refuted: [] })
+  // 停更的 BTC 不参与判断，但黄金读到了且是涨的：要求黄金跌的贴现率剧本因此不成立。
+  expect(reading).toEqual({ state: 'undetermined', reason: 'stale', leg: 'btc', refuted: [
+    { scenario: 'discount-rate', leg: 'gold' }
+  ] })
+})
+
+it('with one leg missing, still rules out the scenarios the other legs disprove', () => {
+  // 用户 2026-11-24 的截图：黄金 +0.13（还在平盘带里）、纳指 +2.06（涨）、BTC −2.36（跌），美元这一窗没有数据。
+  const reading = resolveCrossAssetReading(input({
+    legs: {
+      dxy: { state: 'unavailable', reason: 'missing' },
+      gold: { state: 'available', returnPercent: 0.13 },
+      index: { state: 'available', returnPercent: 2.06 },
+      btc: { state: 'available', returnPercent: -2.36 }
+    }
+  }))
+  // 判不出是哪一档（五个剧本都要美元），但纳指涨着，所以「加密独立」这个要求纳指走平的剧本不成立。
+  expect(reading.state).toBe('undetermined')
+  expect(reading.state === 'undetermined' && reading.reason).toBe('legs-missing')
+  expect(reading.state === 'undetermined' && reading.leg).toBe('dxy')
+  expect(reading.state === 'undetermined' && reading.refuted).toEqual([{ scenario: 'crypto-specific', leg: 'index' }])
 })
 
 it('refuses when no scenario fits, and still lists the near misses', () => {

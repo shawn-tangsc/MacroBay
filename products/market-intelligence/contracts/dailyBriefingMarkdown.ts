@@ -57,8 +57,8 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   macroEmptyCodes: Readonly<Record<string, string>>
   /** 过去 24 小时的总数与构成、另有几条、以及「这段时间没有已收录的发布」（用户 2026-11-14）。 */
   pastWindow: Readonly<{ counts: string; others: string; emptyCollected: string }>
-  /** 未来 7 天判不了重要性时的排期小标题。 */
-  nextImportanceUnknown: Readonly<{ scheduleTitle: string }>
+  /** 未来 7 天判不了重要性时：正文那一句 + 排期小标题。 */
+  nextImportanceUnknown: Readonly<{ sentence: string; scheduleTitle: string }>
   macro: Readonly<{ actual: string; consensus: string; previous: string; noConsensus: string; surprise: Readonly<Record<string, string>>; timeNotPublished: string }>
   /** 网页取到的值的来源后缀（`02` v2.128）：正文/导出/复制三处同一份。 */
   macroWebValue: string
@@ -186,8 +186,12 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   const tier1Upcoming = document.next.tier1Upcoming ?? []
   // 用户 2026-11-15：没有可关注的事件时**整块不出现**——不写占位句，不写「无法判定」，不写「0 个」。
   // 这一栏的空态与正文同一条口径：空就整块消失，不替读者解释为什么空。
-  if (nextItems.length > 0 || tier1Upcoming.length > 0) {
+  // R44：整周有事件、却一条已分级的都没有时，那一栏**有话说**——句子在小标题下、排期之前。
+  // 其余两种空态不变：零事件仍是整块消失（用户 2026-11-15），「确实没有高影响」也不解释。
+  const unratedWeek = document.next.note === 'next-7d-importance-unknown'
+  if (nextItems.length > 0 || tier1Upcoming.length > 0 || unratedWeek) {
     lines.push('', `## ${labels.sections.next}`)
+    if (unratedWeek) lines.push(labels.nextImportanceUnknown.sentence)
     for (const item of nextItems) lines.push(nextLine(item, options))
     if (tier1Upcoming.length > 0) {
       lines.push('', `### ${labels.nextImportanceUnknown.scheduleTitle}`)

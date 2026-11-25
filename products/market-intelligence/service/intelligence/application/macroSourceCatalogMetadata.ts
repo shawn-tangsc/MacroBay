@@ -2,6 +2,7 @@
  * Locked provider mappings for P0 macro sources (doc 19 / 23).
  * Parsers and request builders must consume these definitions — do not duplicate ids elsewhere.
  */
+import { macroRateSeriesRegistry } from '../macro-market/macroMarketSeries'
 
 export const MACRO_SOURCE_IDS = [
   'bls-economic-series',
@@ -155,45 +156,25 @@ export const BEA_MACRO_SERIES: MacroSeriesDefinition[] = [
  * them out of statement text: the range is a level, so it needs a time series and an as-of date,
  * and the statement only ever states it as prose.
  */
+/**
+ * FRED 的采集清单。
+ *
+ * 国债曲线那 19 条**从登记表派生**（`macroRateSeriesRegistry`：一条序列一行的品种名、期限、FRED 上
+ * 的历史起点与实测断档都在那里），这里只把登记表转成采集定义——曲线的档位、名字、历史起点各只有
+ * 一份，不在这里再抄一遍。后面五条是非曲线的宏观指标。
+ *
+ * 同一源扩了 12 条序列（7 → 19）：不是新数据源，`sourceCatalog` / `providerRegistry` 不动。
+ */
 export const FRED_MACRO_SERIES: MacroSeriesDefinition[] = [
-  {
-    key: 'US_2Y_YIELD',
-    providerSeriesId: 'DGS2',
-    metricName: 'US 2Y Treasury Yield',
-    metricKind: 'treasury-yield',
+  ...macroRateSeriesRegistry.map((entry): MacroSeriesDefinition => ({
+    key: entry.metricKey,
+    providerSeriesId: entry.providerSeriesId,
+    metricName: entry.metricName,
+    metricKind: entry.kind === 'nominal' ? 'treasury-yield' : entry.kind === 'real' ? 'rate' : 'inflation',
     comparisonBasis: 'period-change',
     frequency: 'daily',
     unit: 'percent'
-  },
-  {
-    key: 'US_10Y_YIELD',
-    providerSeriesId: 'DGS10',
-    metricName: 'US 10Y Treasury Yield',
-    metricKind: 'treasury-yield',
-    comparisonBasis: 'period-change',
-    frequency: 'daily',
-    unit: 'percent'
-  },
-  {
-    key: 'US_REAL_YIELD_10Y',
-    providerSeriesId: 'DFII10',
-    metricName: 'US 10Y Real Yield',
-    metricKind: 'rate',
-    comparisonBasis: 'period-change',
-    frequency: 'daily',
-    unit: 'percent'
-  },
-  {
-    // The 10-year breakeven the inflation-expectation reading needs. FRED publishes a `.` sentinel
-    // for days the TIPS market is closed, which the parser skips rather than reading as 0%.
-    key: 'US_10Y_BREAKEVEN_INFLATION',
-    providerSeriesId: 'T10YIE',
-    metricName: 'US 10Y Breakeven Inflation',
-    metricKind: 'inflation',
-    comparisonBasis: 'period-change',
-    frequency: 'daily',
-    unit: 'percent'
-  },
+  })),
   {
     key: 'DXY_PROXY',
     providerSeriesId: 'DTWEXBGS',

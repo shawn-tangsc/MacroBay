@@ -53,6 +53,31 @@ const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
   }) }))
 
 /**
+ * 一枚牌连同它自己那根竖线一起读出来：牌心压线、上下两排、牌上的字全部从 DOM 取，
+ * 不读实现里的中间量（读中间量等于用实现给自己作证）。
+ */
+const chipsOf = (markup: string) => {
+  const doc = new DOMParser().parseFromString(markup, 'text/html')
+  return [...doc.querySelectorAll('[data-hint]')].map(group => {
+    const rect = group.querySelector('.mi-positioning-panel__hint-chip rect')!
+    const left = Number(rect.getAttribute('x'))
+    const width = Number(rect.getAttribute('width'))
+    return {
+      hint: group.getAttribute('data-hint'),
+      direction: group.getAttribute('data-hint-direction'),
+      top: Number(rect.getAttribute('y')),
+      height: Number(rect.getAttribute('height')),
+      left,
+      width,
+      centre: left + width / 2,
+      lineX: [...group.querySelectorAll('line')].map(node => Number(node.getAttribute('x1'))),
+      circles: group.querySelectorAll('circle').length,
+      text: [...group.querySelectorAll('.mi-positioning-panel__hint-chip text')].map(node => node.textContent)
+    }
+  })
+}
+
+/**
  * 每张卡挂过的 root 都要卸掉：`document.body.innerHTML = ''` 只清 DOM，不卸 React 树，
  * 而平台 `Popover` 的 Esc 监听挂在 `document` 上——留着，下一条用例的 Esc 会被它先吃掉。
  */
@@ -189,6 +214,50 @@ describe('positioning panel', () => {
     act(() => { options[1]!.click() })
     expect(onWindowChange).toHaveBeenCalledWith('24h')
     act(() => root.unmount())
+  })
+
+  it('gives each hit its own chip, one row apart, when two directions share a segment', () => {
+    // 用户 2026-11-24 现场（22:37 空头 +1.8%、23:07 多头 −2.5%）：一枚牌只属于一次命中，
+    // 各自骑自己那条竖线，放不下就上下错开——不是一枚牌写两行（界面设计硬规则第 1 条）。
+    const markup = render({
+      positioning: {
+        ...availablePositioning,
+        window: '24h',
+        btc: [at(1440), at(720), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
+        eth: [at(1440), at(720), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
+        hints: [
+          { asset: 'eth', direction: 'short', observedAt: at(30), notionalUsd: 2.4e9, dropPct: -1.9, pricePct: 1.8, volumeMultiple: 3.4 },
+          { asset: 'eth', direction: 'long', observedAt: at(0), notionalUsd: 2.41e9, dropPct: -2.2, pricePct: -2.5, volumeMultiple: 5.1 }
+        ]
+      }
+    })
+    const placed = chipsOf(markup)
+    expect(placed).toHaveLength(2)
+    // 每枚牌只说自己那一次命中：资产、方向、文字都归自己，没有「×2」。
+    expect(placed.map(chip => chip.hint)).toEqual(['eth', 'eth'])
+    expect(placed.map(chip => chip.direction)).toEqual(['short', 'long'])
+    expect(placed.map(chip => chip.text)).toEqual([
+      [text.markShort.replace('{pct}', '+1.8%')],
+      [text.markLong.replace('{pct}', '-2.5%')]
+    ])
+    for (const chip of placed) expect(chip.text).toHaveLength(1)
+    // 一枚牌一根线、一个点：这组数据里没有合并，也没有丢。
+    for (const chip of placed) {
+      expect(chip.lineX).toHaveLength(1)
+      expect(chip.circles).toBe(1)
+    }
+    // 上下两排错开，差一枚牌高；牌底不出牌带（`markerRow` 29）。
+    // 这一组贴着右边，牌会被钳到同一个 x，所以「牌心压线」在这里不判（那是贴边内收的例外，
+    // 由远离边的那条用例证明）。
+    expect(new Set(placed.map(chip => chip.top)).size).toBe(2)
+    expect(Math.abs(placed[0]!.top - placed[1]!.top)).toBe(13)
+    for (const chip of placed) {
+      expect(chip.top + chip.height).toBeLessThanOrEqual(29)
+      expect(chip.left + chip.width).toBeLessThanOrEqual(992)
+    }
+    // 全图没有混向那一档，也没有那个没有方向的名字。
+    expect(markup).not.toContain('data-hint-direction="mixed"')
+    expect(markup).not.toContain('疑似爆仓 ×')
   })
 
   it('draws every hit in the window, not only the newest one', () => {
@@ -582,8 +651,8 @@ describe('the mark chips', () => {
   })
   const renderMarks = (hints: readonly ReturnType<typeof mark>[]) =>
     render({ positioning: { ...availablePositioning, hints, hiddenHits: 0 } })
-  const chips = (markup: string) => [...markup.matchAll(/<rect x="([\d.]+)" y="3" width="([\d.]+)"/g)]
-    .map(match => ({ left: Number(match[1]), width: Number(match[2]) }))
+  const chips = (markup: string) => [...markup.matchAll(/<rect x="([\d.]+)" y="(\d+)" width="([\d.]+)" height="(\d+)"/g)]
+    .map(match => ({ left: Number(match[1]), top: Number(match[2]), width: Number(match[3]), height: Number(match[4]) }))
     .sort((first, second) => first.left - second.left)
 
   it('never draws a line without a chip, and never a chip without a line', () => {
@@ -621,29 +690,92 @@ describe('the mark chips', () => {
     expect(packed).toContain('疑似多头爆仓 ×6')
   })
 
-  it('keeps at least 6px between two chips', () => {
+  it('keeps at least 6px between two chips sharing a row', () => {
     const markup = renderMarks([mark(), mark({ observedAt: at(29) }), mark({ asset: 'eth', observedAt: at(120) }), mark({ observedAt: at(0) })])
-    const placed = chips(markup)
+    const placed = chipsOf(markup)
     expect(placed.length).toBeGreaterThan(1)
-    for (let index = 1; index < placed.length; index += 1) {
-      const gap = placed[index]!.left - (placed[index - 1]!.left + placed[index - 1]!.width)
-      expect(gap).toBeGreaterThanOrEqual(6)
+    // 间距是同一排内的事：上下两排各自算，跨排比较会把「错开」当成「重叠」。
+    for (const top of new Set(placed.map(chip => chip.top))) {
+      const inRow = placed.filter(chip => chip.top === top).sort((first, second) => first.left - second.left)
+      for (let index = 1; index < inRow.length; index += 1) {
+        expect(inRow[index]!.left - (inRow[index - 1]!.left + inRow[index - 1]!.width)).toBeGreaterThanOrEqual(6)
+      }
     }
+  })
+
+  it('puts a chip over its own line when two assets hit the same segment, one row apart', () => {
+    // 同向、不同资产、约 8 个单位（24 小时轴上 12 分钟）：两枚牌各归自己的市场，
+    // 牌的横向位置就是自己那条线——这是「这枚牌属于哪根线」的唯一凭据。
+    const markup = render({
+      positioning: {
+        ...availablePositioning,
+        window: '24h',
+        btc: [at(1440), at(720), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
+        eth: [at(1440), at(720), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
+        hints: [
+          { asset: 'btc', direction: 'long', observedAt: at(600), notionalUsd: 8.5e9, dropPct: -2.2, pricePct: -1.8, volumeMultiple: 5.1 },
+          { asset: 'eth', direction: 'long', observedAt: at(588), notionalUsd: 2.4e9, dropPct: -1.9, pricePct: -2.4, volumeMultiple: 3.4 }
+        ]
+      }
+    })
+    const placed = chipsOf(markup)
+    expect(placed).toHaveLength(2)
+    expect(placed.map(chip => chip.hint)).toEqual(['btc', 'eth'])
+    expect(placed.map(chip => chip.direction)).toEqual(['long', 'long'])
+    expect(placed.map(chip => chip.text)).toEqual([
+      [text.markLong.replace('{pct}', '-1.8%')],
+      [text.markLong.replace('{pct}', '-2.4%')]
+    ])
+    expect(markup).not.toContain('×2')
+    expect(new Set(placed.map(chip => chip.top)).size).toBe(2)
+    for (const chip of placed) {
+      expect(Math.abs(chip.centre - chip.lineX[0]!)).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('drops the chip and its line together when both rows are taken, and counts every undrawn hit', () => {
+    // 四类同段：两排各放一枚，剩下两类连牌带线一起不画——不存在只画线的命中。
+    const markup = renderMarks([
+      mark({ asset: 'btc', direction: 'long', observedAt: at(120), pricePct: -2.2 }),
+      mark({ asset: 'btc', direction: 'short', observedAt: at(120), pricePct: 2.4 }),
+      mark({ asset: 'eth', direction: 'long', observedAt: at(120), pricePct: -1.6 }),
+      mark({ asset: 'eth', direction: 'short', observedAt: at(120), pricePct: 1.9 })
+    ])
+    const placed = chipsOf(markup)
+    expect(placed).toHaveLength(2)
+    expect(placed.every(chip => chip.lineX.length === 1)).toBe(true)
+    // 只有一个计数：DTO 没截断（0）+ 排不下（2）；面板那句必须就是它。
+    expect(markup).toContain(text.liquidationHiddenHits.replace('{count}', '2'))
+    expect(markup.split('data-hidden-hits').length - 1).toBe(1)
+    for (const chip of placed) expect(chip.top + chip.height).toBeLessThanOrEqual(29)
+    // N = 总命中（4）− 已画命中（2）：牌与线一起丢，计数只有一个出口。
+    expect(placed.reduce((total, chip) => total + chip.lineX.length, 0)).toBe(2)
+  })
+
+  it('sends every later chip to the upper row once it is in use', () => {
+    // 牌带两排：先出现的贴下半排（16），本排挤了就往上一排（3）；一旦上了上排，后面都留在上排。
+    const markup = renderMarks([
+      mark({ asset: 'btc', direction: 'long', observedAt: at(111), pricePct: -1.8 }),
+      mark({ asset: 'eth', direction: 'long', observedAt: at(107.25), pricePct: -2.1 }),
+      mark({ asset: 'btc', direction: 'short', observedAt: at(86.625), pricePct: 1.5 })
+    ])
+    const placed = chipsOf(markup).sort((first, second) => first.centre - second.centre)
+    expect(placed).toHaveLength(3)
+    // C 的下半排其实还有空位，也不许回去——否则会出现「上面那张比下面那张还晚」的锯齿。
+    expect(placed.map(chip => chip.top)).toEqual([16, 3, 3])
   })
 
   it('writes the direction for a cluster of one, and the count for a cluster of many', () => {
     const single = renderMarks([mark({ direction: 'short', pricePct: 1.8 })])
     expect(single).toContain('疑似空头爆仓 +1.8%')
-    // 同一刻两资产同向：牌放不下（< 6px），并成一簇，只写 ×2。
-    const same = renderMarks([mark(), mark({ asset: 'eth' })])
+    // 同资产同向、牌放不下：并成一簇，写 ×2——「同一市场的同类事件发生了两次」。
+    const same = renderMarks([mark(), mark({ observedAt: at(29) })])
     expect(same).toContain('疑似多头爆仓 ×2')
-  })
-
-  it('never names a direction on a mixed cluster', () => {
-    const mixed = renderMarks([mark(), mark({ asset: 'eth', direction: 'short', pricePct: 1.8 })])
-    expect(mixed).toContain('疑似爆仓 ×2')
-    expect(mixed).not.toContain('疑似多头爆仓 ×2')
-    expect(mixed).not.toContain('疑似空头爆仓 ×2')
+    // 不同资产即使同向也不并：一枚牌只说一个市场。
+    const apart = renderMarks([mark(), mark({ asset: 'eth', observedAt: at(29) })])
+    expect(apart).toContain('data-hint="btc"')
+    expect(apart).toContain('data-hint="eth"')
+    expect(apart).not.toContain('×2')
   })
 
   it('keeps the truncation word off the chips: they count marks, the line under the chart counts the rest', () => {
@@ -832,6 +964,30 @@ describe('time axis', () => {
     const ticks = [...markup.matchAll(/class="mi-positioning-panel__tick">([^<]*)</g)].map(match => match[1])
     expect(ticks).toHaveLength(5)
     expect(ticks[0]).not.toBe(ticks.at(-1))
+  })
+
+  it('prints ticks as compact clock faces, never a time zone', () => {
+    // 用户 2026-11-24：五个刻度各印一遍 `2026-11-24 06:00 GMT+8`，标签互相压住、最后一行顶到下一个日期。
+    // 轴只回答「几点」；时区是整张卡的事，不该每个刻度说一次。
+    // 这条用例**不赌跑在几点**：最早的点固定在 48 小时前（跨日必成立），只断言「不带时区、最新那格是 HH:mm」；
+    // 「跨日带 MM-DD」由 `formatShellClock` 自己的单测传死 `now` 钉住。
+    const nowMs = Date.now()
+    const ago = (ms: number): string => new Date(nowMs - ms).toISOString()
+    const markup = render({
+      positioning: {
+        ...availablePositioning,
+        window: '24h',
+        btc: [ago(48 * 3_600_000), ago(12 * 3_600_000), ago(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
+        eth: [ago(48 * 3_600_000), ago(12 * 3_600_000), ago(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
+        hints: []
+      }
+    })
+    const ticks = [...markup.matchAll(/class="mi-positioning-panel__tick">([^<]*)</g)].map(match => match[1] ?? '')
+    expect(ticks).toHaveLength(5)
+    // 一个刻度都不许带时区：五个 `GMT+8` 就是互相压字的来源。
+    for (const tick of ticks) expect(tick).not.toMatch(/GMT|UTC/)
+    // 最新那个刻度就是「现在」，同一天 → 只有 HH:mm（跨日分支的形状归 `formatShellClock` 的单测）。
+    expect(ticks.at(-1)).toMatch(/^\d{2}:\d{2}$/)
   })
 })
 

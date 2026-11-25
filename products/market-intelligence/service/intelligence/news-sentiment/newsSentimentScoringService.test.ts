@@ -724,4 +724,29 @@ describe('one desktop notice per non-low story that just arrived (R40)', () => {
 
     expect(submitNotice).not.toHaveBeenCalled()
   })
+
+  it('stays silent for a backlog built late: stories published two days ago ring zero times when judged now', async () => {
+    // 2026-11-22 事故：归一化被行情源饿死 45 小时，恢复后把 11-20 的条目一次性补建并判定，
+    // 每一条都被当成「刚到达」集中弹出。判定迟到不能把旧闻变成提醒（用户定的 6 小时窗口）。
+    const submitNotice = vi.fn(accepted)
+    const backlog = Array.from({ length: 10 }, (_, index) =>
+      item({
+        itemId: `backlog-${index}`,
+        title: `Binance Futures ends last price protected period ${index}`,
+        publishedAt: '2026-11-20T09:32:10.513Z'
+      })
+    )
+    const { service } = await harness({
+      withModel: true,
+      submitNotice,
+      items: backlog,
+      now: '2026-11-21T20:49:29.982Z'
+    })
+
+    const result = await service.scoreItems({ itemIds: backlog.map((entry) => (entry as { itemId: string }).itemId) })
+
+    // 判定照常写下来（列表要显示），只是不再弹桌面。
+    expect(result.processed).toBe(10)
+    expect(submitNotice).not.toHaveBeenCalled()
+  })
 })

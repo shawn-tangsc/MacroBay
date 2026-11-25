@@ -491,3 +491,52 @@ describe('旧源接入数值列（N2）', () => {
     expect(stored(database).values).toBeUndefined()
   })
 })
+
+/**
+ * **事件行的期次在写的时候就按事件当天算**（Chief 2026-11-24 批 #85）。
+ *
+ * 真库实测：0xrouter 的中文名讲话/事件（没有 `indicator_id`、名字也不在英文事件码表里）走
+ * `source` 分支，期次写成 `unknown:<源内 id>`；而启动规范化按 `event_type` 把同一行解成事件当天。
+ * 两侧规则不一致 → 主键不同 → **每轮回填新建一行、下次启动再并掉**（每轮约 388 行）。
+ *
+ * 收在写入侧（不是收在规范化）：写的时候就用与规范化同一条规则——事件行期次＝活动当天。
+ */
+describe('事件行按事件当天写期次（#85）', () => {
+  function observeEvent(database: DatabaseSync, over: Readonly<{
+    sourceEventId: string; displayName: string; eventKind: string; scheduledAt: string }>): void {
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values (?, '0xrouter', null, ?, 'AR', null, ?, ?, ?, null, null, null, 'medium', '[]', ?)`)
+      .run(over.sourceEventId, over.displayName, over.eventKind, over.scheduledAt.slice(0, 10),
+        over.scheduledAt, over.scheduledAt)
+  }
+  const periods = (database: DatabaseSync) => database.prepare(
+    'select metric_key, period_key from mi_calendar_events order by metric_key').all() as
+    { metric_key: string; period_key: string }[]
+
+  it('中文名讲话（无 indicator_id、市场身份解不出）→ 期次是活动当天，再跑一遍不新增', () => {
+    const database = openDatabase()
+    ensureCalendarStandardTables(database)
+    observeEvent(database, { sourceEventId: '["45125",78986]', displayName: '欧洲央行管委斯图纳拉斯发表讲话',
+      eventKind: 'central-bank-activity', scheduledAt: '2026-11-23T18:10:00.000Z' })
+    backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: '2026-11-23T21:32:48.000Z' })
+    // 改前是 `unknown:["45125",78986]`——与规范化解出来的 `2026-11-23` 相差一期，于是每轮两行。
+    expect(periods(database)).toEqual([{ metric_key: '["45125",78986]', period_key: '2026-11-23' }])
+    const second = backfillStandardRowsFromObservations(database,
+      { providerId: '0xrouter', observedAt: '2026-11-24T03:00:00.000Z' })
+    expect(second.written).toBeGreaterThan(0)
+    expect(periods(database)).toHaveLength(1)
+  })
+
+  it('不是事件类型的行不受影响：仍然按未解析记 `unknown:`（不越界）', () => {
+    const database = openDatabase()
+    ensureCalendarStandardTables(database)
+    // `economic-indicator` 但身份解不出：期次仍然不知道，不许拿发布日期顶。
+    observeEvent(database, { sourceEventId: '["45126",78987]', displayName: '某个没有映射的指标',
+      eventKind: 'economic-indicator', scheduledAt: '2026-11-23T18:10:00.000Z' })
+    backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: '2026-11-23T21:32:48.000Z' })
+    expect(periods(database)).toEqual([{ metric_key: '["45126",78987]', period_key: 'unknown:["45126",78987]' }])
+  })
+})

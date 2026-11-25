@@ -19,8 +19,25 @@ export const MACRO_ECONOMIC_CALENDAR_IPC_METHODS = {
   refreshFedFomcDecision: 'intelligence.macro.economicCalendar.refreshFedFomcDecision',
   syncBlsEmploymentSchedule: 'intelligence.macro.economicCalendar.syncBlsEmploymentSchedule',
   setReleaseTime: 'intelligence.macro.economicCalendar.setReleaseTime',
-  clearReleaseTime: 'intelligence.macro.economicCalendar.clearReleaseTime'
+  clearReleaseTime: 'intelligence.macro.economicCalendar.clearReleaseTime',
+  /** 读已生成的解读（只读；不触发生成）。 */
+  readEventInterpretation: 'intelligence.macro.economicCalendar.readEventInterpretation',
+  /** 生成 / 重试一次解读。档门控在服务侧：低档与未分级一律 `not-applicable`，不花模型调用。 */
+  requestEventInterpretation: 'intelligence.macro.economicCalendar.requestEventInterpretation'
 } as const
+
+/** 解读的四种读者可见状态：有正文 / 该档不生成 / 生成过但失败了 / 还没有（这一份数据没生成过）。 */
+export type MacroCalendarInterpretationView =
+  | Readonly<{ state: 'ready'; text: string; generatedAt: string; evidenceScope: readonly string[] }>
+  | Readonly<{ state: 'not-applicable' }>
+  | Readonly<{ state: 'failed'; failureCode: string }>
+  | Readonly<{ state: 'absent' }>
+
+export type MacroCalendarInterpretationInput = Readonly<{
+  eventKey: string
+  /** 读者界面语言：一份解读只服务一种语言，语言变了重新生成。 */
+  locale: 'zh-CN' | 'en-US'
+}>
 
 export const MACRO_ECONOMIC_CALENDAR_JOB_HANDLER = 'market-intelligence.refreshMacroCalendar' as const
 

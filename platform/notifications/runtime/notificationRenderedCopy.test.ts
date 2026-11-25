@@ -96,6 +96,27 @@ describe('新形状：成品句子只挑不拼', () => {
     expect(diagnostics).toEqual([])
   })
 
+  it("①' 没有 edition 而只写过一版：那一版就是这条记录的语言（老英文版日报通知）", async () => {
+    const { delivery, diagnostics } = harness('zh-CN')
+    const content = await delivery.resolveContent(record({
+      // 2026-11-23 之前落库的英文版日报通知：只带 en-US 一份、没有 edition。
+      // 少了这条指认，中文界面按第②步找不到中文那一份，整条降级成「有一条新通知」+ 空正文。
+      rendered: { 'en-US': RENDERED['en-US']! },
+      eventTypeId: 'market-intelligence.briefing.ready'
+    }))
+
+    expect(content.title).toBe('The 11/06 07:00 English edition is ready.')
+    expect(content.body).toBe('Jobs led the day.')
+    expect(diagnostics).toEqual([])
+  })
+
+  it("①' 两版都在时不认「它自己那一版」：仍按读者语言挑，不抢第②步", async () => {
+    const { delivery } = harness('zh-CN')
+    const content = await delivery.resolveContent(record({ rendered: RENDERED }))
+
+    expect(content.title).toBe('11/06 07:00 中文这一期已经生成。')
+  })
+
   it('③ 两份都没有 → 兜底句 + copy-unresolved，绝不拿另一种语言顶上', async () => {
     const { delivery, diagnostics } = harness('en-US')
     const content = await delivery.resolveContent(record({

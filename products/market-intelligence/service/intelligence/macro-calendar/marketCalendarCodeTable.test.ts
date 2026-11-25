@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { codeTableReasonSets, marketCalendarCodeTable, validateCodeTableRows } from './marketCalendarCodeTable'
+import { resolveCalendarCode } from './marketCalendarCodeLookup'
 import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
@@ -25,7 +26,8 @@ describe('标准码表', () => {
       ...Object.values(zeroXRouterSourceMetricMappings).map((entry) => entry.metricKey),
       ...Object.values(germanSourceMetricMappings).map((entry) => entry.metricKey),
     ]
-    const missing = [...new Set(mappedCodes)].filter((code) => marketCalendarCodeTable[code] === undefined)
+    // 判据走统一查表（架构师 2026-11-25）：目标码可以在主码表或按国家码表里，两表不重叠
+    const missing = [...new Set(mappedCodes)].filter((code) => !resolveCalendarCode(code).found)
     expect(missing, `映射表用了码表里没有的码：${missing.slice(0, 5).join(', ')}`).toEqual([])
     // **事件类型码不在码表里**（2026-11-18 Chief 定）：`evt.*` 是「一类」，不是「一场」，
     // 没有单一主办国；它们的名字由事件码表提供，码表只放带国家的指标行。这里核对它们都有名字。
@@ -84,9 +86,11 @@ describe('标准码表', () => {
       }
     }
     expect(problems.slice(0, 8)).toEqual([])
-    // 闭集本身不许被写窄或写宽。
+    // 闭集本身不许被写窄或写宽。6 = todo / not-public / name-broken / awaiting-data /
+    // period-unresolved / name-incomplete；「机构不公开」与「我们还没核」是两种事实，不许合并。
     expect(codeTableReasonSets['not-built']).toHaveLength(4)
-    expect(codeTableReasonSets.pending).toHaveLength(5)
+    expect(codeTableReasonSets.pending).toHaveLength(6)
+    expect(codeTableReasonSets.pending).toContain('official-source-not-public')
   })
 
   it('事件身份不参与分级：`evt.*` 的 kind 是 event、tier 为 null', () => {
@@ -154,5 +158,42 @@ describe('年度化标记与载入校验', () => {
       }
     }
     expect(() => validateCodeTableRows(broken)).toThrow(/annualization/)
+  })
+
+  /**
+   * 运行时 fail-closed（架构师 2026-11-21 保留③，只补两条、不扩范围）：
+   * 整表断言管的是**现在这份数据**，这两条管的是**以后写错的数据**——写错一个词，
+   * 界面上的「机构不公开」就会变成「我们还没核」，两种事实换了位，事后查不出来。
+   */
+  it('官网页待补理由不在闭集里 → 载入即抛（点名码与取值）', () => {
+    const broken = {
+      'US.CPI.NSA.YOY': {
+        ...marketCalendarCodeTable['US.CPI.NSA.YOY'],
+        officialSource: { pending: true as const, reason: 'official-sauce-todo' as never }
+      }
+    }
+    expect(() => validateCodeTableRows(broken))
+      .toThrow(/US\.CPI\.NSA\.YOY：官网页待补理由不在闭集里（official-sauce-todo）/)
+  })
+
+  it('状态为 pending / not-built 而理由不在对应闭集 → 载入即抛', () => {
+    const pendingBroken = {
+      'US.CPI.NSA.YOY': {
+        ...marketCalendarCodeTable['US.CPI.NSA.YOY'],
+        status: 'pending' as const,
+        reason: 'official-sauce-todo' as never
+      }
+    }
+    expect(() => validateCodeTableRows(pendingBroken))
+      .toThrow(/US\.CPI\.NSA\.YOY：pending 的理由不在闭集里（official-sauce-todo）/)
+    const notBuiltBroken = {
+      'US.CPI.NSA.YOY': {
+        ...marketCalendarCodeTable['US.CPI.NSA.YOY'],
+        status: 'not-built' as const,
+        reason: 'official-source-todo' as never
+      }
+    }
+    expect(() => validateCodeTableRows(notBuiltBroken))
+      .toThrow(/US\.CPI\.NSA\.YOY：not-built 的理由不在闭集里（official-source-todo）/)
   })
 })

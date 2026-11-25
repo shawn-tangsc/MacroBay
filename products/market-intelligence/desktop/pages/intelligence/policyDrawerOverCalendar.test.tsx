@@ -69,7 +69,6 @@ async function mountWithCalendarOpen(): Promise<void> {
   root = createRoot(container)
   await act(async () => root!.render(createElement(CryptoIntelligenceDashboard, {
     client: { queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }) },
-    fearGreedClient: { querySnapshot: async () => ({ state: 'empty' as const, asOf }) },
     fundingRateClient: { query: async () => ({ state: 'empty' as const, asOf }) },
     openInterestClient: { query: async () => ({ state: 'empty' as const, asOf, window: '7d' as const }) },
     now: () => new Date(asOf),

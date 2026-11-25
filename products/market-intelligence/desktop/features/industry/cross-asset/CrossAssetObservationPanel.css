@@ -12,9 +12,12 @@
   --mi-cross-asset-gap: 16px;
   --mi-cross-asset-gap-small: 8px;
   --mi-cross-asset-gap-large: 24px;
-  /* 画布高度按「与左右两栏内容块等高」定标（约 250px 一栏）：
-     图例 20 + 图表 100 + 刻度 30 + 内边距 → 中央栏约 260px。 */
-  --mi-cross-asset-chart-height: 100px;
+  /* 图框地板：宽档 116，窄档（单栏）150。这块是**地板**不是高度——现在由行高定块高、图吃剩下的余量，
+     见下面 `@container` 那段注释。
+     窄档 150 是界面设计 2026-11-23 定的，两条理由都是量出来的：单栏里五条线的浮层要 157，栏高
+     150 + 刻度 30 = 180、可用 164，装得下并余 7；同时单栏绘图区约 538 宽，100 那版是 538×88
+     ≈ 6.1:1，五条归一曲线被压成一条带，150 之后 538×138 ≈ 3.9:1 才看得出形状。不是随手加高。 */
+  --mi-cross-asset-chart-height: 150px;
   --mi-cross-asset-chart-height-wide: 116px;
   /* 空状态与图表共用同一高度，避免加载完成后整块跳动。 */
   --mi-cross-asset-axis-width: 62px;
@@ -54,16 +57,21 @@
 .mi-cross-asset__chart { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 /* 标题右角：一个勾 + 那张卡唯一的按钮；`margin-left:auto` 把它们一起推到最右。 */
 .mi-cross-asset__heading-actions { margin-left: auto; display: inline-flex; align-items: center; gap: var(--mi-cross-asset-gap-small); }
-.mi-cross-asset__heading-actions .ant-switch { margin: 0; }
 .mi-cross-asset__chart-actions, .mi-cross-asset__quote-heading, .mi-cross-asset__status { display: flex; align-items: center; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
 /*
- * 左栏的高度由同一行里更高的那一列决定，而表只按内容排：余量全堆在表底下，看起来像一块空白
- * （用户 2026-11-18：「这个表格可以高一点，把现在的高度撑满」「就是每一行」）。
- * 做法：左栏改成列向 flex，表 `flex: 1` 吃掉余量，`table-layout: fixed` 会把多出来的高度
- * **平均分到每一行**；单元格垂直居中，读数落在行的中线上。窄屏单列时没有固定高度，行为不变。
+ * 行的顺序：**行按自己的内边距与行高排，图吃剩下的**（用户 2026-11-23）。
+ *
+ * 2026-11-18 那版相反：左栏列向 flex、表 `flex: 1` 吃余量，`table-layout: fixed` 把多出来的高度
+ * 平均分到每一行——表的行只有四五排时，余量就被摊成每行 70–80px，读者看到的是「每一行都很大」
+ * （用户 2026-11-23 截图：市场状态只剩 4 行，每行被拉开）。所以表不再伸缩：它按内容排，
+ * 左栏仍然撑满整行（右边那条分隔线要到底），余量留在表下方。
+ * 单元格垂直居中，读数落在行的中线上；窄屏单列时没有并排的列，行为不变。
  */
 .mi-cross-asset__quote { display: flex; flex-direction: column; }
 .mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }
+/* 行高走应用列表行那一档（ui-rules 速查：列表行 44 单行 / 60 两行）。
+   不用「自然高」：四五行的表自然高只有 29，旁边那张图的地板都比它高，左栏底下会空出一大块。 */
+.mi-cross-asset__status-table tbody tr { height: 44px; }
 .mi-cross-asset__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mi-cross-asset-gap); }
 .mi-cross-asset__body > * { min-width: 0; box-sizing: border-box; }
 .mi-cross-asset__quote > strong { display: inline-block; font-size: 24px; margin: 10px 6px 2px 0; }
@@ -100,9 +108,21 @@
  * stretches to the grid row (the table's height), the chart takes what is left after its own toolbar and
  * legend, and the plot fills the frame — its `preserveAspectRatio="none"` svg stretches with it.
  */
+/*
+ * 图框 + 刻度是一栏（浮层的定位与高度都以它为准）。
+ *
+ * 浮层原来挂在 `.mi-cross-asset__plot` 上，`max-height: calc(100% - 16px)` 量的是**绘图区**：
+ * 行高改 44 之后绘图区只有 104–171，而五条线的浮层要 140 出头，五行裁 3、四行裁 25、三行裁 27，
+ * 还长出一条滚动条（用户 2026-11-23 真机，悬停是这张图唯一的读数出口）。
+ * 挂到这一栏上、仍然保持 `flex: 1`，图框照旧吃余量，浮层可以压到刻度那一行，但不越过图例。
+ */
+.mi-cross-asset__chart-area { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .mi-cross-asset__chart-frame { display: grid; grid-template-columns: var(--mi-cross-asset-axis-width) minmax(0, 1fr); gap: var(--mi-cross-asset-gap-small); padding-block: 6px; flex: 1; min-height: var(--mi-cross-asset-chart-height); }
+/* `svg` 必须脱离文档流：它在 `viewBox="0 0 1000 200"` 下有自己的内在比例（宽 × 0.2），
+   放在流里会把图框的地板算成「宽 × 0.2 + 内边距」，地板写多少都盖不过它（界面设计 2026-11-23 探到）。
+   所以绘图区定位、svg 绝对铺满：高度只由上层的行高与地板决定。 */
 .mi-cross-asset__plot { position: relative; height: 100%; min-width: 0; }
-.mi-cross-asset__plot svg { width: 100%; height: 100%; overflow: visible; }
+.mi-cross-asset__plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .mi-cross-asset__plot path { fill: none; stroke: var(--asset-color); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .mi-cross-asset__plot [data-forming-line] circle { fill: var(--asset-color); stroke: var(--mi-cross-asset-surface); stroke-width: 1; vector-effect: non-scaling-stroke; }
 /*
@@ -126,14 +146,24 @@
 .mi-cross-asset__ticks { position: relative; min-height: 3em; margin-left: calc(var(--mi-cross-asset-axis-width) + var(--mi-cross-asset-gap-small)); color: var(--mi-cross-asset-muted); font-size: 10px; }
 .mi-cross-asset__ticks time { position: absolute; box-sizing: border-box; width: calc(100% / var(--mi-cross-asset-tick-count)); overflow-wrap: anywhere; }
 .mi-cross-asset__crosshair { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--mi-cross-asset-muted); pointer-events: none; }
+/* `100%` 是 `.mi-cross-asset__chart-area`（图框 + 刻度）的高度，不是绘图区：见上面那条注释。 */
 .mi-cross-asset__tooltip { position: absolute; box-sizing: border-box; width: var(--mi-cross-asset-tooltip-width); max-width: calc(100% - var(--mi-cross-asset-tooltip-inset) - var(--mi-cross-asset-tooltip-inset)); max-height: calc(100% - var(--mi-cross-asset-tooltip-inset) - var(--mi-cross-asset-tooltip-inset)); overflow: auto; padding: 9px; border: 1px solid var(--mi-cross-asset-line); background: var(--mi-cross-asset-surface); z-index: 2; font-size: 11px; pointer-events: none; }
 .mi-cross-asset__tooltip time { display: block; margin-bottom: 6px; overflow-wrap: anywhere; }
 .mi-cross-asset__tooltip span { display: flex; align-items: center; gap: 6px; padding-block: 3px; }
 .mi-cross-asset__tooltip b { margin-left: auto; }
 /* CrossAssetLayoutPolicy thresholds from 123; custom properties cannot be used in container conditions. */
+/*
+ * 高度怎么分：**行高固定 44，整块不再有下限，图吃剩下的余量**（用户 2026-11-23）。
+ *
+ * 2026-11-22 那版给整行加过 342 / 330 的下限，当时按五行算的「保持删块前的高度」；等表里只剩四行，
+ * 四行分 342 就成了每行 80 上下，读者看到的是「每一行被拉得很大」（用户 2026-11-23 截图）。
+ * 所以整行下限撤掉、表不再吃余量（`flex: none`），行高改由列表行档 44 定；图框只留既有那块地板 116。
+ * 整块高度 = max(表高, 图那一栏的最小高度)，四行与五行每行都是 44，差值来自行数而不是拉伸。
+ * 窄于 800 是单栏：没有并排的图，不写规则。
+ */
 @container mi-cross-asset (min-width: 800px) {
   .mi-cross-asset__body { grid-template-columns: var(--mi-cross-asset-quote-medium) minmax(0, 1fr); }
-  /* Taller by default here, but the height is the row's: this is a floor, not a ceiling. */
+  /* 这块是地板，不是高度：图随行高长（`flex: 1`），但不许被压到看不见走势。 */
   .mi-cross-asset__chart-frame { min-height: var(--mi-cross-asset-chart-height-wide); }
 }
 @container mi-cross-asset (min-width: 1200px) {
@@ -150,7 +180,7 @@
    asset column because the rows must line up with their header: letting content size the columns
    made the hint under each name set the width, so the four numeric columns drifted out from under
    their own headings. Numbers never wrap; the name and its hint may. */
-.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; flex: 1 1 auto; }
+.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; flex: none; }
 /* Six columns since the ladder became 15m/1h/4h/24h. Every share is explicit: with equal remaining
    width the four windows came out around 42px and the two-decimal percentages ran together into
    what read as one long number (`+0.09%0.06%0.27%0.43%`), so the name and the level give the four
@@ -191,38 +221,9 @@
    carried by `data-live-state` rather than by the wording alone. */
 .mi-cross-asset__status-table tbody th .mi-cross-asset__live { display: inline-block; margin-left: 3px; padding: 0 3px; border: 1px solid var(--mi-cross-asset-line); border-radius: 3px; color: var(--muted); font-size: 8.5px; font-style: normal; font-weight: 500; vertical-align: 1px; white-space: nowrap; }
 .mi-cross-asset__status-table tbody th .mi-cross-asset__live[data-live-state='live'] { color: var(--mi-dashboard-positive); border-color: var(--mi-dashboard-positive); }
-/* Section label and divider: the daily block states its own frequency rather than inheriting the
-   window headings above it. */
-.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section th { text-align: left; font-weight: 500; color: var(--muted); font-size: 9.5px; padding-top: 6px; border-top: 1px solid var(--mi-cross-asset-line); }
-/* The block's rhythm rides on the same line as its heading, as a hint behind an icon: one gap keeps
-   the 22px trigger from reading as part of the 9.5px word beside it (reader, 2026-11-06), and the
-   icon sits on the text's baseline rather than lifting the row's other cells. */
-/* 标题与 ⓘ 在同一行：容器是 inline-flex，图标 `flex: none` 不许被压缩、也不许被挤到下一行。
-   之前它们是两个块级兄弟，窄一点 icon 就掉到第二行，还因为脱离行内流画出默认按钮的方框
-   （读者 2026-11-08 截图）。 */
-.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section-heading {
-  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-}
-.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section-hint {
-  flex: none; margin-left: 0;
-}
-
-/* The daily cell carries two different statements: the move over the day, and the context that makes it
-   readable (term spread, inflation expectation). Run together on one line they read as a single
-   sentence; stacked, the change is the answer and the context is beneath it. */
-.mi-cross-asset__status-table tbody td.mi-cross-asset__daily { white-space: normal; }
-.mi-cross-asset__status-table tbody td.mi-cross-asset__daily > strong { display: block; white-space: nowrap; }
-.mi-cross-asset__status-table tbody td.mi-cross-asset__daily small { display: block; margin-top: 1px; opacity: .8; }
-
 .mi-cross-asset__not-connected { text-align: left !important; white-space: normal !important; color: var(--muted); }
 .mi-cross-asset__not-connected span { font-size: 12px; }
 .mi-cross-asset__not-connected small { display: block; font-size: 9.5px; opacity: .75; }
-/* The rate rows answer with one merged daily cell instead of four intraday windows. It carries no new
-   look — the same type scale, the same `data-direction` colouring the window cells use — it only lets
-   the optional 期限利差/通胀预期 line break beneath the figure it belongs to instead of running on. */
-.mi-cross-asset__status-table td.mi-cross-asset__daily { white-space: normal; }
-.mi-cross-asset__daily small { display: block; color: var(--muted); font-size: 9px; font-weight: 400; }
-
 /* The reading line (design 142 §6, the reader's choice B1): one footnote spanning the panel under the
    chart, not a card. A single rule above it and 6px of padding keep it reading as an annotation of the
    chart rather than as a block competing with the analysis beside the panel. Below a 1200px container it

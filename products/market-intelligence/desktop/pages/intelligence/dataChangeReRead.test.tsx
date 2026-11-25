@@ -54,12 +54,23 @@ async function deliverDataChanged(payload: unknown): Promise<void> {
   await flush()
 }
 
+/** 看板上恐惧贪婪只从复合查询读；空态就有这一份最小结果（偏斜还没接入）。 */
+function emptyCard(input: { asOf: string; timeZone?: string }) {
+  return {
+    asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone ?? 'UTC',
+    fearGreed: { state: 'empty' as const }, optionSkew: { state: 'not-connected' as const }
+  }
+}
+
+/** 卡的读口吃合并后的 revision：事件之后要过 5 秒安静窗口才真的重读一次。 */
+async function advanceCard(): Promise<void> { await act(async () => { await vi.advanceTimersByTimeAsync(5000) }) }
+
 async function flush(): Promise<void> {
   await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 }
 
 type Counts = {
-  fearGreed: number
+  sentimentOptions: number
   fundingRate: number
   openInterest: number
   divergence: number
@@ -74,7 +85,7 @@ async function render() {
   policyPathRead.mockResolvedValue({ state: 'unavailable', reason: 'query-failed' })
 
   const query = {
-    fearGreed: vi.fn(async () => ({ state: 'empty' as const, asOf })),
+    sentimentOptions: vi.fn(async (input: { asOf: string; timeZone: string }) => emptyCard(input)),
     fundingRate: vi.fn(async () => ({ state: 'empty' as const, asOf })),
     openInterest: vi.fn(async () => ({ state: 'empty' as const, asOf, window: '7d' as const })),
     divergence: vi.fn(async () => ({ state: 'unavailable' as const, reason: 'query-failed' as const, missing: [] })),
@@ -92,7 +103,7 @@ async function render() {
         timeZone: 'UTC',
         children: createElement(CryptoIntelligenceDashboard, {
           client: { queryMonth: query.calendar },
-          fearGreedClient: { querySnapshot: query.fearGreed },
+          sentimentOptionsClient: { query: query.sentimentOptions },
           fundingRateClient: { query: query.fundingRate },
           openInterestClient: { query: query.openInterest },
           divergenceClient: { query: query.divergence },
@@ -123,7 +134,7 @@ async function render() {
   await flush()
 
   const counts = (): Counts => ({
-    fearGreed: query.fearGreed.mock.calls.length,
+    sentimentOptions: query.sentimentOptions.mock.calls.length,
     fundingRate: query.fundingRate.mock.calls.length,
     openInterest: query.openInterest.mock.calls.length,
     divergence: query.divergence.mock.calls.length,
@@ -140,23 +151,26 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     const { container, counts } = await render()
     const before = counts()
     // 六个读口都真的读过一轮（门禁放行后才会有这次读）。
-    expect(before).toEqual({ fearGreed: 1, fundingRate: 1, openInterest: 1, divergence: 1, capital: 1, policyPath: 1, calendar: 1 })
-    const cardBefore = container.querySelector('.mi-crypto-dashboard__sentiment')
+    expect(before).toEqual({ sentimentOptions: 1, fundingRate: 1, openInterest: 1, divergence: 1, capital: 1, policyPath: 1, calendar: 1 })
+    const cardBefore = container.querySelector('.mi-defensive-premium')
     expect(cardBefore).not.toBeNull()
 
     await deliverDataChanged({ panels: ['dashboard'], sources: ['alternative-fear-greed', 'binance-futures'] })
+    const immediate = counts()
+    // 其它读口当场重读；卡吃的是合并后的 revision，安静窗口没到之前一次都不发。
+    expect(immediate.fundingRate).toBe(before.fundingRate + 1)
+    expect(immediate.openInterest).toBe(before.openInterest + 1)
+    expect(immediate.divergence).toBe(before.divergence + 1)
+    expect(immediate.capital).toBe(before.capital + 1)
+    expect(immediate.policyPath).toBe(before.policyPath + 1)
+    expect(immediate.sentimentOptions).toBe(before.sentimentOptions)
 
-    const after = counts()
-    expect(after.fearGreed).toBe(before.fearGreed + 1)
-    expect(after.fundingRate).toBe(before.fundingRate + 1)
-    expect(after.openInterest).toBe(before.openInterest + 1)
-    expect(after.divergence).toBe(before.divergence + 1)
-    expect(after.capital).toBe(before.capital + 1)
-    expect(after.policyPath).toBe(before.policyPath + 1)
+    await advanceCard()
+    expect(counts().sentimentOptions).toBe(immediate.sentimentOptions + 1)
     // 日历月不是 `dashboard` 面板：这一条不许把它一起带走。
-    expect(after.calendar).toBe(before.calendar)
+    expect(counts().calendar).toBe(before.calendar)
     // 重读不是重挂载：同一个 DOM 节点还在原处（换掉订阅那一行就会红）。
-    expect(container.querySelector('.mi-crypto-dashboard__sentiment')).toBe(cardBefore)
+    expect(container.querySelector('.mi-defensive-premium')).toBe(cardBefore)
   })
 
   it('ignores a calendar write for the dashboard read points, and re-reads the month for it', async () => {
@@ -166,7 +180,7 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     await deliverDataChanged({ panels: ['economic-calendar'], sources: ['macro-calendar-0xrouter-economic-data'] })
 
     const after = counts()
-    expect(after.fearGreed).toBe(before.fearGreed)
+    expect(after.sentimentOptions).toBe(before.sentimentOptions)
     expect(after.fundingRate).toBe(before.fundingRate)
     expect(after.openInterest).toBe(before.openInterest)
     expect(after.divergence).toBe(before.divergence)
@@ -186,14 +200,14 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     // `dashboard` 就一个看板读口都不动（日历那一处是它自己的面板命中，另算）。
     const after = counts()
     expect({
-      fearGreed: after.fearGreed,
+      sentimentOptions: after.sentimentOptions,
       fundingRate: after.fundingRate,
       openInterest: after.openInterest,
       divergence: after.divergence,
       capital: after.capital,
       policyPath: after.policyPath
     }).toEqual({
-      fearGreed: before.fearGreed,
+      sentimentOptions: before.sentimentOptions,
       fundingRate: before.fundingRate,
       openInterest: before.openInterest,
       divergence: before.divergence,
@@ -207,8 +221,10 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     const before = counts()
 
     await deliverDataChanged({ panels: ['dashboard'], sources: ['fred-rates-liquidity'] })
+    await advanceCard()
     const once = counts()
     expect(once.openInterest).toBe(before.openInterest + 1)
+    expect(once.sentimentOptions).toBe(before.sentimentOptions + 1)
 
     // 同一次投递发两遍：读口只重读一轮（两遍算同一个 revision），不发起两路并发。
     await act(async () => {
@@ -216,9 +232,10 @@ describe('看板按「采集写了库」重读自己的读口', () => {
       delivered.forEach(listener => listener({ panels: ['dashboard'], sources: ['fred-rates-liquidity'] }))
     })
     await flush()
+    await advanceCard()
 
     expect(counts().openInterest).toBe(once.openInterest + 1)
-    expect(counts().fearGreed).toBe(once.fearGreed + 1)
+    expect(counts().sentimentOptions).toBe(once.sentimentOptions + 1)
   })
 
   it('leaves the last reading on screen while the re-read is in flight', async () => {
@@ -226,14 +243,14 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     installProductEventChannel()
     policyPathRead.mockResolvedValue({ state: 'unavailable', reason: 'query-failed' })
     let resolveFunding: ((value: unknown) => void) | undefined
-    let resolveFearGreed: ((value: unknown) => void) | undefined
+    let resolveFearGreed: (() => void) | undefined
     const funding = vi.fn()
       .mockResolvedValueOnce({ state: 'empty' as const, asOf })
       .mockImplementationOnce(() => new Promise((resolve) => { resolveFunding = resolve }))
     const query = {
-      fearGreed: vi.fn()
-        .mockResolvedValueOnce({ state: 'empty' as const, asOf })
-        .mockImplementationOnce(() => new Promise((resolve) => { resolveFearGreed = resolve })),
+      sentimentOptions: vi.fn()
+        .mockResolvedValueOnce(emptyCard({ asOf }))
+        .mockImplementationOnce((input: { asOf: string; timeZone: string }) => new Promise((resolve) => { resolveFearGreed = () => resolve(emptyCard(input)) })),
       openInterest: vi.fn(async () => ({ state: 'empty' as const, asOf, window: '7d' as const })),
       divergence: vi.fn(async () => ({ state: 'unavailable' as const, reason: 'query-failed' as const, missing: [] })),
       capital: vi.fn(async () => { throw new Error('no snapshot') }),
@@ -248,7 +265,7 @@ describe('看板按「采集写了库」重读自己的读口', () => {
           timeZone: 'UTC',
           children: createElement(CryptoIntelligenceDashboard, {
             client: { queryMonth: query.calendar },
-            fearGreedClient: { querySnapshot: query.fearGreed },
+            sentimentOptionsClient: { query: query.sentimentOptions },
             fundingRateClient: { query: funding },
             openInterestClient: { query: query.openInterest },
             divergenceClient: { query: query.divergence },
@@ -271,19 +288,20 @@ describe('看板按「采集写了库」重读自己的读口', () => {
     await flush()
 
     await act(async () => { delivered.forEach(listener => listener({ panels: ['dashboard'], sources: ['binance-futures'] })) })
+    await advanceCard()
     // 重读在飞：行/卡不许退回「加载中」（这一条正是「不清空、不置 loading」的判据）。
     expect(funding).toHaveBeenCalledTimes(2)
-    expect(query.fearGreed).toHaveBeenCalledTimes(2)
+    expect(query.sentimentOptions).toHaveBeenCalledTimes(2)
     expect(host.textContent).not.toContain(text.positioning.loading)
     expect(host.textContent).not.toContain(text.fearGreed.loading)
 
     await act(async () => {
       resolveFunding?.({ state: 'empty' as const, asOf })
-      resolveFearGreed?.({ state: 'empty' as const, asOf })
+      resolveFearGreed?.()
     })
     await flush()
     expect(funding).toHaveBeenCalledTimes(2)
-    expect(query.fearGreed).toHaveBeenCalledTimes(2)
+    expect(query.sentimentOptions).toHaveBeenCalledTimes(2)
   })
 
   it('stops subscribing once the page is gone', async () => {

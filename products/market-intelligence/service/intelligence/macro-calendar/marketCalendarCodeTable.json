@@ -1206,8 +1206,11 @@
     "measure": "RATE",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出制造业产能利用率"
     },
     "status": "active"
   },
@@ -1227,8 +1230,11 @@
     "measure": "RATE",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出总行业产能利用率"
     },
     "status": "active"
   },
@@ -1311,8 +1317,11 @@
     "measure": "COUNT",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Challenger, Gray & Christmas",
+      "url": "https://www.challengergray.com/blog/category/job-cuts-report/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "挑战者 · 月度裁员公告报告分类页，含当月裁员总数"
     },
     "status": "active"
   },
@@ -1332,8 +1341,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Challenger, Gray & Christmas",
+      "url": "https://www.challengergray.com/blog/category/job-cuts-report/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "挑战者 · 同一份月度裁员公告报告给出环比"
     },
     "status": "active"
   },
@@ -1353,8 +1365,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Challenger, Gray & Christmas",
+      "url": "https://www.challengergray.com/blog/category/job-cuts-report/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "挑战者 · 同一份月度裁员公告报告给出同比"
     },
     "status": "active"
   },
@@ -1419,8 +1434,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/consumer-confidence",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "咨商会 · 消费者信心指数官方主题页，含当月指数"
     },
     "status": "active"
   },
@@ -1536,8 +1554,11 @@
     "measure": "CHANGE",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g19/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.19 · 消费信贷当月发布，含总额与年率变动"
     },
     "status": "active"
   },
@@ -1798,8 +1819,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of Cleveland",
+      "url": "https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "克利夫兰联储 · 通胀即时预测页，发布 CPI 月度即时预测"
     },
     "status": "active"
   },
@@ -1891,8 +1915,11 @@
     "measure": "DIFF",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "U.S. Bureau of Economic Analysis",
+      "url": "https://www.bea.gov/data/intl-trade-investment/international-transactions",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "BEA · 国际交易（含经常帐）官方数据集页"
     },
     "status": "active"
   },
@@ -2365,8 +2392,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 调查同一份月报的 employment 分项"
     },
     "status": "active"
   },
@@ -2386,8 +2416,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 调查同一份月报的 new orders 分项"
     },
     "status": "active"
   },
@@ -2407,8 +2440,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 调查同一份月报的 prices paid 分项"
     },
     "status": "active"
   },
@@ -2428,8 +2464,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 调查同一份月报的 prices received 分项"
     },
     "status": "active"
   },
@@ -2449,8 +2488,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/survey/empire/empiresurvey_overview",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · Empire State 制造业调查官方页，月报主指数为 general business conditions"
     },
     "status": "active"
   },
@@ -2470,8 +2512,11 @@
     "measure": "COUNT",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "National Association of Realtors",
+      "url": "https://www.nar.realtor/research-and-statistics/housing-statistics/existing-home-sales",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "NAR · 成屋销售统计页，含季调年化销售总数"
     },
     "status": "active"
   },
@@ -2491,8 +2536,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "National Association of Realtors",
+      "url": "https://www.nar.realtor/research-and-statistics/housing-statistics/existing-home-sales",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "NAR · 成屋销售统计页同一份发布给出月率"
     },
     "status": "active"
   },
@@ -2656,8 +2704,11 @@
     "measure": "YOY",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Housing Finance Agency",
+      "url": "https://www.fhfa.gov/data/hpi",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "FHFA · HPI 官方页，月度新闻稿含年率"
     },
     "status": "active"
   },
@@ -2677,8 +2728,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Housing Finance Agency",
+      "url": "https://www.fhfa.gov/data/hpi",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "FHFA · 房价指数（HPI）官方页，含月度购买型指数"
     },
     "status": "active"
   },
@@ -2698,8 +2752,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Housing Finance Agency",
+      "url": "https://www.fhfa.gov/data/hpi",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "FHFA · HPI 官方页，月度新闻稿含月率"
     },
     "status": "active"
   },
@@ -2719,8 +2776,11 @@
     "measure": "ANNUALIZED_QOQ",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "U.S. Bureau of Economic Analysis",
+      "url": "https://www.bea.gov/data/gdp/gross-domestic-product",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "BEA · GDP 发布内含 final sales 分项，按年化季率发布"
     },
     "status": "active"
   },
@@ -2833,8 +2893,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/research/policy/gscpi",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · 全球供应链压力指数（GSCPI）官方页"
     },
     "status": "active"
   },
@@ -2968,8 +3031,11 @@
     "measure": "YOY",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出总指数按年变化"
     },
     "status": "active"
   },
@@ -2989,8 +3055,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 工业产出与产能利用率当月发布，含总指数月率"
     },
     "status": "active"
   },
@@ -3032,7 +3101,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3053,7 +3122,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3074,7 +3143,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3095,7 +3164,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3116,7 +3185,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3137,7 +3206,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3158,7 +3227,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3179,7 +3248,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3200,7 +3269,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3221,7 +3290,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3242,7 +3311,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3263,7 +3332,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3284,7 +3353,7 @@
     "seasonality": "SA",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -3511,8 +3580,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/employment-trends-index",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "咨商会 · 就业趋势指数（ETI）官方主题页"
     },
     "status": "active"
   },
@@ -3532,8 +3604,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/us-leading-indicators",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "咨商会 · 领先经济指标官方主题页，含月度环比"
     },
     "status": "active"
   },
@@ -3595,8 +3670,11 @@
     "measure": "YOY",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出制造业产出按年变化"
     },
     "status": "active"
   },
@@ -3616,8 +3694,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出制造业产出月率"
     },
     "status": "active"
   },
@@ -4103,8 +4184,11 @@
     "measure": "YOY",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "National Association of Realtors",
+      "url": "https://www.nar.realtor/research-and-statistics/housing-statistics/pending-home-sales",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "NAR · 待售房屋销售统计页，含指数按年变化"
     },
     "status": "active"
   },
@@ -4124,8 +4208,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "National Association of Realtors",
+      "url": "https://www.nar.realtor/research-and-statistics/housing-statistics/pending-home-sales",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "NAR · 待售房屋销售统计页同一份发布给出月率"
     },
     "status": "active"
   },
@@ -4707,7 +4794,7 @@
     "seasonality": "NONE",
     "officialSource": {
       "pending": true,
-      "reason": "official-source-todo"
+      "reason": "official-source-not-public"
     },
     "status": "active"
   },
@@ -4868,8 +4955,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of Richmond",
+      "url": "https://www.richmondfed.org/region_communities/regional_data_analysis/business_surveys/manufacturing",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "里奇蒙联储 · 制造业调查当前结果页（composite manufacturing index）"
     },
     "status": "active"
   },
@@ -4889,8 +4979,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of Richmond",
+      "url": "https://www.richmondfed.org/region_communities/regional_data_analysis/business_surveys/non-manufacturing",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "里奇蒙联储 · 非制造业调查当前结果页（原service sector调查，已改名并沿用同一系列）"
     },
     "status": "active"
   },
@@ -4910,8 +5003,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of Richmond",
+      "url": "https://www.richmondfed.org/region_communities/regional_data_analysis/business_surveys/manufacturing",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "里奇蒙联储 · 制造业调查当前结果页，月报含 shipments 分项指数"
     },
     "status": "active"
   },

@@ -16,6 +16,7 @@ import { release } from 'node:os'
 import { basename, join } from 'node:path'
 
 import { readTextFilePreview } from '../../../files/attachments/textFilePreview'
+import { isExternalUrl } from '../../../notifications/contracts/externalUrl'
 import {
   clampWindowSizeToMinimum,
   DEFAULT_MIN_WINDOW_HEIGHT,
@@ -134,7 +135,9 @@ export function registerWindowIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: Windo
     })
   })
   ipcMain.handle(IpcChannels.shellOpenExternal, (_event: IpcMainInvokeEvent, url: string) => {
-    if (!url.startsWith('https://') && !url.startsWith('http://')) {
+    // 判据只有一份（`isExternalUrl`），与渲染层的动作按钮共用：两处各写一套时，协议大小写
+    // 的差异会让按钮画得出来、点下去这里 throw，而调用点把 rejection 吞掉——点了没反应。
+    if (!isExternalUrl(url)) {
       throw new Error('Only http(s) URLs can be opened externally.')
     }
     return shell.openExternal(url)

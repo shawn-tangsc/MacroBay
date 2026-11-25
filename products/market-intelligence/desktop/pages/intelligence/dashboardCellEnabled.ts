@@ -42,10 +42,13 @@ export const QUOTES_STATUS_ROW_CELLS: Readonly<Record<CrossAssetStatusId, readon
   btc: [dashboardCellId('quotes', 'btc')],
   eth: [dashboardCellId('quotes', 'eth')],
   dxy: [dashboardCellId('quotes', 'usd'), dashboardCellId('quotes', 'usd-fallback')],
-  gold: [dashboardCellId('quotes', 'gold'), dashboardCellId('quotes', 'gold-fallback')],
-  us10y: [dashboardCellId('quotes', 'ust10y')],
-  realRate: [dashboardCellId('quotes', 'ust10y')]
+  gold: [dashboardCellId('quotes', 'gold'), dashboardCellId('quotes', 'gold-fallback')]
+  // 美债 10Y 与实际利率的两行已搬进「国债收益率 · 日频」卡（用户 2026-11-22 定）；
+  // 那一格的开关仍然管那张卡，由下面的 `macroRates` 直接读同一格。
 })
+
+/** `quotes:usd` → `usd`：同一份表算出来的格 id 要拆回格键时只在这里拆，别处不拼字符串。 */
+export const cellKeyOfId = (cellId: string): string => cellId.slice(cellId.indexOf(':') + 1)
 
 /**
  * 一格可以选哪些源：这一格的主源 + 紧跟其后的备用行（`fallback: true`）。
@@ -72,20 +75,31 @@ export function cellSourceChoices(moduleId: string, cellKey: string): readonly s
 }
 
 /**
- * 美元格选了哪个源（没选 / 选了不在这格范围内的源 → undefined，走默认规则）。
+ * 美元格读哪个源：先看这一行里**启用的那一格**（主格优先，主格关掉就看备用格）。
+ *
+ * 一行有两个格（`quotes:usd` 与 `quotes:usd-fallback`），「任一启用就算这行在读」。取源必须跟着
+ * 启用的那一格走：只按主格取的话，读者关了主格、开了备用格（十二数据的合成美元）时，这一行仍会去
+ * 要主格那个源（真机 2026-11-24：真 DXY 被套餐拒，合成那条有数也不显示）。
+ *
+ * 没选过 / 选了不在这格范围内的源 → `undefined`，走服务侧的默认规则（真实那条优先，读不到时兜底）。
+ * 两格都关 → 也不传：行已经不画了。
  *
  * 格 id 随卡片合并不是固定的：`490231e` 把「跨资产」并入「行情卡」之后，美元格只剩
  * `quotes:usd`（旧的 `cross-asset:usd` 已不存在）。所以这里仍经 `dashboardCellId` 查表，
  * 别处不会拿着一个已经消失的键去读。
  */
 export function selectedDollarSourceId(
-  selections: Readonly<Record<string, string>>
+  selections: Readonly<Record<string, string>>,
+  cells: Readonly<Record<string, boolean>> = {}
 ): string | undefined {
-  const cellId = dashboardCellId('quotes', 'usd')
-  const chosen = selections[cellId]
-  if (chosen === undefined) return undefined
-  const allowed = new Set(cellSourceChoices('quotes', 'usd'))
-  return allowed.has(chosen) ? chosen : undefined
+  for (const cellKey of ['usd', 'usd-fallback'] as const) {
+    const cellId = dashboardCellId('quotes', cellKey)
+    if (!isCellEnabled(cells, cellId)) continue
+    const chosen = selections[cellId]
+    const allowed = new Set(cellSourceChoices('quotes', cellKey))
+    return chosen !== undefined && allowed.has(chosen) ? chosen : undefined
+  }
+  return undefined
 }
 
 /** 源级启用表：`sourceId → enabled`；整表读不到时是 undefined（未知），不许当成「全都启用」。 */
@@ -155,7 +169,8 @@ export function resolveDashboardReadGates(cells: Readonly<Record<string, boolean
     // 图表与三行同读一份跨资产快照：三格都关掉才停这一路。
     crossAsset: rowEnabled('index') || rowEnabled('btc') || rowEnabled('eth'),
     macroMarket: rowEnabled('dxy') || rowEnabled('gold'),
-    macroRates: rowEnabled('us10y'),
+    // 国债收益率那张卡读的还是同一格（`quotes/ust10y`）：行的位置没了，格的开关没变。
+    macroRates: isCellEnabled(cells, dashboardCellId('quotes', 'ust10y')),
     fearGreed: isCellEnabled(cells, dashboardCellId('fear-greed', 'index')),
     capital: isAnyCellEnabled(cells, [dashboardCellId('capital', 'stablecoin'), dashboardCellId('capital', 'etf')]),
     positioning: isAnyCellEnabled(cells, [dashboardCellId('positioning', 'oi'), dashboardCellId('positioning', 'funding')]),

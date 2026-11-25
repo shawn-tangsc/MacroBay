@@ -93,6 +93,11 @@ export type DailyBriefingStore = BriefingEditionSlotStore & BriefingAttemptRunSt
   list: (from: string, to: string, locale: DailyBriefingLocale) => Promise<readonly DailyBriefingStoredEdition[]>
   prune: (beforeDate: string) => Promise<void>
   /**
+   * 海报的表与清理（`briefing_posters`）。仓储层装配它，清理只在 `prune` / `deletePeriod` 两处跟。
+   * 可选：没有海报存储的装配（旧测试、纯内存替身）照旧工作。
+   */
+  posters?: import('./briefingPosterStore').BriefingPosterStore
+  /**
    * Opens a row in state `running` and returns its attempt number. The number is allocated here and
    * nowhere else; a session link only refers to it.
    */

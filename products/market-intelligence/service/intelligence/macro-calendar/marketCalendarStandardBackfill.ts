@@ -14,8 +14,8 @@ import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import type { CalendarStandardWriteLayer, CalendarStandardWriterId } from './calendarStandardWriteLayer'
 import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import { routeStandardRelease } from './marketCalendarStandardRowRouting'
-import { ensureCalendarStandardTables, recordCalendarUnmapped, type CalendarUnmappedReason }
-  from './marketCalendarStandardTable'
+import { calendarStandardTablePolicy, ensureCalendarStandardTables, recordCalendarUnmapped,
+  type CalendarUnmappedReason } from './marketCalendarStandardTable'
 
 /**
  * **从观测表回填标准表**（一次性，可重复跑）。
@@ -204,6 +204,17 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   let periodRuleConflicts = 0
   const periodRuleConflictIdentities = new Set<string>()
   const standardRows: Record<string, unknown>[] = []
+  /**
+   * **这条源内发布已经写下的正常期次**（只用于「写侧算不出期次」时的沿用，见下面的 source 分支）。
+   * 一条 SQL 只准备一次：回填一轮几千行，逐行 prepare 是白开销。
+   */
+  const standardTableExists = database.prepare("select 1 from sqlite_master where type = 'table' and name = ?")
+    .get(calendarStandardTablePolicy.eventsTable) !== undefined
+  const storedSourcePeriodOf = standardTableExists
+    ? database.prepare(`select period_key from ${calendarStandardTablePolicy.eventsTable}
+      where source_provider_id = ? and source_event_id = ? and period_key not like 'unknown:%'
+      order by period_key limit 1`)
+    : undefined
   for (const row of latest.values()) {
     // 身份解码按来源：新源从 `market_fact_key` 里解，旧源从 `indicator_id` 查身份表再算期间。
     // 这是「怎么读这个来源的身份」，不是「这类怎么落」——分流仍然只有 `routeStandardRelease` 一处。
@@ -378,10 +389,32 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
        * 那是同一类错，只是换了个分支：读者看到的「期次」是那一刻几点发的，不是这一期是什么。
        * 现在与有码那一档同一条规则——标题解得出来就用，解不出就记明确缺失
        * （`unknown:<source_event_id>`，每行唯一，不会与他行同期）。
+       *
+       * **事件行是例外，它的期次是「活动当天」**（Chief 2026-11-24 批，#85）：与启动规范化第 2 步
+       * 同一条规则。不这么写，中文名的讲话/央行事件每轮都被写成 `unknown:<源内 id>`，而规范化按
+       * `event_type` 把它解成活动当天——两侧期次不同 → 主键不同 → **每轮新建一行、下次启动再并掉**
+       * （真库实测每轮约 388 行）。事件的身份里本来就没有「统计期」，只有「哪一天发生」。
        */
+      const eventKind = String(row.event_kind ?? '')
+      const eventDayPeriod = scheduledDate !== ''
+        && (eventKind === 'central-bank-activity' || eventKind === 'financial-event')
+        ? scheduledDate.slice(0, 10) : undefined
+      /**
+       * **这一条源内发布已经有一行正常期次时，沿用它**（Chief 2026-11-24 批 #85 的另一半）。
+       *
+       * 有些行的期次只有启动迁移解得出来（按身份重算那一批，例如 `联邦基金基准利率` 那条
+       * 落在 `2026-09`）。写侧算不出就去写 `unknown:`，主键差一期 → 又插一行、下次启动再并掉。
+       * 只在**算不出期次**时才问已有行：源改了期次就该按新的写，让规范化去处理两行。
+       */
+      const storedSourcePeriod = (): string | undefined => {
+        const stored = storedSourcePeriodOf?.get(providerId, String(row.source_event_id)) as
+          { period_key: string } | undefined
+        return stored === undefined ? undefined : String(stored.period_key)
+      }
       const sourcePeriod = identity === undefined
-        ? (titlePeriod ?? `unknown:${String(row.source_event_id)}`)
-        : (resolvedPeriod !== '' ? resolvedPeriod : `unknown:${String(row.source_event_id)}`)
+        ? (titlePeriod ?? eventDayPeriod ?? storedSourcePeriod() ?? `unknown:${String(row.source_event_id)}`)
+        : (resolvedPeriod !== '' ? resolvedPeriod
+          : (eventDayPeriod ?? storedSourcePeriod() ?? `unknown:${String(row.source_event_id)}`))
       standardRows.push({ ...shared, metricKey: sourceIdentity, periodKey: sourcePeriod,
         identityKind: 'source' as const, ...(sourceName === '' ? {} : { sourceLabel: sourceName }) })
       source += 1

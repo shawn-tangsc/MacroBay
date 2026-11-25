@@ -11,11 +11,16 @@
  *
  * 挡什么：`*.tsx` 里 `*Hint` / `*Note` 文案的**用法点**——成员访问（`text.a.hoursHint`、`labels.xNote`）
  * 与键字符串（`resolveText('…Hint')`）。
- * 不挡什么：i18n 定义文件本身（`*.ts`）、`*.test.*`（断言里的键名是文本，不是渲染位置）。
+ * 不挡什么：i18n 定义文件本身（`*.ts`）、`*.test.*`（断言里的键名是文本，不是渲染位置）、
+ * **截图面**（见 `CAPTURE_ONLY_SURFACES`：那几个文件的产物是一张图，不是屏幕上的界面）。
+ *
+ * 豁免**只免这一条**（说明句出现在正文位置）。别以为进了名单就什么都放过：内部进度话术
+ * （「本版只验证…」「本版不采集…」）、手写第二份文案、图上的数不走契约结算，在导出面上**同样禁**，
+ * 由 `scripts/capture-surfaces.test.mts` 另管——那条测试不认名单豁免，只认事实。
  *
  * 复算：`pnpm exec tsx scripts/check-body-prose.mts`。
  */
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
 const ROOT = process.cwd()
@@ -27,6 +32,61 @@ const SKIP_DIRS = new Set(['node_modules', 'out', 'dist', '.git', 'coverage'])
 const ALLOWED_CONTEXT = /helpTrigger\(|\bPopover\b|content=|lines=|aria-|title=|ariaLabelKey=|labelKeys=/u
 
 type Finding = { file: string; line: number; key: string }
+
+/**
+ * 截图面：产物是**一张图**、不是一屏界面的文件。
+ *
+ * 豁免的理由**不是「读者看不见」**——那张图会被存档、转发、被不相干的人读到，比屏幕上的字活得久。
+ * 理由是**产物形态**：PNG 里没有 hover、没有可点的 `ⓘ`，也没有可以省下来的屏幕空间预算；
+ * 「把说明收进浮层」在图上不存在，而这句话本身是内容（这一版缺不缺数据、有没有另一种语言版），
+ * 删了就变成「残缺的一期看起来是完整的」。
+ *
+ * 判据只认**这个文件自己是不是只用来画图**（不是「这句话看起来像说明」）：
+ * - 按文件写死，精确相对路径、`*.tsx`、不许通配/目录/正则（形状由 `captureSurfacePathProblem` 校验，
+ *   用例在 `scripts/capture-surfaces.test.mts`）；
+ * - 加一条要过架构师：名单只在本文件的 diff 里增删，别处不得改；
+ * - 结构上也要立得住：条目必须能被反向依赖证明「只被那个导出入口引用」
+ *   （`BriefingPosterWindow` 的 importer 恰好是 `pages/briefing-poster/index.tsx`，多一个可见页面即红）；
+ * - 同样的命中出现在**别的**文件里照样红：白名单不是整门禁的旁路，基线那边照旧只降不升。
+ *
+ * 今天两条，形状同一个：导出面自己一个文件。
+ * - 海报窗口：主进程 `show:false` 起一个不显示的窗口，画完 `capturePage()` 就把窗口销毁
+ *   （`window/briefingPosterCapture.ts`），页面上没有控件、没有壳层状态；
+ * - 页面的离屏导出节点：`DailyBriefingShareHost`（`aria-hidden` + `left:-20000px`），
+ *   页面自己截图导出、推图都用这一块。
+ */
+const CAPTURE_ONLY_SURFACES: readonly string[] = [
+  'products/market-intelligence/desktop/pages/intelligence/BriefingPosterWindow.tsx',
+  'products/market-intelligence/desktop/pages/intelligence/DailyBriefingShareHost.tsx'
+]
+
+/** 纯函数：这个文件是不是截图面（相对仓库根、`/` 分隔）。 */
+export function isCaptureOnlySurface(file: string): boolean {
+  return CAPTURE_ONLY_SURFACES.includes(file)
+}
+
+/** 名单本身也要能被测试读到（每条都必须在仓库里存在）。 */
+export function captureOnlySurfaces(): readonly string[] {
+  return CAPTURE_ONLY_SURFACES
+}
+
+/**
+ * 纯函数：名单条目的形状问题（`null` = 合格）。
+ *
+ * 只许「精确相对路径 + `.tsx`」：通配会顺手放过一批文件，目录会连以后新建的文件一起放过，
+ * 正则更没法审——三种都会把「这一处是不是导出面」变成没人复核的默认值。
+ */
+export function captureSurfacePathProblem(entry: string): string | null {
+  if (!entry.endsWith('.tsx')) return '必须是 .tsx 文件'
+  if (entry.includes('\\')) return '必须用 / 分隔'
+  if (entry.startsWith('/') || entry.startsWith('./') || entry.includes('//')) return '必须是相对仓库根的规范路径'
+  if (/[*?[\]{}()|+^$]/u.test(entry)) return '不许通配、目录或正则'
+  if (entry.endsWith('/')) return '不许是目录'
+  const absolute = join(ROOT, entry)
+  if (!existsSync(absolute)) return '文件不存在'
+  if (!statSync(absolute).isFile()) return '不是单个文件'
+  return null
+}
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -68,23 +128,175 @@ export function mergeBaseline(
  */
 export function stripFloatingBlocks(text: string): string {
   let out = ''
+  let cursor = 0
+  for (const [start, end] of floatingBlockSpans(text)) {
+    out += text.slice(cursor, start)
+    // 用等量空白替换，保持行号不变（行号仍要指得准）。
+    out += text.slice(start, end).replace(/[^\n]/gu, ' ')
+    cursor = end
+  }
+  return out + text.slice(cursor)
+}
+
+/** 浮层表达式的字符区间：`lines={…}` / `content={…}`，按花括号配平，跨行也算。 */
+export function floatingBlockSpans(text: string): ReadonlyArray<readonly [number, number]> {
+  const spans: Array<readonly [number, number]> = []
   let index = 0
   while (index < text.length) {
     const match = /(?:lines|content)=\{/u.exec(text.slice(index))
-    if (match === null) { out += text.slice(index); break }
+    if (match === null) break
     const start = index + match.index
-    out += text.slice(index, start)
-    let depth = 0
-    let cursor = start + match[0].length - 1
-    for (; cursor < text.length; cursor += 1) {
-      if (text[cursor] === '{') depth += 1
-      else if (text[cursor] === '}') { depth -= 1; if (depth === 0) { cursor += 1; break } }
+    const end = blockEnd(text, start + match[0].length - 1)
+    spans.push([start, end])
+    index = end
+  }
+  return spans
+}
+
+/**
+ * 从 `{` 开始配平到它的闭括号，**跳过字符串与模板字面量里的括号**。
+ *
+ * 为什么要认引号：这段区间原来只决定「剥掉哪些字符」，判错是多剥/少剥（假红，安全）；
+ * 现在它还是 `exemptHintKeySpans` 的豁免边界，判错就会把正文当成水口**放过**——
+ * `lines={['a}b']}` 里那个 `}` 不是块的结束，认错就会把后面的正文一起圈进豁免。
+ *
+ * 模板字面量按 `${…}` 进表达式、回到反引号退出递归处理；`\` 跳过下一个字符。
+ * 未闭合的字符串一直读到文末：区间更大＝剥得更多＝更容易报红，方向与「不放过正文」一致。
+ */
+function blockEnd(text: string, open: number): number {
+  const stack: string[] = ['{']
+  let index = open + 1
+  while (index < text.length) {
+    const char = text[index]
+    const top = stack[stack.length - 1]
+    if (top === '{') {
+      if (char === "'" || char === '"' || char === '`') { stack.push(char); index += 1; continue }
+      if (char === '{') { stack.push('{'); index += 1; continue }
+      if (char === '}') { stack.pop(); index += 1; if (stack.length === 0) return index; continue }
+      index += 1
+      continue
     }
-    // 用等量空白替换，保持行号不变（行号仍要指得准）。
-    out += text.slice(start, cursor).replace(/[^\n]/gu, ' ')
-    index = cursor
+    if (char === '\\') { index += 2; continue }
+    if (top === '`' && char === '$' && text[index + 1] === '{') { stack.push('{'); index += 2; continue }
+    if (char === top) { stack.pop(); index += 1; continue }
+    index += 1
+  }
+  return text.length
+}
+
+/** 每行的起始偏移：命中位置按**字符位置**判，不按行判（同一行里可能两种位置都有）。 */
+export function lineStartOffsets(text: string): readonly number[] {
+  const starts: number[] = []
+  let offset = 0
+  for (const line of text.split('\n')) { starts.push(offset); offset += line.length + 1 }
+  return starts
+}
+
+function lineOfOffset(starts: readonly number[], index: number): number {
+  let low = 0
+  let high = starts.length - 1
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (starts[mid]! <= index) low = mid
+    else high = mid - 1
+  }
+  return low
+}
+
+/** 一行里每个声明子各自的初始表达式区间：`const a = X, b = Y` 拆成两个，各判各的。 */
+export function declaratorsOnLine(line: string): ReadonlyArray<Readonly<{ name: string; start: number; end: number }>> {
+  const head = /\b(?:const|let)\s+/u.exec(line)
+  if (head === null) return []
+  const out: Array<Readonly<{ name: string; start: number; end: number }>> = []
+  let index = (head.index ?? 0) + head[0].length
+  while (index < line.length) {
+    const nameMatch = /^([A-Za-z_$][\w$]*)\s*=\s*/u.exec(line.slice(index))
+    if (nameMatch === null) break
+    const start = index + nameMatch[0].length
+    let depth = 0
+    let quote = ''
+    let cursor = start
+    for (; cursor < line.length; cursor += 1) {
+      const char = line[cursor]!
+      if (quote !== '') {
+        if (char === '\\') { cursor += 1; continue }
+        if (char === quote) quote = ''
+        continue
+      }
+      if (char === "'" || char === '"' || char === '`') { quote = char; continue }
+      if ('([{'.includes(char)) depth += 1
+      else if (')]}'.includes(char)) depth -= 1
+      else if (char === ',' && depth === 0) break
+    }
+    out.push({ name: nameMatch[1]!, start, end: cursor })
+    index = cursor + 1
   }
   return out
+}
+
+/** 说明句的键写法：成员访问（`copy.liveHint`）与键字符串（`'…liveHint'`），含它在行内的区间。 */
+const HINT_TOKEN = /\.([A-Za-z_$][\w$]*(?:Hint|Note))\b|(['"`])([\w.$-]*(?:Hint|Note))\2/gu
+
+/**
+ * 「先把键赋给变量、再交给 ⓘ」的写法：`const liveHint = t('…liveHint')` → `lines={[liveHint]}`。
+ *
+ * 判据是**所有使用点都在浮层水口里**，不是「变量名出现过一次就算」：只要这个变量还有一处出现在正文
+ * （普通 JSX 位置），它就不豁免——否则把同一句话再渲染一次就绕过了门禁。
+ * 水口只认这几种：`lines={…}` / `content={…}` 块内、`title=` / `aria-*` / `helpTrigger(`、
+ * 以及 `hintKey={X}` / `labelKey={X}` / `ariaLabelKey={X}` 这三类把键原样交给组件的属性。
+ *
+ * 基线里 `BriefingManualRunDialog.tsx :: nowHint` 那条**不是「过期条目」，是「原来就命中、被这条
+ * 豁免放过」**：判据与基线同一笔收是对的，但别读成「基线里写着的东西都可以顺手清」——清不清看的是
+ * 它现在还在不在正文里。
+ *
+ * **已知边界，不是漏判，别去「修」它**：跨文件常量不追。键从别的模块 import 进来再赋值时，
+ * 这里看不到它的使用点，一律从严按正文报。修它要引入真正的数据流分析，而收益抵不上
+ * 「正文被当成水口放过」的代价——从严最多让人把句子直接写进 ⓘ，不会漏掉正文里的一句说明。
+ *
+ * 返回**键在源码里的字符区间**（不是行号）：豁免只覆盖那个定义表达式里的那一次键，
+ * 同一行别处的正文照旧算命中——整行豁免等于给这一行的每个使用点发通行证
+ * （`const a = copy.aHint, b = copy.bodyHint` 会把 b 一起放过）。
+ */
+export function exemptHintKeySpans(source: string): ReadonlyArray<readonly [number, number]> {
+  const spans = floatingBlockSpans(source)
+  const starts = lineStartOffsets(source)
+  const lines = source.split('\n')
+  const inSpans = (index: number): boolean => spans.some(([start, end]) => index >= start && index < end)
+  const exempt: Array<readonly [number, number]> = []
+
+  lines.forEach((line, lineIndex) => {
+    for (const declarator of declaratorsOnLine(line)) {
+      const expression = line.slice(declarator.start, declarator.end)
+      const tokens: Array<readonly [number, number]> = []
+      const lineStart = starts[lineIndex] ?? 0
+      for (const match of expression.matchAll(HINT_TOKEN)) {
+        // `declarator.start` 是**行内**偏移，豁免区间要的是**文件内**偏移：漏了这层加法，
+        // 区间会落到文件开头附近的无关代码上，等于这条豁免从来没生效（实测踩过）。
+        const at = lineStart + declarator.start + (match.index ?? 0)
+        tokens.push([at, at + match[0].length] as const)
+      }
+      if (tokens.length === 0) continue
+
+      const uses: number[] = []
+      for (const match of source.matchAll(new RegExp(`\\b${declarator.name}\\b`, 'gu'))) {
+        const at = match.index ?? 0
+        if (lineOfOffset(starts, at) === lineIndex) continue
+        uses.push(at)
+      }
+      if (uses.length === 0) continue
+      const allInSinks = uses.every((at) => {
+        if (inSpans(at)) return true
+        // **按位置判，不按整行判**：同一行里既可能有 `{liveHint}` 的正文，也可能有 `lines={[liveHint]}`。
+        // 用整行 `ALLOWED_CONTEXT` 判断，等于给这一行的每个使用点都发通行证（反向判据当场失效）。
+        const prefix = source.slice(starts[lineOfOffset(starts, at)] ?? 0, at)
+        return /(?:hintKey|labelKey|ariaLabelKey)=\{[^}]*$/u.test(prefix)
+          || /\b(?:title|aria-[a-z-]+)=\{[^}]*$/u.test(prefix)
+          || /\bhelpTrigger\([^)]*$/u.test(prefix)
+      })
+      if (allInSinks) exempt.push(...tokens)
+    }
+  })
+  return exempt
 }
 
 const invokedDirectly = process.argv[1]?.endsWith('check-body-prose.mts') === true
@@ -95,7 +307,15 @@ function main(): void {
     const absolute = join(ROOT, root)
     if (!existsSync(absolute)) continue
     for (const file of walk(absolute)) {
-      const text = stripFloatingBlocks(readFileSync(file, 'utf8'))
+      const id = relative(ROOT, file).split(sep).join('/')
+      if (isCaptureOnlySurface(id)) continue
+      const source = readFileSync(file, 'utf8')
+      const text = stripFloatingBlocks(source)
+      // 先把键赋给变量、再交给 ⓘ 的写法：**只豁免那个定义表达式里的那一次键**（按位置，不按行）。
+      // 同一行别处的正文照旧算命中——整行豁免会把 `const a = copy.aHint, b = copy.bodyHint` 一起放过。
+      const exempt = exemptHintKeySpans(source)
+      const exemptAt = (at: number): boolean => exempt.some(([start, end]) => at >= start && at < end)
+      const starts = lineStartOffsets(text)
       text.split('\n').forEach((line, index) => {
         if (ALLOWED_CONTEXT.test(line)) return
         // 键**定义**不是用法：`const X_KEY = '…Hint'` 只是给这段文案起名字，真正渲染在别处。
@@ -103,12 +323,16 @@ function main(): void {
         if (/^\s*const\s+[A-Z][A-Z0-9_]*\s*=/.test(line)) return
         const keys: string[] = []
         // 成员访问：取最后一段（`text.hours.hoursHint` → `hoursHint`）
-        for (const match of line.matchAll(/\.([A-Za-z_$][\w$]*(?:Hint|Note))\b/gu)) keys.push(match[1]!)
+        for (const match of line.matchAll(/\.([A-Za-z_$][\w$]*(?:Hint|Note))\b/gu)) {
+          if (!exemptAt((starts[index] ?? 0) + (match.index ?? 0) + 1)) keys.push(match[1]!)
+        }
         // 键字符串：`'settings.x.hoursHint'`
-        for (const match of line.matchAll(/['"`]([\w.$-]*(?:Hint|Note))['"`]/gu)) keys.push(match[1]!)
+        for (const match of line.matchAll(/['"`]([\w.$-]*(?:Hint|Note))['"`]/gu)) {
+          if (!exemptAt((starts[index] ?? 0) + (match.index ?? 0) + 1)) keys.push(match[1]!)
+        }
         for (const key of new Set(keys)) {
           // 基线键必须归一化分隔符：Windows 上 `relative()` 给 `a\\b`，基线里是 `a/b`，两边永远对不上。
-          findings.push({ file: relative(ROOT, file).split(sep).join('/'), line: index + 1, key })
+          findings.push({ file: id, line: index + 1, key })
         }
       })
     }

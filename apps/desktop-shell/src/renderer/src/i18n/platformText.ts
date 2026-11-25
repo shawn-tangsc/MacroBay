@@ -1329,8 +1329,52 @@ export type PlatformText = {
     centerEmptyHint: string
     centerStaleNotice: string
     centerReload: string
+    /** 点「看原文」这类外链按钮却没打开时的那一句（列表上方的状态行）。 */
+    centerLinkFailed: string
     centerUnknownHint: string
     channelsHeading: string
+    /**
+     * 通知详情里那一行「海报」（#46）。四态词**不带参数**（`StatusPill` 只收 `labelKey`），
+     * 数字与原因在值那一行拼接；`hint.*` 是 ⓘ 里的两句（逐通道一行 / 不支持图片的那句）。
+     */
+    detail: {
+      /** 详情是抽屉里的第二层视图：返回键的读屏名。 */
+      back: string
+      /** 通知中心每行那颗文字动作的可见字。 */
+      entry: string
+      /** 详情「送达」组的组名，以及组里「文字」那一行的行名；海报那行用下面的 `poster.label`。 */
+      group: string
+      text: string
+      /**
+       * 「文字」「海报」两行**共用**的三个状态词。`noImage`（这一版没有图）只属海报那一行，
+       * 留在 `poster.state`——挂在海报名下的共用词会让改海报措辞时悄悄改掉文字行。
+       */
+      state: { sent: string; unconfirmed: string; failed: string }
+      poster: {
+        label: string
+        /** 只剩 `noImage`：三个共用状态词已在 `detail.state`（见上）。 */
+        state: { noImage: string }
+        counts: { all: (count: number) => string; partial: (failed: number, total: number) => string }
+        /**
+         * 数字与原因之间那个「·」：两者字号不同（数字弱化、原因是正文色），只能是两个节点，
+         * 连接符就得是文案而不是 CSS——**可见标点也算文案**，零字面量。
+         *
+         * 值里**不带空格**：节点之间由布局的 `gap` 给间隙，字符串再带就多出两边的空格。
+         * 渲染条件是「有原因」——单通道没有数字时也要读作「未发送 · 通道未收下」。
+         */
+        value: { separator: string }
+        reason: {
+          timeout: string
+          renderFailed: string
+          tooLarge: string
+          channelRefused: string
+          channelUnavailable: string
+          imageUnavailable: string
+          multiple: string
+        }
+        hint: { unsupportedChannels: (count: number) => string; channelLine: (channel: string, reason: string) => string }
+      }
+    }
   }
   webSearch: {
     title: string
@@ -2760,7 +2804,49 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerEmptyHint: '失败与系统问题会出现在这里。',
       centerStaleNotice: '刚才没能刷新，下面是上次读到的内容。',
       centerReload: '重新加载',
+      centerLinkFailed: '这条链接没能打开，稍后再试一次。',
       centerUnknownHint: '批量操作先不可用：通知现在读不到。',
+      /**
+       * 通知详情里那一行「海报」（#46）：键在一处，句子由壳用。
+       * 四态词不带参数（`StatusPill` 只收 `labelKey`），数字紧跟药丸之后用 `counts.*`。
+       */
+      detail: {
+        back: '返回',
+        entry: '详情',
+        group: '送达',
+        text: '文字',
+        state: {
+          sent: '已发送',
+          unconfirmed: '等回执',
+          failed: '未发送',
+        },
+        poster: {
+          label: '海报',
+          state: {
+            noImage: '这一版没有图',
+          },
+          counts: {
+            all: (count) => `${count} 条通道`,
+            partial: (failed, total) => `${failed}/${total}`,
+          },
+          value: {
+            separator: '·',
+          },
+          reason: {
+            timeout: '出图超时',
+            renderFailed: '出图失败',
+            tooLarge: '图太大',
+            channelRefused: '通道未收下',
+            channelUnavailable: '通道不可用',
+            imageUnavailable: '图没能取到',
+            multiple: '多个原因',
+          },
+          hint: {
+            unsupportedChannels: (count) => `${count} 个通道不支持图片，未计入`,
+            channelLine: (channel, reason) => `${channel}：${reason}`,
+          },
+        },
+      },
     },
     webSearch: {
       title: '网页搜索',
@@ -4180,7 +4266,46 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerEmptyHint: 'Failures and system problems will appear here.',
       centerStaleNotice: 'Could not refresh — showing what was read last time.',
       centerReload: 'Reload',
+      centerLinkFailed: 'That link could not be opened. Try again in a moment.',
       centerUnknownHint: 'Bulk actions are unavailable for now: notifications cannot be read right now.',
+      /** The poster row inside a notification detail (#46); the four state words carry no parameters. */
+      detail: {
+        back: 'Back',
+        entry: 'Details',
+        group: 'Delivery',
+        text: 'Text',
+        state: {
+          sent: 'Sent',
+          unconfirmed: 'Awaiting receipt',
+          failed: 'Not sent',
+        },
+        poster: {
+          label: 'Poster',
+          state: {
+            noImage: 'No poster in this edition',
+          },
+          counts: {
+            all: (count) => `${count} channels`,
+            partial: (failed, total) => `${failed}/${total}`,
+          },
+          value: {
+            separator: '·',
+          },
+          reason: {
+            timeout: 'render timed out',
+            renderFailed: 'render failed',
+            tooLarge: 'poster too large',
+            channelRefused: 'the channel refused it',
+            channelUnavailable: 'channel unavailable',
+            imageUnavailable: 'poster unavailable',
+            multiple: 'several reasons',
+          },
+          hint: {
+            unsupportedChannels: (count) => `${count} channel${count === 1 ? '' : 's'} cannot receive images; not counted`,
+            channelLine: (channel, reason) => `${channel}: ${reason}`,
+          },
+        },
+      },
     },
     webSearch: {
       title: 'Web Search',

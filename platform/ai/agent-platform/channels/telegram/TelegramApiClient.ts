@@ -56,6 +56,38 @@ export class TelegramApiClient {
     return this.request<true>('sendChatAction', { chat_id: chatId, action: 'typing' }, signal)
   }
 
+  /**
+   * 下载一条入站附件的字节（0.4.5）。两步都走**注入的平台网络层**，适配器里不出现裸 `fetch`：
+   * `getFile` 拿 `file_path`，再按 `…/file/bot<token>/<file_path>` 取字节。
+   *
+   * 只负责「取到字节」：大小的**下载前判定**由调用方按 store 的策略做（超限不该先拉下来再丢），
+   * 这里也不做格式嗅探——判定只留一处。
+   */
+  async downloadFile(fileId: string, signal?: AbortSignal): Promise<TelegramApiResult<Uint8Array>> {
+    const lookup = await this.request<{ file_path?: unknown }>('getFile', { file_id: fileId }, signal)
+    if (!lookup.ok) return lookup
+    const filePath = typeof lookup.value?.file_path === 'string' ? lookup.value.file_path : ''
+    if (!filePath || filePath.includes('..')) return { ok: false, code: 'telegram-provider-rejected' }
+    try {
+      if (signal?.aborted) return { ok: false, code: 'telegram-network-unavailable' }
+      const token = await this.deps.token()
+      if (!token || signal?.aborted) return { ok: false, code: 'telegram-provider-rejected' }
+      const response = await this.deps.getPlatformFetch()(`${telegramApiBase}/file/bot${token}/${filePath}`, { signal })
+      if (!response.ok) {
+        return response.status === 429
+          ? { ok: false, code: 'telegram-rate-limited' }
+          : response.status >= 500
+            ? { ok: false, code: 'telegram-network-unavailable' }
+            : { ok: false, code: 'telegram-provider-rejected' }
+      }
+      return { ok: true, value: new Uint8Array(await response.arrayBuffer()) }
+    } catch (error) {
+      const transportError = chromiumErrorName(error)
+      const failure = { ok: false as const, code: classifyTransportFailure(error, signal) }
+      return transportError ? { ...failure, transportError } : failure
+    }
+  }
+
   async botUsername(signal?: AbortSignal): Promise<TelegramApiResult<string>> {
     const response = await this.request<{ username?: unknown }>('getMe', {}, signal)
     return response.ok && typeof response.value.username === 'string' && response.value.username.trim()

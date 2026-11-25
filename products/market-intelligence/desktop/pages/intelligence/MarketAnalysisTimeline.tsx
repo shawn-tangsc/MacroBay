@@ -81,6 +81,8 @@ export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
    * renders: the caption then falls back to the event's own subject.
    */
   groupTypes?: Record<string, string>
+  /** 新闻分组那行标题的解释位：`背景新闻：{title}`。与「最近一次判定」分开，不拼成一行。 */
+  groupBackground: string
 }>
 
 type Props = Readonly<{
@@ -193,7 +195,15 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
   /** 一行时间轴节点：两个页签共用这一份，行为与样式一字不改。 */
   const renderEntry = (entry: MarketAnalysisTimelineEntry): React.ReactElement => {
   const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? '')
-  const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null
+  /**
+   * 新闻分组的标题是**背景**，不是触发（用户 2026-11-21）：类型单独一行，标题另起一行写
+   * 「背景新闻：…」。以前两者拼成「消息面 · 标题」，读者会把标题读成这次分析的原因，
+   * 而真正的触发在下面那行「最近一次判定」。其它分组类型照旧（`宏观 · CPI` 那种是它的名字）。
+   */
+  const sentimentGroup = spansGroups && entry.groupType === 'sentiment'
+  const sentimentLabel = sentimentGroup ? groupTypes.sentiment : undefined
+  const backgroundNews = sentimentGroup && entry.groupSubject ? entry.groupSubject : null
+  const groupCaption = spansGroups && !sentimentGroup ? groupCaptionFor(entry, groupTypes) : null
   // 一次运行一行：`runKey` 在「正在解析 → 已发布 / 失败」之间不变，所以 React 复用的是同一行，
   // 不是删一行加一行。老主进程没有 `runKey` 时按 `analysisRunId ?? id` 退（依赖一次运行产一行）。
   const rowKey = entry.runKey ?? entry.analysisRunId ?? entry.id
@@ -207,6 +217,8 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
       <span><time>{formatTime(entry.occurredAt, 'second')}</time><StatusPill labelKey={ANALYSIS_STATUS_KEY[entry.status]} resolveText={resolveProductText} tone={ANALYSIS_STATUS_TONE[entry.status]} /></span>
       {/* Which event this row is about. Two conclusions published seconds apart are two
           different events; without the name they read as one conclusion posted twice. */}
+      {sentimentLabel ? <small className="mi-analysis-timeline__group-type" data-group-type={entry.groupType}>{sentimentLabel}</small> : null}
+      {backgroundNews ? <small className="mi-analysis-timeline__group-background" data-group-background={backgroundNews}>{text.groupBackground.replace('{title}', backgroundNews)}</small> : null}
       {groupCaption ? <small className="mi-analysis-timeline__group">{groupCaption}</small> : null}
       {failureDetail ? <small className="mi-analysis-timeline__failure">{failureDetail}</small> : null}
       {/* The tag and the conclusion share one line, so they live in one flex item: a row is a

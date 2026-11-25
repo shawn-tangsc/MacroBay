@@ -41,8 +41,23 @@ export const metricRestApiAdapter: IntelligenceSourceAdapter = {
     if (!targets.length || (!fetchText && !fetchMetricTarget)) return []
 
     const records: AppendRawRecordInput[] = []
+    let failed = 0
     for (const target of targets) {
-      const body = await fetchMetricTargetBody(target, config.sourceId, fetchText, fetchMetricTarget)
+      let body: string
+      try {
+        body = await fetchMetricTargetBody(target, config.sourceId, fetchText, fetchMetricTarget)
+      } catch (error) {
+        // 一条取数失败只让那一条缺（国债曲线上是 19 条序列各一个请求）：整轮失败会顺带把另外十八条
+        // 也判成没数据，而它们其实拿到了。缺的那条下一轮自己重试，这一轮的其它记录照常落库。
+        failed += 1
+        console.log(JSON.stringify({
+          marker: 'MI_METRIC_TARGET_FAILED',
+          sourceId: config.sourceId,
+          target: target.metricKey ?? target.symbol ?? target.seriesId ?? 'single',
+          message: (error instanceof Error ? error.message : String(error)).slice(0, 200)
+        }))
+        continue
+      }
       const payloadHash = hashPayload(body)
       const dedupeSuffix = target.metricKey ?? target.symbol ?? target.seriesId ?? 'single'
       records.push({
@@ -60,6 +75,10 @@ export const metricRestApiAdapter: IntelligenceSourceAdapter = {
           symbol: target.symbol
         })
       })
+    }
+    // 全部目标都失败不是「这轮没有数据」，是这次运行失败：否则加载态会被读成健康的空轮。
+    if (failed > 0 && records.length === 0) {
+      throw new Error(`${config.sourceId}: all ${failed} metric targets failed`)
     }
     return records
   },
@@ -200,7 +219,10 @@ function normalizeMetricDrafts(input: {
       dataDomain,
       eventFamily: 'metric-event',
       eventSubtype: metric.metricKind,
-      metricEventJson: JSON.stringify(metric)
+      metricEventJson: JSON.stringify(metric),
+      // One hash per day, not one for the payload: a 365-day backfill must not mark all 365 days
+      // as revised when a single day's value moves.
+      bodyHash: hashPayload(`${metric.metricKey}:${periodKey}:${String(metric.actual)}`)
     }
   })
 }

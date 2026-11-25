@@ -9,6 +9,7 @@ export const INTELLIGENCE_PUBLIC_QUERY_METHODS = {
   queryRelatedEvents: 'intelligence.queryRelatedEvents',
   queryImpactTimeline: 'intelligence.queryImpactTimeline',
   queryFearGreedSnapshot: 'intelligence.queryFearGreedSnapshot',
+  querySentimentOptionsCard: 'intelligence.querySentimentOptionsCard',
   queryFundingRateHistory: 'intelligence.queryFundingRateHistory',
   queryOpenInterestHistory: 'intelligence.queryOpenInterestHistory',
   queryMarketDivergence: 'intelligence.queryMarketDivergence',

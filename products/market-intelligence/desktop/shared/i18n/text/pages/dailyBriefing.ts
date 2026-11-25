@@ -68,13 +68,20 @@ export const dailyBriefingText = {
     macroWebValue: '（网页）',
     macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-write-failed': '日历数据已经采到，但没能写入本地库', 'calendar-catch-up-failed': '这次补采没有成功', 'calendar-catch-up-timeout': '补采没有在限定时间内完成', 'calendar-catch-up-unknown': '补采结果未知（已排上）' },
     /**
-     * 「未来 7 天」这一栏的两段话（产品 2026-11-14 定，因为来源根本没给重要性）：
-     * 主句说**我们判不出**（不是「没有」——「没有」是替来源下断言），
-     * 小标题给我们自己的一级指标排期（真排期、有日期、有依据）。
+     * 「未来 7 天」这一栏的两段话：主句说**我们判不出**（不是「没有」——「没有」是替来源下断言），
+     * 小标题给我们自己的一级排期（真排期、有日期、有依据）。
      *
-     * 硬约束：**不许把一级排期写成「高影响事件」**——前者是我们的一级清单，后者是来源的判断。
+     * 理由在 R44 之后变了：不再「来源没给重要性」，而是**这些事件我们还没分级**（档由我们自己的
+     * 身份→族→档表判，未分级就是还没判过）。用词是「分级」不是「定档」——行上的值就叫「未分级」，
+     * 同一屏还有「日历时间：待定」，说「定档」会被读成日期没定（Chief 2026-11-24 拍）。
+     *
+     * 什么时候出这句、什么时候出「没有高影响事件」那两句，判据在服务侧
+     * （`dailyBriefingEmptyCodes.nextEmptyCode`）：周里有事件且一条已分级的都没有才是这句；
+     * 周里零事件仍走「没有高影响事件」。
+     *
+     * 硬约束：**不许把一级排期写成「高影响事件」**——前者是我们的一级清单，后者是分级判出来的。
      */
-    nextImportanceUnknown: { sentence: '未来 7 天：高影响事件无法判定（来源未提供重要性）', scheduleTitle: '一级指标排期' },
+    nextImportanceUnknown: { sentence: '未来 7 天：高影响事件无法判定（这些事件我们还没分级）', scheduleTitle: '一级指标排期' },
     /**
      * 过去 24 小时那段（产品 2026-11-14 定）：**先报总数与构成**，再说明细。
      * 总数取自读完之后的全部行，明细按类型配比 2/1/1、合计最多 3；`others` = 总数 − 明细，永远这么算。
@@ -518,7 +525,7 @@ export const dailyBriefingText = {
     macroUnreadable: 'Not readable right now: ',
     macroWebValue: ' (web)',
     macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-write-failed': 'The calendar data was collected but could not be written to the local store', 'calendar-catch-up-failed': 'This catch-up attempt did not succeed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
-    nextImportanceUnknown: { sentence: 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', scheduleTitle: 'Tier-1 indicator schedule' },
+    nextImportanceUnknown: { sentence: 'Next 7 days: high-impact events cannot be determined (we have not rated these events yet)', scheduleTitle: 'Tier-1 indicator schedule' },
     pastWindow: {
       header: 'Past 24 hours · {count} releases',
       composition: 'Economic indicators {indicators} · Central banks & speeches {centralBank} · Financial events {financial}',

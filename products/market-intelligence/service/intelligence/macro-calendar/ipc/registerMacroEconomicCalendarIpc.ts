@@ -3,6 +3,7 @@ import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegist
 import {
   MACRO_ECONOMIC_CALENDAR_IPC_METHODS
 } from '../../../../contracts/macro/economicCalendarQueryContracts'
+import type { MacroCalendarInterpretationService } from '../macroCalendarEventInterpretationService'
 import type { MacroCalendarProviderSettingsService } from '../macroCalendarProviderSettingsService'
 import { createMacroEconomicCalendarQueryService, type MacroCalendarReleaseTimeOverrides } from '../macroEconomicCalendarQueryService'
 import type { MacroCalendarReleaseTimeOverrideCache, MacroCalendarReleaseTimeOverrideStore } from '../macroCalendarReleaseTimeOverrideStore'
@@ -59,7 +60,12 @@ export function registerMacroEconomicCalendarIpc(
   market?: SafeMarketQuery & { refresh: (input: unknown) => unknown; readCollectionFreshness?: () => Promise<unknown>
     refreshNow?: (input: unknown) => Promise<unknown> },
   /** 渲染专用只读口的数据库句柄（未映射月读 + 事件清单）。读口本身只在 `rendering/` 里。 */
-  unmappedMonth?: { database: Parameters<typeof listUnmappedCalendarObservationsForRendering>[0] }
+  unmappedMonth?: { database: Parameters<typeof listUnmappedCalendarObservationsForRendering>[0] },
+  /**
+   * 事件解读（R36 #34 第二半）。未注入＝两个方法不注册：解读是可选能力，
+   * 没有模型服务时整条日历仍然可用，只是没有那一段。
+   */
+  interpretation?: MacroCalendarInterpretationService
 ): void {
   const releaseTimeOverrides = connection?.releaseTimeOverrides
   // Seed the synchronous view before the first query; until it lands, a row falls back to its
@@ -230,6 +236,19 @@ export function registerMacroEconomicCalendarIpc(
   })
   register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.queryMonth, async (payload) => service.queryMonth(payload))
   register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getEventDetail, async (payload) => service.getEventDetail(payload))
+  /** 解读：读只读、不触发生成；request 才是唯一会花模型调用的入口，档门控在服务侧。 */
+  if (interpretation) {
+    register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.readEventInterpretation, async (payload) => {
+      const input = interpretationInputOf(payload)
+      if (!input) return { state: 'absent' as const }
+      try { return interpretation.read(input) } catch { return { state: 'failed' as const, failureCode: 'provider-error' } }
+    })
+    register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.requestEventInterpretation, async (payload) => {
+      const input = interpretationInputOf(payload)
+      if (!input) return { state: 'absent' as const }
+      try { return await interpretation.request(input) } catch { return { state: 'failed' as const, failureCode: 'provider-error' } }
+    })
+  }
   register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.setReleaseTime, async (payload) => actions.setReleaseTime(payload))
   register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.clearReleaseTime, async (payload) => actions.clearReleaseTime(payload))
   register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.previewManualBlsIcs, async (payload) => actions.previewManualIcs(payload))
@@ -245,4 +264,11 @@ export function registerMacroEconomicCalendarIpc(
     register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getProviderSchedule, async (payload) => { try { return isProviderInput(payload) ? safeProviderSchedule(() => providerSettings.getProviderSchedule(payload.providerId), payload.providerId) : providerUnavailable() } catch { return providerUnavailable() } })
   }
   register(productId, MACRO_ECONOMIC_CALENDAR_IPC_METHODS.testProviderConnection, async (payload) => actions.testProviderConnection(payload))
+}
+
+/** 解读入参只有两个字段：事件身份与界面语言；别的形状一律当作「没有请求」。 */
+function interpretationInputOf(payload: unknown): { eventKey: string; locale: 'zh-CN' | 'en-US' } | undefined {
+  const value = payload as { eventKey?: unknown; locale?: unknown } | undefined
+  if (value === undefined || typeof value.eventKey !== 'string' || value.eventKey.length === 0) return undefined
+  return { eventKey: value.eventKey, locale: value.locale === 'en-US' ? 'en-US' : 'zh-CN' }
 }

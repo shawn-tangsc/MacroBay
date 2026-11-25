@@ -86,28 +86,17 @@ describe('守卫 B：反向孤儿', () => {
   })
 
   /**
-   * 源码级：**catalog 自己不许写指标码**（它只合成）；散落在别处的码必须在 catalog 里。
-   * 后半句专抓「有人在某个文件里手写了一个新码却没登记」。
+   * 源码级：**catalog 自己不许写指标码**（它只合成）。
+   *
+   * 原本还有后半句「散落在别处的码必须在 catalog 里」——那条已撤：catalog 的键集就是这些表的并集，
+   * 等于自己判自己，而且只扫 8 个文件。判据换成「在名称表里」、扫描面扩到全模块，
+   * 见 `marketCalendarCodeNames.test.ts` 的「码本体：散落各处的码必须在名称表里」。
    */
-  it('keeps the catalog free of metric literals, and every literal elsewhere in the catalog', () => {
+  it('keeps the catalog free of metric literals', () => {
     const source = readFileSync(CATALOG_SOURCE, 'utf8')
     // 指标码的形状是 `US.<测度>.<口径>.<量纲>`：四段起。两段的 `US.CPI` 是发布前缀，不是码。
     const metricLiteral = /'US\.[A-Z0-9_]+(\.[A-Z0-9_]+){2,}'/g
     expect(source.match(metricLiteral) ?? []).toEqual([])
-
-    const catalog = metricCatalog()
-    const dir = join(process.cwd(), 'products/market-intelligence/service/intelligence/macro-calendar')
-    const files = ['macroIndicatorCardGroups.ts', 'marketCalendarReleaseGroups.ts', 'marketCalendarCodeNames.ts',
-      'coreIndicatorValueSources.ts', 'marketCalendarMetricIdentity.ts',
-      'macroCalendarReleaseValueMappingPolicy.ts', 'polymarketConsensus.ts', 'marketCalendarMetricCatalog.ts']
-    const unregistered: string[] = []
-    for (const file of files) {
-      for (const literal of readFileSync(join(dir, file), 'utf8').match(metricLiteral) ?? []) {
-        const key = literal.replace(/'/g, '')
-        if (!catalog.has(key)) unregistered.push(`${file}: ${key} 不在 catalog 里`)
-      }
-    }
-    expect(unregistered.join('\n')).toBe('')
   })
 })
 

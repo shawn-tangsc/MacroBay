@@ -5,6 +5,8 @@ import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@plat
 import type { MarketCalendarPage, MarketCalendarQuery } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { DEFAULT_CALENDAR_LANDED_COUNTRIES, type CalendarLandedCountrySelection } from '../../../contracts/calendarLandedCountries'
 import { DEFAULT_CALENDAR_REMINDER_SETTINGS, type CalendarReminderSettings } from '../../../contracts/calendarEventReminder'
+import { collapseCalendarReleases } from './calendarReleaseAggregation'
+import { marketCalendarReleaseGroupByMetricKey } from './marketCalendarReleaseGroups'
 import { registerCalendarEventReminderJob } from './calendarEventReminderJob'
 import type { CalendarReminderEvent } from './calendarEventReminderScan'
 import type { CalendarReminderSettingsStore } from './calendarEventReminderSettingsStore'
@@ -87,12 +89,23 @@ export function registerCalendarEventReminder(input: Readonly<{
       const page = input.queryMonth({ month: monthKey, locale: 'zh', asOf })
       return page.state === 'available' ? [...page.events] : []
     })
-    return events.map((event) => ({
-      eventKey: event.observationKey ?? event.eventKey,
-      title: event.title,
+    /**
+     * **一次发布只出一条**（R44 §4.3）：同一次发布的几行合成一条、档取最高。
+     * 聚合只看已存的档，不重算——它是读侧唯一的合并口，作业与「通知测试」都从这里拿。
+     */
+    const collapsed = collapseCalendarReleases(events.map((event) => ({
+      countryCode: event.countryCode,
+      metricKey: event.eventNameKey,
       scheduledAt: event.scheduledAt,
-      /* 源没给重要性就不带这个字段：缺省 ≠ 某个更低的重要度（提醒按档位筛，缺省的一律不推）。 */
-      ...(event.importance === undefined ? {} : { importance: event.importance })
+      ...(event.importance === undefined ? {} : { importance: event.importance }),
+      event
+    })), (metricKey) => marketCalendarReleaseGroupByMetricKey[metricKey])
+    return collapsed.map(({ row, importance }) => ({
+      eventKey: row.event.observationKey ?? row.event.eventKey,
+      title: row.event.title,
+      scheduledAt: row.event.scheduledAt,
+      /* 没档就不带这个字段：缺省 ≠ 某个更低的重要度（提醒按档位筛，缺省的一律不推）。 */
+      ...(importance === undefined ? {} : { importance })
     }))
   }
 

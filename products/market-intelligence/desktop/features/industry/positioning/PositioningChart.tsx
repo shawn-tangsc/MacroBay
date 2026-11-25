@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Tooltip } from '@platform/ui/components/tooltip'
+import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
@@ -13,40 +15,96 @@ import {
   type DashboardPositioningViewState
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 import { axisTicks } from './positioningAxisTicks'
+import {
+  MARKER_CHIP,
+  POSITIONING_CHART_FALLBACK,
+  layoutLiquidationMarks,
+  positioningChartGeometry,
+  type LiquidationMarkLayout,
+  type PositioningChartGeometry
+} from './positioningLiquidationMarkers'
+import { placePositioningTooltip } from './positioningTooltip'
 
 import type { PositioningPanelText } from './positioningText'
 
-const VIEW = Object.freeze({ width: 1000, height: 186, left: 32, right: 992, markerTop: 3, markerRow: 16, upperTop: 26, upperBottom: 92, zero: 142 })
-/** 标记牌：13 高、贴图上方那条带里，下缘正好是 `markerRow`——竖线从牌子底下开始，不穿牌。 */
-const MARKER_CHIP = Object.freeze({ height: 13, baseline: 12, radius: 4, gap: 6 })
+/**
+ * 图按**容器像素**画：量和国债卡、资金流卡同一套（`ResizeObserver` → `clientWidth/Height`），
+ * svg 的 `width/height` 就是实测值，字 9px 就是 9px。
+ *
+ * 旧写法是一块固定 1000×300 的坐标系 + `width:100%; height:auto`，整幅（含字）按列宽等比缩小：
+ * 图列 700 时缩放 0.7，牌字只有 6.3px（用户 2026-11-24 报「整体缩小」）。量不到尺寸时
+ * （静态渲染、首帧）退回同一比例的兜底坐标系，量到就换成真像素。
+ */
+function useChartBox(): readonly [React.RefObject<HTMLDivElement | null>, Readonly<{ width: number; height: number }>] {
+  const ref = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState<Readonly<{ width: number; height: number }>>({ width: 0, height: 0 })
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+    const measure = (): void => setBox({ width: Math.round(node.clientWidth), height: Math.round(node.clientHeight) })
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+  return [ref, box] as const
+}
+
+/** 量到就用实测像素，量不到用兜底比例——两条路都是像素坐标，只是数不同。 */
+function geometryOf(box: Readonly<{ width: number; height: number }>): PositioningChartGeometry {
+  return positioningChartGeometry(
+    box.width > 0 ? box.width : POSITIONING_CHART_FALLBACK.width,
+    box.height > 0 ? box.height : POSITIONING_CHART_FALLBACK.height
+  )
+}
+
+/** 量到之前挂一个 viewBox 让首帧也画得出来（量到之后去掉，1 单位 = 1 像素）。 */
+function viewBoxOf(box: Readonly<{ width: number; height: number }>, view: PositioningChartGeometry): string | undefined {
+  return box.width > 0 && box.height > 0 ? undefined : `0 0 ${view.width} ${view.height}`
+}
 
 /**
  * 没有可画的读数时的图框：保留两条车道标签与两条基准线（上车道底线、费率零线）。
  *
- * 高度与真图同一个 `VIEW`——空态与有数据态用同一张图的尺寸，读者不会觉得换了一张卡；
+ * 尺寸与真图同源（同一个量容器 + 同一份几何），空态与有数据态卡高一致，读者不会觉得换了一张卡；
  * 不画刻度：刻度必须是真实时刻，骨架不编数据。状态句由调用点放在这张图上方的那一行。
  */
 export function PositioningChartSkeleton({ text }: Readonly<{ text: PositioningPanelText }>): React.ReactElement {
+  const [ref, box] = useChartBox()
+  const view = geometryOf(box)
   return (
-    <div className="mi-positioning-panel__chart" data-chart-skeleton="true">
-      <svg viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} aria-hidden="true" focusable="false">
-        <text x="0" y={VIEW.upperTop - 8} className="mi-positioning-panel__lane">{text.notional}</text>
-        <text x="0" y={VIEW.upperBottom + 18} className="mi-positioning-panel__lane">{text.rateLabel}</text>
-        <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.upperBottom + 6} y2={VIEW.upperBottom + 6} className="mi-positioning-panel__rule" />
-        <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.zero} y2={VIEW.zero} className="mi-positioning-panel__zero" />
-      </svg>
+    <div className="mi-positioning-panel__chart-body" data-chart-skeleton="true" ref={ref}>
+      <div className="mi-positioning-panel__chart">
+        <svg width={box.width || undefined} height={box.height || undefined} viewBox={viewBoxOf(box, view)}
+          aria-hidden="true" focusable="false">
+          <text x="0" y={view.upperTop - 8} className="mi-positioning-panel__lane">{text.notional}</text>
+          <text x="0" y={view.upperBottom + 18} className="mi-positioning-panel__lane">{text.rateLabel}</text>
+          <line x1={view.left} x2={view.right} y1={view.upperBottom + 6} y2={view.upperBottom + 6} className="mi-positioning-panel__rule" />
+          <line x1={view.left} x2={view.right} y1={view.zero} y2={view.zero} className="mi-positioning-panel__zero" />
+        </svg>
+      </div>
     </div>
   )
 }
 
-export function PositioningChart({ positioning, funding, text }: Readonly<{
+export function PositioningChart({ positioning, funding, text, geometry, marks, box }: Readonly<{
   positioning: Extract<DashboardPositioningViewState, { state: 'available' }>
   funding: DashboardFundingRateHistoryState
   text: PositioningPanelText
+  /** 像素坐标系：量到容器就是实测宽高。 */
+  geometry: PositioningChartGeometry
+  /** 牌与竖线的排布：和几何同源，算一次（`hidden` 要拿去做下面那句截断数）。 */
+  marks: LiquidationMarkLayout
+  box: Readonly<{ width: number; height: number }>
 }>): React.ReactElement {
   const ref = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<Readonly<{ index: number; left: number; top: number; width: number; height: number }> | undefined>(undefined)
   const formatTime = useShellTimeFormat()
+  const timeZone = useShellTimeZone()
+  /** 轴刻度用紧凑口径：同日 `HH:mm`、跨日 `MM-DD HH:mm`，不带时区——五个刻度各印一遍 `GMT+8` 会互相压字。
+      浮层里那一刻仍用完整口径（带时区），轴只回答「几点」。 */
+  const formatTick = (instant: string): string => formatShellClock(instant, { timeZone }) ?? formatTime(instant)
   const resolveProductKey = useProductTextKey()
 
   const rows = positioning.btc.length >= positioning.eth.length ? positioning.btc : positioning.eth
@@ -54,8 +112,8 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
   const startMs = count > 0 ? Date.parse(rows[0]!.observedAt) : 0
   const endMs = count > 0 ? Date.parse(rows.at(-1)!.observedAt) : 0
   const span = Math.max(1, endMs - startMs)
-  const x = (ms: number) => VIEW.left + ((ms - startMs) / span) * (VIEW.right - VIEW.left)
-  const xAt = (index: number) => count <= 1 ? VIEW.left : VIEW.left + (index / (count - 1)) * (VIEW.right - VIEW.left)
+  const x = (ms: number) => geometry.left + ((ms - startMs) / span) * (geometry.right - geometry.left)
+  const xAt = (index: number) => count <= 1 ? geometry.left : geometry.left + (index / (count - 1)) * (geometry.right - geometry.left)
 
   // Each asset is scaled to its own range: BTC is three times ETH, and one shared axis would flatten
   // the smaller line. Computed once — the per-point version rescanned 168 values for every point.
@@ -68,7 +126,7 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
   const btcScale = scaleOf(positioning.btc)
   const ethScale = scaleOf(positioning.eth)
   const upperY = (value: number, scale: Readonly<{ min: number; range: number }>) =>
-    VIEW.upperBottom - ((value - scale.min) / scale.range) * (VIEW.upperBottom - VIEW.upperTop)
+    geometry.upperBottom - ((value - scale.min) / scale.range) * (geometry.upperBottom - geometry.upperTop)
 
   const periodMs = 8 * 3_600_000
   // One readable leg is still a readable leg: draw the points that came back, the card names the
@@ -96,9 +154,10 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     slots.set(settlesAt, slot)
   }
   const maximumRate = Math.max(...[...slots.values()].flatMap(slot => [slot.btc, slot.eth]).map(value => Math.abs(value ?? 0)), 0.001)
-  const barCentre = Math.min(30, VIEW.zero - VIEW.upperBottom - 10)
-  const rateY = (value: number) => VIEW.zero - (value / maximumRate) * barCentre
-  const band = Math.max(2, (8 * 3_600_000 / span) * (VIEW.right - VIEW.left))
+  // 柱子最多占到费率车道的一半多一点（0.6）：车道高度由几何给，柱子跟着车道走，不写死像素。
+  const barCentre = Math.max(8, Math.round((geometry.zero - geometry.upperBottom) * 0.6))
+  const rateY = (value: number) => geometry.zero - (value / maximumRate) * barCentre
+  const band = Math.max(2, (8 * 3_600_000 / span) * (geometry.right - geometry.left))
   // Two bars share one 8-hour band, one per asset. Drawn on the same centre they painted over
   // each other and the amber under the translucent purple read as a third colour, which is why
   // the lower lane looked pink instead of showing two series.
@@ -110,7 +169,7 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
    * of them to `right - barWidth` for the newest period — a slot whose instant sits on the axis
    * edge — and the two painted over each other again, which is the merge this replaces.
    */
-  const groupLeft = (centre: number) => Math.min(Math.max(centre - groupWidth / 2, VIEW.left), VIEW.right - groupWidth)
+  const groupLeft = (centre: number) => Math.min(Math.max(centre - groupWidth / 2, geometry.left), geometry.right - groupWidth)
   const barX = (centre: number, asset: 'btc' | 'eth') => groupLeft(centre) + (asset === 'btc' ? 0 : barWidth + barGap)
 
   const hovered = hover === undefined ? undefined : rows[hover.index]
@@ -124,130 +183,39 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
   const pick = (event: React.MouseEvent<SVGSVGElement>) => {
     const rect = ref.current?.getBoundingClientRect()
     if (!rect || count === 0) return
-    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
-    const scaled = ((ratio * VIEW.width) - VIEW.left) / (VIEW.right - VIEW.left)
+    const localX = event.clientX - rect.left
+    // 像素坐标：指针落在哪一列，直接按绘图区的左右缘比，不再经过 viewBox 比例。
+    const ratio = (localX - geometry.left) / (geometry.right - geometry.left)
     setHover({
-      index: Math.round(Math.min(1, Math.max(0, scaled)) * (count - 1)),
+      index: Math.round(Math.min(1, Math.max(0, ratio)) * (count - 1)),
       // The tooltip follows the pointer: pinned to a corner it hid whichever half of the chart
       // the reader was not pointing at.
-      left: event.clientX - rect.left,
+      left: localX,
       top: event.clientY - rect.top,
       width: rect.width,
       height: rect.height
     })
   }
 
-  // 点上画**当前窗口内的全部命中**（账本），每格一个：点与牌子同源、与通知不同源。
-  // 7 天视图就画 7 天内所有命中，不再固定只画「现在那一条」——那条只在 24 小时视图下才等于全部。
-  const marks = positioning.hints
-    .map(hint => {
-      const markMs = Date.parse(hint.observedAt)
-      if (!(markMs >= startMs && markMs <= endMs)) return undefined
-      return {
-        key: `${hint.asset}-${hint.observedAt}`,
-        asset: hint.asset,
-        direction: hint.direction,
-        x: x(markMs),
-        y: upperY(hint.notionalUsd, hint.asset === 'btc' ? btcScale : ethScale),
-        pct: formatDashboardChange(hint.pricePct ?? hint.dropPct),
-        volumeMultiple: hint.volumeMultiple
-      }
-    })
-    .filter((entry): entry is {
-      key: string; asset: 'btc' | 'eth'; direction: 'long' | 'short'; x: number; y: number; pct: string; volumeMultiple: number
-    } => entry !== undefined)
-    .sort((left, right) => left.x - right.x)
-
-  type Mark = (typeof marks)[number]
-  type Cluster = Readonly<{
-    key: string
-    marks: readonly Mark[]
-    asset: 'btc' | 'eth'
-    direction: 'long' | 'short' | 'mixed'
-    label: string
-    summary: string
-    left: number
-    width: number
-  }>
-
-  /** 簇的话：一条说方向 + 价格变化；同向 ≥2 说 ×N；混向不写方向。 */
-  const clusterLabel = (cluster: readonly Mark[]): string => {
-    if (cluster.length === 1) {
-      const only = cluster[0]!
-      return (only.direction === 'long' ? text.markLong : text.markShort).replace('{pct}', only.pct)
-    }
-    const sameDirection = cluster.every(mark => mark.direction === cluster[0]!.direction)
-    if (sameDirection) {
-      const template = cluster[0]!.direction === 'long' ? text.markLongMany : text.markShortMany
-      return template.replace('{count}', String(cluster.length))
-    }
-    return text.markMixedMany.replace('{count}', String(cluster.length))
-  }
-
-  const directionOf = (cluster: readonly Mark[]): 'long' | 'short' | 'mixed' =>
-    cluster.every(mark => mark.direction === cluster[0]!.direction) ? cluster[0]!.direction : 'mixed'
-
-  /**
-   * 从左到右贪心成簇（界面 2026-11-08）：取最左未分配者起一簇，牌以线居中、到边内收贴边；
-   * 若牌与上一张右缘不足 `MARKER_CHIP.gap`，就把下一条并进来重算文字再试——放得下就收簇。
-   * 线不动：并簇只改**文字与牌位**，每条命中仍留自己那根竖线。
-   */
-  const clusters: Cluster[] = []
-  let cursor = 0
-  while (cursor < marks.length) {
-    let members: Mark[] = [marks[cursor]!]
-    let label = clusterLabel(members)
-    let width = chipWidthFor(label)
-    const placement = (): number => {
-      const center = (members[0]!.x + members.at(-1)!.x) / 2
-      return Math.max(VIEW.left, Math.min(center - width / 2, VIEW.right - width))
-    }
-    let left = placement()
-    // 试放下一条：它自己那张牌若与**本簇**的牌右缘不足 6px，就并进来重算，再试下一条。
-    // 注意「并进本簇」不是「另起一簇再往左挤」——那会让两枚牌压在一起。
-    while (cursor + members.length < marks.length) {
-      const next = marks[cursor + members.length]!
-      const nextWidth = chipWidthFor(clusterLabel([next]))
-      const nextLeft = Math.max(VIEW.left, Math.min(next.x - nextWidth / 2, VIEW.right - nextWidth))
-      if (nextLeft >= left + width + MARKER_CHIP.gap) break
-      members = [...members, next]
-      label = clusterLabel(members)
-      width = chipWidthFor(label)
-      left = placement()
-    }
-    const direction = directionOf(members)
-    clusters.push({
-      key: members.map(mark => mark.key).join('+'),
-      marks: members,
-      asset: members[0]!.asset,
-      direction,
-      label,
-      // 浮层与牌同一句话，单个再加一句量；成簇时量各不相同，不编一个数出来。
-      summary: members.length === 1 ? `${label} · ${members[0]!.volumeMultiple.toFixed(1)}×` : label,
-      left,
-      width
-    })
-    cursor += members.length
-  }
-
   return (
     <div className="mi-positioning-panel__chart">
-      <svg ref={ref} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label={text.pairTitle}
+      <svg ref={ref} width={box.width || undefined} height={box.height || undefined} viewBox={viewBoxOf(box, geometry)}
+        role="img" aria-label={text.pairTitle}
         onMouseMove={pick} onMouseLeave={() => setHover(undefined)}>
-        <text x="0" y={VIEW.upperTop - 8} className="mi-positioning-panel__lane">{text.notional}</text>
-        <text x="0" y={VIEW.upperBottom + 18} className="mi-positioning-panel__lane">{text.rateLabel}</text>
-        <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.upperBottom + 6} y2={VIEW.upperBottom + 6} className="mi-positioning-panel__rule" />
+        <text x="0" y={geometry.upperTop - 8} className="mi-positioning-panel__lane">{text.notional}</text>
+        <text x="0" y={geometry.upperBottom + 18} className="mi-positioning-panel__lane">{text.rateLabel}</text>
+        <line x1={geometry.left} x2={geometry.right} y1={geometry.upperBottom + 6} y2={geometry.upperBottom + 6} className="mi-positioning-panel__rule" />
         <path d={linePath(positioning.btc, x, point => upperY(point.notionalUsd, btcScale))} className="mi-positioning-panel__line" data-series="btc" />
         <path d={linePath(positioning.eth, x, point => upperY(point.notionalUsd, ethScale))} className="mi-positioning-panel__line" data-series="eth" />
-        <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.zero} y2={VIEW.zero} className="mi-positioning-panel__zero" />
+        <line x1={geometry.left} x2={geometry.right} y1={geometry.zero} y2={geometry.zero} className="mi-positioning-panel__zero" />
         {[...slots.entries()].map(([settlesAt, slot]) => (['btc', 'eth'] as const).map(asset => {
           const rate = slot[asset]
           if (rate === undefined) return null
           const y = rateY(rate)
           return <rect key={`${asset}-${settlesAt}`} data-series={asset} data-settles-at={new Date(settlesAt).toISOString()}
             className="mi-positioning-panel__bar"
-            x={barX(x(settlesAt), asset)} y={Math.min(y, VIEW.zero)}
-            width={barWidth} height={Math.max(Math.abs(VIEW.zero - y), 0.8)} rx="1" />
+            x={barX(x(settlesAt), asset)} y={Math.min(y, geometry.zero)}
+            width={barWidth} height={Math.max(Math.abs(geometry.zero - y), 0.8)} rx="1" />
         }))}
         {/* Each line ends with its own number. The two lines are scaled to their own ranges, so
             the heights are not comparable — the labels are what tie a point on the curve back to
@@ -259,46 +227,51 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
           const cy = upperY(last.notionalUsd, asset === 'btc' ? btcScale : ethScale)
           // One label above its line, one below: the two ends are often a few units apart, and
           // both above collided exactly when the reader most wants to compare them.
-          const flip = cx > VIEW.right - 64
+          const flip = cx > geometry.right - 64
           const dy = asset === 'btc' ? -8 : 12
           return (
             <text key={asset} data-line-end={asset} data-series={asset}
               className="mi-positioning-panel__end"
               x={flip ? cx - 4 : cx + 4}
-              y={Math.max(VIEW.upperTop + 12, Math.min(cy + dy, VIEW.upperBottom + 4))}
+              y={Math.max(geometry.upperTop + 12, Math.min(cy + dy, geometry.upperBottom + 4))}
               textAnchor={flip ? 'end' : 'start'}>{formatDashboardNotional(last.notionalUsd)}</text>
           )
         })}
-        {/* 一簇一组：线、点、牌在同一个组里，悬停/聚焦/点哪个都出同一份浮层。
-            **不存在只画线的命中**——每条线都在某个带牌的簇里。 */}
-        {clusters.map(cluster => (
-          <Tooltip key={cluster.key} dataText={cluster.summary} resolveText={resolveProductKey}>
-            <g className="mi-positioning-panel__hint" data-hint={cluster.asset} data-hint-direction={cluster.direction}
-              data-hint-count={cluster.marks.length} tabIndex={0} aria-label={cluster.summary}>
-              {cluster.marks.map(mark => (
+        {/* 一枚牌一组：线、点、牌在同一个组里，悬停/聚焦/点哪个都出同一份浮层。
+            牌只说自己那个市场那个方向，颜色也由它定（`data-hint-direction` → `currentColor`）。
+            **不存在只画线的命中**——每条线都在某个带牌的组里；两排都放不下的命中连牌带线一起不画，
+            数量由下面那句「图上还有 N 次」统一记账。 */}
+        {marks.chips.map(chip => (
+          <Tooltip key={chip.key} dataText={chip.summary} resolveText={resolveProductKey}>
+            <g className="mi-positioning-panel__hint" data-hint={chip.asset} data-hint-direction={chip.direction}
+              data-hint-count={chip.marks.length} tabIndex={0} aria-label={chip.summary}>
+              {chip.marks.map(mark => (
                 <g key={mark.key}>
-                  <line x1={mark.x} x2={mark.x} y1={VIEW.markerRow} y2={VIEW.height - 10} />
-                  <circle cx={mark.x} cy={mark.y} r="3" />
+                  <line x1={mark.x} x2={mark.x} y1={geometry.markerRow} y2={geometry.height - 10} />
+                  <circle cx={mark.x} cy={upperY(mark.notionalUsd, mark.asset === 'btc' ? btcScale : ethScale)} r="3" />
                 </g>
               ))}
               <g className="mi-positioning-panel__hint-chip">
-                <rect x={cluster.left} y={VIEW.markerTop} width={cluster.width}
-                  height={MARKER_CHIP.height} rx={MARKER_CHIP.radius} />
-                <text x={cluster.left + cluster.width / 2} y={VIEW.markerTop + MARKER_CHIP.baseline}
-                  textAnchor="middle">{cluster.label}</text>
+                <rect x={chip.left} y={chip.top} width={chip.width}
+                  height={chip.height} rx={MARKER_CHIP.radius} />
+                {/* 一行字，牌心压在自己那条线上；颜色与牌框、竖线同一个 `currentColor`。 */}
+                <text x={chip.left + chip.width / 2} y={chip.top + MARKER_CHIP.baseline}
+                  textAnchor="middle">{chip.text}</text>
               </g>
             </g>
           </Tooltip>
         ))}
-        {hovered && hover ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover.index)} x2={xAt(hover.index)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
+        {hovered && hover ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover.index)} x2={xAt(hover.index)} y1={geometry.upperTop} y2={geometry.height - 10} /> : null}
         {axisTicks(startMs, span, count).map(tick => (
-          <text key={tick.at} x={x(tick.at)} y={VIEW.height - 1}
+          <text key={tick.at} x={x(tick.at)} y={geometry.height - 6}
             textAnchor={tick.first ? 'start' : tick.last ? 'end' : 'middle'}
-            className="mi-positioning-panel__tick">{formatTime(new Date(tick.at).toISOString())}</text>
+            className="mi-positioning-panel__tick">{formatTick(new Date(tick.at).toISOString())}</text>
         ))}
       </svg>
       {hovered && hover ? (
-        <div className="mi-positioning-panel__tooltip" style={tooltipStyle(hover)}>
+        <div className="mi-positioning-panel__tooltip" style={placePositioningTooltip({
+          x: hover.left, y: hover.top, boxWidth: hover.width, boxHeight: hover.height
+        })}>
           <strong>{formatTime(hovered.observedAt)}</strong>
           {(['btc', 'eth'] as const).map(asset => {
             const notional = positioning[asset][hover!.index]?.notionalUsd
@@ -320,6 +293,46 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
   )
 }
 
+/**
+ * 图这一列的整块：量容器 → 几何 → 牌排布 → 图 + 两条脚注。
+ *
+ * 量在这里、算也在这里：牌能不能放下取决于图有多宽，截断数又是「服务端截断 + 排不下」一个数字，
+ * 三者必须同源，拆到两处就会各算一套。脚注放在量出来的框**外面**，不占图的高度。
+ */
+export function PositioningChartBody({ positioning, funding, text, fundingNote }: Readonly<{
+  positioning: Extract<DashboardPositioningViewState, { state: 'available' }>
+  funding: DashboardFundingRateHistoryState
+  text: PositioningPanelText
+  /** 一条腿读不到时的说明（面板按 `funding.missing` 造句，这里只排位置）。 */
+  fundingNote: string
+}>): React.ReactElement {
+  const [ref, box] = useChartBox()
+  const geometry = useMemo(() => geometryOf(box), [box.width, box.height])
+  const marks = useMemo(() => layoutLiquidationMarks(positioning, text, geometry), [positioning, text, geometry])
+  const undrawn = positioning.hiddenHits + marks.hidden
+  return (
+    <>
+      <div className="mi-positioning-panel__chart-body" ref={ref}>
+        <PositioningChart positioning={positioning} funding={funding} text={text} geometry={geometry} marks={marks} box={box} />
+      </div>
+      {/* 一条腿读不到：整句、muted、不带重试——另半张图照常画，读者要知道少了哪条腿。 */}
+      {fundingNote ? (
+        <p className="mi-positioning-panel__funding-missing" data-funding-missing="true" role="status">{fundingNote}</p>
+      ) : null}
+      {/*
+        截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
+        一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
+        只有**一个数字**：服务端截断的（DTO 本来就没进图）+ 两排都排不下而丢掉的。
+      */}
+      {undrawn > 0 ? (
+        <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
+          {text.liquidationHiddenHits.replace('{count}', String(undrawn))}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
 function linePath(points: readonly DashboardPositioningPoint[], x: (ms: number) => number, y: (point: DashboardPositioningPoint) => number): string {
   return points.map((point, index) => `${index ? 'L' : 'M'}${x(Date.parse(point.observedAt)).toFixed(1)} ${y(point).toFixed(1)}`).join(' ')
 }
@@ -327,25 +340,3 @@ function linePath(points: readonly DashboardPositioningPoint[], x: (ms: number) 
 export function formatRate(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(4)}%`
 }
-
-const TOOLTIP = Object.freeze({ width: 214, height: 76, offset: 14, inset: 4 })
-
-/**
- * Places the tooltip beside the pointer and flips it to the other side when the preferred side
- * would leave the chart, so the reading never sits on top of what it is describing.
- */
-function tooltipStyle(hover: Readonly<{ left: number; top: number; width: number; height: number }>): Readonly<{ left: number; top: number }> {
-  const { width, height, offset, inset } = TOOLTIP
-  const fitsRight = hover.left + offset + width <= hover.width - inset
-  const left = fitsRight ? hover.left + offset : Math.max(inset, hover.left - offset - width)
-  const top = Math.min(Math.max(inset, hover.top - height / 2), Math.max(inset, hover.height - height - inset))
-  return { left, top }
-}
-
-/** Rough advance widths at the 9px chart-label size: a CJK glyph ~9px, latin ~5.2px. */
-function chipWidthFor(label: string): number {
-  let width = 0
-  for (const character of label) width += /[\u3000-\u9fff]/.test(character) ? 9 : 5.2
-  return Math.round(width + 12)
-}
-

@@ -16,7 +16,7 @@ import { buildAnalysisSummary, buildPredictionRecords, buildPublishedTimeline } 
  */
 export const marketAnalysisLine: AnalysisLine = Object.freeze({
   analysisKind: 'market',
-  promptVersion: 'market-analysis-v2',
+  promptVersion: 'market-analysis-v3',
   skillVersion: 'market-analysis-v1',
   outputSchemaVersion: MARKET_ANALYSIS_CONTRACT_POLICY.outputSchemaVersion,
 

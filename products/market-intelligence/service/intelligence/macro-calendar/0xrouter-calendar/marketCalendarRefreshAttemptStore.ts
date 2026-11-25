@@ -21,7 +21,7 @@ import { exact, instant } from './marketCalendarStorageValidation'
 export const marketCalendarRefreshAttemptPolicy = Object.freeze({
   // 尝试台账里合法的来源标识：当前三条事件身份，加上切换前写入的历史标识。
   // 台账是 append-only 的事实记录，切换来源不等于那些尝试没发生过——读回时要认得它们。
-  descriptors: [...marketCalendarPublicPolicy.feedByKind, ...marketCalendarPublicPolicy.descriptors],
+  descriptors: [...marketCalendarPublicPolicy.feedByKind, ...marketCalendarPublicPolicy.collectionFeeds],
   locales: ['zh', 'en'] as const,
   states: ['succeeded', 'failed'] as const,
   triggers: marketCalendarPublicPolicy.attemptTriggers,

@@ -1,3 +1,4 @@
+import type { EditionPosterRow } from '@platform/notifications/contracts/notificationContracts'
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { briefingFailedNotice, briefingTimeLabel, notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import type { DailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
@@ -7,6 +8,7 @@ import { withGenerationTrace } from './dailyBriefingStoredAttempt'
 import { cutoffDate } from './dailyBriefingGenerationGuards'
 import { assertNoSerializedValueObjects } from './briefingDisplayValue'
 import type { DailyBriefingStore } from './dailyBriefingService'
+import type { BriefingPosterProducer } from './briefingPosterProducer'
 import type { DailyBriefingTodayFailureCode, DailyBriefingTodayResult } from './dailyBriefingService'
 
 /**
@@ -25,6 +27,11 @@ export async function publishDailyBriefingEdition(input: Readonly<{
   recorder: Pick<DailyBriefingGenerationRecorder, 'begin' | 'end' | 'complete'>
   now: () => string
   noticeSubmit?: DailyBriefingNoticeSubmit
+  /**
+   * 出图：**落版次之后、提交通知之前**跑一次，有界（≤15s，超时由它自己收尾）。
+   * 失败/超时都不带 hash 提交——图挂了照建记录、照发正文（裁决 A 在提交时的那一半）。
+   */
+  renderPoster?: BriefingPosterProducer['render']
   date: string
   periodId: string
   locale: DailyBriefingLocale
@@ -85,8 +92,24 @@ export async function publishDailyBriefingEdition(input: Readonly<{
     }
   }
   await store.prune(cutoffDate(date)).catch(() => undefined)
+  // 出图在提交之前：这一刻还没有 hash 的话，记录就永远带不上，海报等于永远发不出去（有界串行）。
+  // 它失败或超时只少一张图，不改变这一版的成败，也不挡下面那条通知。
+  const poster = input.renderPoster === undefined
+    ? undefined
+    : await input.renderPoster({ date, periodId, locale, editionGeneratedAt: traced.edition.generatedAt }).catch(() => undefined)
+  // 这一版海报表里的那一行，推送那一刻就冻结到通知记录上（#46）：详情页只读记录，不按 editionId
+  // 回查——回查在同一期重生成后会猜错行，保留期删行后还会把「失败过」读成「没有图」。
+  // 三种结果分开写：成了带 hash；失败/超时带原因码；`null` ＝ 查过、表里没有这一行。
+  // 出图这一路没装（`renderPoster === undefined`）或它自己抛了：不写＝不知道，别编成「没有」。
+  const posterRow: EditionPosterRow | null | undefined = poster === undefined
+    ? undefined
+    : poster.ok
+      ? { status: 'ready', contentHash: poster.contentHash, failureCode: null }
+      : { status: poster.status, contentHash: null, failureCode: poster.code }
   await notifyDailyBriefing(input.noticeSubmit, {
     kind: 'ready', date, periodId, editionId: `${date}:${locale}:${periodId}`, locale, deliver: input.deliver,
+    ...(poster?.ok === true ? { editionPoster: { contentHash: poster.contentHash } } : {}),
+    ...(posterRow === undefined ? {} : { editionPosterRow: posterRow }),
     timeLabel: briefingTimeLabel(traced.edition.windowEnd, traced.edition.timeZone),
     // 导读：手动「推送到手机」那条早就带上了，自动发布这条以前漏了——手机上就只剩标题，没有内容。
     // 两条路径共用同一个字段、同一个拼句函数。
@@ -131,6 +154,7 @@ export async function settleEditorialEdition(input: Readonly<{
   recorder: Pick<DailyBriefingGenerationRecorder, 'begin' | 'end' | 'complete'>
   now: () => string
   noticeSubmit?: DailyBriefingNoticeSubmit
+  renderPoster?: BriefingPosterProducer['render']
   date: string
   periodId: string
   locale: DailyBriefingLocale
@@ -155,6 +179,7 @@ export async function settleEditorialEdition(input: Readonly<{
   return publishDailyBriefingEdition({
     document: input.document, store: input.store, attempts: input.attempts, run: input.run, recorder: input.recorder, now: input.now,
     ...(input.noticeSubmit ? { noticeSubmit: input.noticeSubmit } : {}),
+    ...(input.renderPoster ? { renderPoster: input.renderPoster } : {}),
     date: input.date, periodId: input.periodId, locale: input.locale, deliver: deliversCompletion
   })
 }

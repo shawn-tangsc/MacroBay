@@ -10,15 +10,6 @@ export const crossAssetTextKeys = Object.freeze({
   analysis: 'pages.intelligence.portal.dashboard.crossAsset.analysis',
   refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
   noData: 'pages.intelligence.portal.dashboard.crossAsset.noData',
-  dailyFrequency: 'pages.intelligence.portal.dashboard.crossAsset.dailyFrequency',
-  dailyCadence: 'pages.intelligence.portal.dashboard.crossAsset.dailyCadence',
-  dailyMixedDates: 'pages.intelligence.portal.dashboard.crossAsset.dailyMixedDates',
-  dailyCaveat: 'pages.intelligence.portal.dashboard.crossAsset.dailyCaveat',
-  dailySpreadAndInflation: 'pages.intelligence.portal.dashboard.crossAsset.dailySpreadAndInflation',
-  dailySpreadOnly: 'pages.intelligence.portal.dashboard.crossAsset.dailySpreadOnly',
-  dailyChangeWithDate: 'pages.intelligence.portal.dashboard.crossAsset.dailyChangeWithDate',
-  dailyChangeUnknownWithDate: 'pages.intelligence.portal.dashboard.crossAsset.dailyChangeUnknownWithDate',
-  inflationExpectationWithDate: 'pages.intelligence.portal.dashboard.crossAsset.inflationExpectationWithDate',
   syntheticCaveat: 'pages.intelligence.portal.dashboard.crossAsset.syntheticCaveat',
   proxyCaveat: 'pages.intelligence.portal.dashboard.crossAsset.proxyCaveat',
   marketClosedHint: 'pages.intelligence.portal.dashboard.crossAsset.marketClosedHint',
@@ -35,7 +26,6 @@ export const crossAssetTextKeys = Object.freeze({
   /** 供应商永久不提供这个品种：整行遮住，只留这一句状态。 */
   sourceRefused: 'pages.intelligence.portal.dashboard.crossAsset.sourceRefused',
   /** 标题右上的勾：不显示这类行（勾上＝隐藏）。 */
-  hideUnavailableRows: 'pages.intelligence.portal.dashboard.crossAsset.hideUnavailableRows',
   /** 品种被供应商永久拒绝时 ⓘ 的那一行（有更多只被拒时用 `…More` 合并成一句，仍只占一行）。 */
   planNotServedReason: 'pages.intelligence.portal.dashboard.crossAsset.planNotServedReason',
   planNotServedReasonMore: 'pages.intelligence.portal.dashboard.crossAsset.planNotServedReasonMore',

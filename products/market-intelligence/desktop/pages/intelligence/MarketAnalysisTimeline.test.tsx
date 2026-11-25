@@ -44,6 +44,57 @@ afterEach(async () => {
 })
 
 describe('MarketAnalysisTimeline', () => {
+  // 用户 2026-11-21：那行「消息面 · 新闻标题」被读成「这条新闻触发了分析」。改法是把类型和
+  // 标题分开：类型一行、标题一行（「背景新闻：…」），而真正的原因仍是下面那行「最近一次判定」。
+  it('separates the news type, the background headline and the trigger into their own lines', async () => {
+    const newsEntry = (id: string, runId: string, triggerStatus: Record<string, unknown>, subject: string | null) => ({
+      id, eventGroupId: 'mi-eg-news', analysisRunId: runId, kind: 'analysis', status: 'published', occurredAt: asOf,
+      summaryRef: `mi-as-${id}`, safeTitle: '解读已生成', safeExcerpt: '偏空。', version: 1, triggerStatus,
+      groupType: 'sentiment', groupSubject: subject
+    })
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') {
+        return {
+          schemaVersion: 1,
+          items: [
+            // 同一个分组的两条运行：各带自己的触发，标题只有一条背景行
+            newsEntry('mi-tl-a', 'mi-ar-a', { triggerKey: 'schedule.asia.open', reasonCode: 'session-slot-asia', decidedAt: asOf }, 'Binance 把代币化股票加入抵押品'),
+            newsEntry('mi-tl-b', 'mi-ar-b', { triggerKey: 'manual.refresh', reasonCode: 'manual-request', decidedAt: asOf }, 'Binance 把代币化股票加入抵押品'),
+            // 另一个分组只是让「跨分组」成立（单分组视图本来就不显示分组名）
+            newsEntry('mi-tl-c', 'mi-ar-c', { triggerKey: 'manual.refresh', reasonCode: 'manual-request', decidedAt: asOf }, null),
+            { ...newsEntry('mi-tl-d', 'mi-ar-d', { triggerKey: 'calendar.refresh', reasonCode: 'significance-confirmed', decidedAt: asOf }, 'CPI'), groupType: 'macro', eventGroupId: 'mi-eg-macro' }
+          ],
+          nextCursor: null
+        }
+      }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return { itemId: 'item-1', queued: true }
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    await flushReads()
+
+    // 标题单独一行，与类型标签不是同一个元素（以前是「消息面 · 标题」拼成的一行）
+    const backgrounds = Array.from(container.querySelectorAll('[data-group-background]'))
+    expect(backgrounds.map(node => node.textContent))
+      .toEqual([text.groupBackground.replace('{title}', 'Binance 把代币化股票加入抵押品'), text.groupBackground.replace('{title}', 'Binance 把代币化股票加入抵押品')])
+    const types = Array.from(container.querySelectorAll('[data-group-type]'))
+    expect(types.map(node => node.textContent)).toEqual(['消息面', '消息面', '消息面'])
+    for (const type of types) expect(type.textContent).not.toContain('Binance')
+
+    // 同一分组的两条运行各自显示自己的触发：一条开盘、一条手动。
+    const triggers = Array.from(container.querySelectorAll('[data-trigger-status]')).map(node => node.textContent ?? '')
+    expect(triggers.some(line => line.includes(text.triggerStatus.reasons['session-slot-asia']!))).toBe(true)
+    expect(triggers.some(line => line.includes(text.triggerStatus.reasons['manual-request']!))).toBe(true)
+
+    // 没有背景标题的那条不出背景行；非新闻分组照旧用「类型 · 名字」。
+    expect(container.querySelectorAll('[data-group-background]')).toHaveLength(2)
+    expect(container.textContent).toContain(`${text.groupTypes.macro} · CPI`)
+  })
+
   it('shows a persisted analysis failure and permits an explicit retry after refresh', async () => {
     const invoke = vi.fn(async (_product: string, method: string) => {
       if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [], nextCursor: null }
@@ -928,11 +979,13 @@ describe('market analysis timeline event captions', () => {
       entry('mi-tl-1', 'mi-eg-macro', '2026-10-31T13:36:04.000Z', 'macro', 'Fed Funds Target Range Upper')
     ])
 
+    // 新闻那一行不再把类型和标题拼在一起（用户 2026-11-21）：类型单独一行，标题另起一行叫
+    // 「背景新闻」——否则读者会把标题读成这次分析的原因。宏观那行照旧用「类型 · 名字」。
+    expect(Array.from(container.querySelectorAll('[data-group-type]')).map(node => node.textContent)).toEqual(['消息面'])
+    expect(Array.from(container.querySelectorAll('[data-group-background]')).map(node => node.textContent))
+      .toEqual([text.groupBackground.replace('{title}', 'A Nasdaq-listed company may sell $450 million bitcoin')])
     const captions = Array.from(container.querySelectorAll('.mi-analysis-timeline__group')).map(node => node.textContent)
-    expect(captions).toEqual([
-      '消息面 · A Nasdaq-listed company may sell $450 million bitcoin',
-      '宏观 · Fed Funds Target Range Upper'
-    ])
+    expect(captions).toEqual(['宏观 · Fed Funds Target Range Upper'])
   })
 
   it('says nothing about the event on a list scoped to one event, or on a row whose event has no name', async () => {
@@ -941,6 +994,8 @@ describe('market analysis timeline event captions', () => {
       entry('mi-tl-1', 'mi-eg-1', '2026-10-31T13:00:00.000Z', 'sentiment', '某条消息')
     ])
     expect(scoped.querySelector('.mi-analysis-timeline__group')).toBeNull()
+    // 单分组视图里连「背景新闻」也不出现：那一屏本来就知道自己在看哪一条。
+    expect(scoped.querySelector('[data-group-background]')).toBeNull()
     await act(async () => root?.unmount())
     root = undefined
     document.body.replaceChildren()
@@ -950,6 +1005,7 @@ describe('market analysis timeline event captions', () => {
       entry('mi-tl-1', 'mi-eg-2', '2026-10-31T13:00:00.000Z', 'macro', null)
     ])
     expect(unnamed.querySelector('.mi-analysis-timeline__group')).toBeNull()
+    expect(unnamed.querySelector('[data-group-background]')).toBeNull()
   })
 })
 

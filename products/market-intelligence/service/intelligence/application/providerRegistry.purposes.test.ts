@@ -11,6 +11,10 @@ import { allSources } from './providerRegistry'
  * 在看板上看到它，那是可见行为变化而不是重构。
  */
 /**
+ * **2026-11-22 的一处有意的改动**：`deribit-options` 从 `[]` 变成 `['dashboard']`。用户要求在
+ * 「采集与数据」里看到合并卡这一格（两行源），它因此成为看板面板源；分析快照不读它（`optional`
+ * 分组只是满足「面板源必须在 agent 里」这条判据）。
+ *
  * **2026-11-17 的一处有意的改动**：`0xrouter-aggregate-provider` 从 `[]` 变成 `['dashboard']`。
  * 这不是派生漂移，是用户要求（「旧源给我加回来，互相补充，新的覆盖旧的」）——它重新声明
  * `etf-net-flow` 作 CryptoETF 的备源，因此出现在看板的 ETF 那一格。除此之外逐源一字不动。
@@ -41,6 +45,9 @@ describe('the derived panels match what the registry declared before purposes ex
     ['defillama-tvl', []],
     ['cryptoetf-etf-flows', ['dashboard']],
     ['alternative-fear-greed', ['dashboard']],
+    // 2026-11-22 用户要求：合并卡的右半（BTC 期权偏斜）真的在看板上，所以它成为看板面板源
+    // （此前待接入期是 `[]`）。这一条是有意的可见变化，不是派生漂移。
+    ['deribit-options', ['dashboard']],
     ['coindesk-rss', ['dashboard']],
     ['ethereum-foundation-blog', []],
     ['cryptopanic', []],

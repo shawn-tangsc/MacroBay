@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { zeroXRouterCanonicalIdentity, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { derivePublishWindows } from './marketCalendarPublishWindow'
 import { calendarStandardTablePolicy, hasActualValue } from './marketCalendarStandardTable'
+import { isCalendarPeriodToken } from './marketCalendarPeriodKey'
 import { releaseStatusesPromotedByValue } from '../../../contracts/macro/marketCalendarQueryContracts'
 
 /**
@@ -17,14 +18,25 @@ import { releaseStatusesPromotedByValue } from '../../../contracts/macro/marketC
  * 2. 桶一（同国家+码+首发布日 已有正常期次行时的 `unknown:` 重复）：**先于期次解析跑**——
  *    否则那条重复会被解析成另一个周次、躲过合并，落成同一发布的第二行（实测 MBA 那组）。
  *    规则：保留行没有的字段才补，然后删重复行。
- * 3. 期次解析；4. 桶二（同国家+码+期次 的多行）：有 actual 优先 → 都有取首发布日最晚 →
- *    都无取最早。**每一次删除都整行进 `mi_calendar_events__merge_audit_v1`**，记规则分支与保留目标行。
+ * 3. 期次解析。**每一次删除都整行进 `mi_calendar_events__merge_audit_v1`**，记规则分支与保留目标行。
  *
- * 幂等：第二遍 0 变更。不碰国家码、不碰主键、不碰数值本身（桶一/桶二只为补空缺字段并值）。
+ * 幂等：第二遍 0 变更。不碰国家码、不碰主键、不碰数值本身（桶一只为补空缺字段并值）。
+ * **同一期、不同首发布日的行不合并**：那是两次发布（主键含首发布日），并掉就是丢数据。
  */
+/**
+ * 这一行的期次是不是「待解析」：`unknown:`（明确缺失），或者**不是任何一种期次令牌**
+ * （`SECOND` / `ADVANCE` 这种修订序号被误当期次）。两者都不是缺陷行，而是还没解出真期次。
+ */
+function isUnresolvedPeriodKey(periodKey: string): boolean {
+  return periodKey.startsWith('unknown:') || !isCalendarPeriodToken(periodKey)
+}
+
 export const calendarStartupNormalizationPolicy = Object.freeze({
   mergeAuditTable: 'mi_calendar_events__merge_audit_v1'
 })
+
+/** 报告里「被改名成 unknown 的原期次」最多列几条：多到看不出形状时就该去查代码，不是查日志。 */
+const renamedFromSampleLimit = 10
 
 export type CalendarNormalizationReport = Readonly<{
   scanned: number
@@ -35,8 +47,23 @@ export type CalendarNormalizationReport = Readonly<{
   mergedRows: number
   droppedRows: number
   unresolvedPeriods: number
-  /** 因「跨源值冲突」而**故意不并**的组数（同源两行仍按老规则合并）。 */
-  conflictGroupsKept: number
+  /**
+   * 被改名成 `unknown:<源内发布 id>` 的行数，以及它们**原来的 `period_key`**（distinct、前几条）。
+   *
+   * 为什么记原值：改名是对的（那不是期次），但**漏认一种期次形状**也表现成「解析 N 条」。
+   * 只记数量，日志里看不出是谁被改名了，下次还得翻库。
+   */
+  renamedToUnknown: number
+  renamedFromPeriods: readonly string[]
+  renamedFromDistinct: number
+  /**
+   * 改名撞上「目标行已存在」的次数：不再抛 UNIQUE，而是把值并进那一行、删本条。
+   *
+   * 撞车在今天的数据上还没出现，但旧写法是裸 `update`、主键含 `period_key`，一撞就抛——
+   * 而整段规范化在一个 `try/catch` 里只记一行「失败（已忽略）」，于是**这一轮清理整段不跑**，
+   * 日志还像「没事可做」。计数是为了它发生时能看见。
+   */
+  renameCollisions: number
 }>
 
 type Row = Record<string, unknown>
@@ -87,8 +114,12 @@ export function normalizeCalendarStandardRows(
 
   const report = {
     scanned: 0, valueStateToPresent: 0, valueStateToMissing: 0, statusPromoted: 0,
-    periodsResolved: 0, mergedRows: 0, droppedRows: 0, unresolvedPeriods: 0, conflictGroupsKept: 0
+    periodsResolved: 0, mergedRows: 0, droppedRows: 0, unresolvedPeriods: 0
   }
+  let renamedToUnknown = 0
+  let renameCollisions = 0
+  // distinct：同一个假期次（例如一批 `SECOND`）只记一条，日志才读得懂。
+  const renamedFrom = new Set<string>()
   const byCode = new Map<string, Array<{ id: string; entry: Record<string, unknown> }>>()
   for (const [id, entry] of Object.entries(zeroXRouterIndicatorIdentities)) {
     const list = byCode.get(entry.metricKey) ?? []
@@ -137,6 +168,10 @@ export function normalizeCalendarStandardRows(
     }
 
     // ── 1b. 桶一：同（国家+码+首发布日）已有正常期次行时，`unknown:` 重复先并值后删 ──
+    //     抽成函数是因为它在「期次解析之后」还要再跑一遍（见步骤 2 末，#53）：解析可能刚好让
+    //     一条 unknown 变成正常期次，于是同一身份出现「正常 + unknown」——那时该当场合掉，
+    //     而不是等下一次启动。**原顺序不动**：它第一次仍然在解析之前跑。
+    const mergeUnknownDuplicates = (): void => {
     const bucketOne = database.prepare(`select country_code, metric_key, first_scheduled_date
       from ${table} group by 1,2,3
       having sum(period_key not like 'unknown:%') > 0 and sum(period_key like 'unknown:%') > 0`).all() as Row[]
@@ -168,15 +203,22 @@ export function normalizeCalendarStandardRows(
           anyMerged ? 'merged-value-then-delete' : 'values-equal-direct-delete')
       }
     }
+    }
+    mergeUnknownDuplicates()
 
     // ── 2. 期次解析（只用已有 periodRule） ──────────────────────────────────
     // 发布窗口与回填共用同一套算法（从该源历史发布日现算）：期次反推必须两边一致，
     // 否则回填写下 2026-10、这里又把它「解」成 2026-11，同一行每轮翻一次。
     const publishWindows = derivePublishWindows(database)
-    const unresolved = database.prepare(`select rowid as rowId, country_code, metric_key, period_key,
+    /**
+     * **候选＝`unknown:` 的，加上「根本不是期次令牌」的**（0.4.5 #52）。
+     * 后者以前漏在闸外：回放曾把 `US.GDP.2026-Q3.SECOND` 的末段当期次写成 `SECOND`，
+     * 它不是 unknown、也不是期次，于是永远不被解析，与 BEA 的 `2026-Q3` 并存成两行。
+     */
+    const unresolved = (database.prepare(`select rowid as rowId, country_code, metric_key, period_key,
         scheduled_date, first_scheduled_date, coalesce(event_type, '') as event_type,
-        source_label, source_label_en
-      from ${table} where period_key like 'unknown:%'`).all() as Row[]
+        source_event_id, source_label, source_label_en
+      from ${table}`).all() as Row[]).filter((row) => isUnresolvedPeriodKey(String(row.period_key)))
     const rename = database.prepare(`update ${table} set period_key = ? where rowid = ?`)
     const index = new Map<string, number>()
     for (const row of database.prepare(`select rowid as rowId, country_code, metric_key, period_key, first_scheduled_date
@@ -205,7 +247,48 @@ export function normalizeCalendarStandardRows(
         })
         period = canonical?.periodKey ?? null
       }
-      if (period === null) { report.unresolvedPeriods += 1; continue }
+      if (period === null) {
+        /**
+         * 解不出来，而它的期次**本来就不是期次**（`SECOND` 这类修订序号）：把它落成
+         * 「明确缺失」`unknown:<源内发布 id>`，与同身份的另一行同一写法——否则它顶着一个
+         * 假期次永远是「另一期」，后面的桶一认不出它们是同一次发布（0.4.5 #52）。
+         * 已经是 `unknown:` 的不动：那本来就是「明确缺失」。
+         */
+        const current = String(row.period_key)
+        const currentKey = keyOf(row)
+        if (!current.startsWith('unknown:')) {
+          const target = { ...row, period_key: `unknown:${String(row.source_event_id)}` }
+          const occupiedUnknown = index.get(keyOf(target))
+          if (occupiedUnknown === undefined) {
+            rename.run(String(target.period_key), Number(row.rowId))
+            index.delete(currentKey)
+            index.set(keyOf(target), Number(row.rowId))
+            renamedToUnknown += 1
+          } else {
+            /**
+             * **目标行已存在 → 并进去，不抛**（架构师 2026-11-24 复核）：裸 `update` 撞主键会抛
+             * UNIQUE，而整段规范化在一个 `try/catch` 里，抛了就是这一轮清理整段停摆。
+             * 与正常期次撞车（下面那段）同一个动作：补缺字段 → 归档 → 删本条。不许删保留方、
+             * 不许改来源（这里是同一发布的两条重复观测，来源留谁的都行）。
+             */
+            const keptUnknown = readRow.get(occupiedUnknown) as Row
+            const mergedUnknown = mergeMissingFields(keptUnknown.values_json, row.values_json)
+            if (mergedUnknown.changed) {
+              database.prepare(`update ${table} set values_json = ?, value_state = ? where rowid = ?`)
+                .run(mergedUnknown.valuesJson, hasActualValue(mergedUnknown.valuesJson) ? 'present' : 'missing',
+                  occupiedUnknown)
+              report.mergedRows += 1
+            }
+            archiveAndDelete(Number(row.rowId), target, keyOf(keptUnknown), 'unknown-rename-collision')
+            index.delete(currentKey)
+            renameCollisions += 1
+          }
+          // 原值进报告：将来漏认一种形状时，能看出**是谁被改名了**（distinct，前几条就够）。
+          renamedFrom.add(current)
+        }
+        report.unresolvedPeriods += 1
+        continue
+      }
       const currentKey = keyOf(row)
       const target = { ...row, period_key: period }
       const occupied = index.get(keyOf(target))
@@ -226,68 +309,27 @@ export function normalizeCalendarStandardRows(
       index.delete(currentKey)
       report.periodsResolved += 1
     }
+    // 解析之后当场再合一遍（#53）：本次刚解析出来的正常行，与同一身份仍挂着的 `unknown:` 重复。
+    // 幂等：没有这种重复时它一条都不动。
+    mergeUnknownDuplicates()
 
     /**
-     * **跨源值冲突不并**（Chief 2026-11-21，0.4.5 #18）：两家对同一期给出不同的数时，
-     * 合并会挑一行留下、另一行的值当场消失——读者看到的是一个来源的数，却以为是共识，
-     * 事后也查不到「曾有两家不一致」。**同源两行仍按老规则合并**（那是同一家的修订）。
+     * **同一期、不同首发布日的行一条都不并**（Chief 2026-11-24 改契约）。
+     *
+     * 这里原来有一段「桶二」：按（国家+码+期次）分组、忽略首发布日，把多条合成一条
+     * （有 actual 优先 → 都取最晚 → 都无取最早）。它有两个后果，第二个是丢数据：
+     * - 每轮回填写两行、启动再并掉，下一轮又造出来（CA 经济信心那批每轮 14 行）；
+     * - **多条真实发布被并成一条**：CA 经济信心 2026-09 源上发了三条（10-05 50.5 / 10-13 51.3 /
+     *   10-19 51.7），只剩最后一条，前两条的值只留在审计表里。
+     *
+     * 主键含 `first_scheduled_date` 本来就是「排期不同＝两行」；**同首发布日**的重复由桶一
+     * （`unknown:` 重复）和写入端的 upsert 处理，不在这里再按期间合并。
+     * 跨源值冲突不再由这一步计数：`markCrossSourceConflicts` 记的是同一份数据、还带双方的值。
      */
-    const conflictsIn = (group: readonly Row[]): readonly string[] => {
-      if (new Set(group.map((row) => String(row.source_provider_id))).size < 2) return []
-      const conflicted: string[] = []
-      for (const field of ['actual', 'previous', 'consensus'] as const) {
-        const values = new Set<string>()
-        for (const row of group) {
-          const value = fieldsOf(row.values_json)[field]
-          if (isFilled(value)) values.add(String(value).trim())
-        }
-        if (values.size > 1) conflicted.push(field)
-      }
-      return conflicted
-    }
-
-    // ── 3b. 桶二：同（国家+码+期次）多行，按「有 actual → 最晚 → 最早」合并 ──────
-    const duplicatesByPeriod = database.prepare(`select country_code, metric_key, period_key
-      from ${table} group by 1,2,3 having count(*) > 1`).all() as Row[]
-    for (const group of duplicatesByPeriod) {
-      const rowsHere = database.prepare(`select rowid as rowId, * from ${table}
-        where country_code = ? and metric_key = ? and period_key = ?`).all(
-        String(group.country_code), String(group.metric_key), String(group.period_key)) as Row[]
-      // 跨源且值不同：**一条都不删、不改**，留给冲突审计记一对互指；计数进报告，不静默。
-      if (conflictsIn(rowsHere).length > 0) {
-        report.conflictGroupsKept += 1
-        continue
-      }
-      const ranked = rowsHere.map((row) => ({ row, hasActual: hasActualValue(String(row.values_json)) ? 1 : 0 }))
-      ranked.sort((left, right) => {
-        if (left.hasActual !== right.hasActual) return right.hasActual - left.hasActual
-        const leftDate = String(left.row.first_scheduled_date)
-        const rightDate = String(right.row.first_scheduled_date)
-        return left.hasActual === 1 ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate)
-      })
-      const kept = ranked[0]!.row
-      const allActual = ranked.every((item) => item.hasActual === 1)
-      const noneActual = ranked.every((item) => item.hasActual === 0)
-      const branch = allActual ? 'latest-when-all-have-actual'
-        : noneActual ? 'earliest-when-none-have-actual' : 'actual-priority'
-      let keptValues = String(kept.values_json)
-      let anyMerged = false
-      for (const loser of ranked.slice(1)) {
-        const merged = mergeMissingFields(keptValues, loser.row.values_json)
-        if (merged.changed) { keptValues = merged.valuesJson; anyMerged = true }
-      }
-      if (anyMerged) {
-        database.prepare(`update ${table} set values_json = ?, value_state = ? where rowid = ?`)
-          .run(keptValues, hasActualValue(keptValues) ? 'present' : 'missing', Number(kept.rowId))
-        report.mergedRows += 1
-      }
-      for (const loser of ranked.slice(1)) {
-        archiveAndDelete(Number(loser.row.rowId), group, keyOf(kept), `period-resolve-dup/${branch}`)
-      }
-    }
 
     database.exec('commit')
-    return report
+    return { ...report, renamedToUnknown, renamedFromDistinct: renamedFrom.size,
+      renamedFromPeriods: [...renamedFrom].slice(0, renamedFromSampleLimit), renameCollisions }
   } catch (error) {
     database.exec('rollback')
     throw error

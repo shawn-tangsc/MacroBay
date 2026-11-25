@@ -4,7 +4,11 @@
  * 名表、分级、子项、官网页全部从这张表派生；映射表每一行的码都必须在这张表里，否则不许入库。
  *
  * `officialSource` 要么是机构页（带 `verifiedAt` 与 basis），要么是 `pending` + 闭集理由——**没有第三种，
- * 也没有空链接**。查不到的写 `official-source-todo`，不许拿聚合站凑。
+ * 也没有空链接**。待补理由必须分开两种事实（用户 2026-11-01：「没有」与「拿不到」不许混成一句）：
+ * `official-source-todo`＝**我们还没能核到机构页**（查了，但这台机器被 403/Akamai 挡，或还没排到）；
+ * `official-source-not-public`＝**机构没有可匿名、可长期引用的稳定发布页或数据页**（每期 URL 变／
+ * 需会员登记／需订阅），所以不填 URL、不填 `verifiedAt`——但**不说成「机构没有发布页」**（ISM 有公开月报 PDF）。
+ * 查不到的写前者，不许拿聚合站凑。
  *
  * 注意：表里存的是**机构页**，不是「这一场发布的具体页面」。要指向某一场，得用发布键去拼，那是另一件事。
  */
@@ -12,11 +16,18 @@ export type OfficialSource = Readonly<{ agency: string; url: string; pageKind: '
 export type CodeStatus = 'active' | 'not-built' | 'pending' | 'retired'
 export type NotBuiltReason = 'duplicate-scope' | 'no-reader' | 'second-identity' | 'measure-unclear'
 export type PendingReason =
-  | 'official-source-todo' | 'source-name-broken' | 'awaiting-data' | 'period-unresolved' | 'name-incomplete'
+  | 'official-source-todo'
+  /** 机构存在，但**没有可匿名、可长期引用的稳定发布页或数据页**（每期 URL 变／需会员登记／需订阅）；
+   * 因此不填 URL、不填 `verifiedAt`。与「我们还没能核到」是两种事实，不许合并。 */
+  | 'official-source-not-public'
+  | 'source-name-broken' | 'awaiting-data' | 'period-unresolved' | 'name-incomplete'
 
 export const codeTableReasonSets = Object.freeze({
   'not-built': Object.freeze(['duplicate-scope', 'no-reader', 'second-identity', 'measure-unclear'] as const),
-  pending: Object.freeze(['official-source-todo', 'source-name-broken', 'awaiting-data', 'period-unresolved', 'name-incomplete'] as const)
+  pending: Object.freeze([
+    'official-source-todo', 'official-source-not-public',
+    'source-name-broken', 'awaiting-data', 'period-unresolved', 'name-incomplete'
+  ] as const)
 })
 
 export type CodeTableRow = Readonly<{
@@ -110,6 +121,31 @@ export function validateCodeTableRows(raw: Record<string, unknown>): Record<stri
       if (codeTablePercentMeasures.includes(String(row.measure))) {
         throw new Error(`${where}：率类（measure=${String(row.measure)}）是百分比量纲，不许标 annualization:'flow'——利率年度化是错口径`)
       }
+    }
+    /**
+     * 闭集在运行时也要**真的执行**（架构师 2026-11-21 保留③：只补这两条，别扩范围）。
+     *
+     * ① 官网页待补理由：界面悬停句直接取自这一格，写错一个词，读者看到的
+     *    「机构没有可长期引用的公开页」就会变成「我们还没能核到」——两种事实换了位，事后查不出来。
+     *    今天 48 行走这条（那 48 条都是 `status:'active'` + `officialSource.pending:true`）。
+     * ② 行级理由：状态为 `pending` / `not-built` 时，`reason` 必须取自对应闭集（今天 0 行，但闭集要有执行点）。
+     *
+     * **不许**在这里顺手加「active 不许带 row.reason」这类今天测不到的规则：它在 import 时抛，
+     * 等于整个服务模块加载失败。fail-closed 只对**已经出现的事实**生效。
+     */
+    const source = row.officialSource as { pending?: unknown; reason?: unknown } | undefined
+    if (source !== undefined && source.pending === true) {
+      if (!(codeTableReasonSets.pending as readonly unknown[]).includes(source.reason)) {
+        throw new Error(`${where}：官网页待补理由不在闭集里（${String(source.reason)}）`)
+      }
+    }
+    if (row.status === 'pending'
+      && !(codeTableReasonSets.pending as readonly unknown[]).includes(row.reason)) {
+      throw new Error(`${where}：pending 的理由不在闭集里（${String(row.reason)}）`)
+    }
+    if (row.status === 'not-built'
+      && !(codeTableReasonSets['not-built'] as readonly unknown[]).includes(row.reason)) {
+      throw new Error(`${where}：not-built 的理由不在闭集里（${String(row.reason)}）`)
     }
     out[key] = value as CodeTableRow
   }

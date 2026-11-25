@@ -35,6 +35,7 @@ const text = {
   countryNote: mkDay.mappingCodeCountryNote, codeColumns: mkDay.mappingCodeColumns, codeStatus: mkDay.mappingCodeStatus,
   onlyWithData: mkDay.mappingOnlyWithData, unknownCountry: '未知国家',
   officialOpen: mkDay.mappingOfficialOpen, officialPending: mkDay.mappingOfficialPending,
+  officialPendingReasons: mkDay.mappingOfficialPendingReasons,
   officialNone: mkDay.mappingOfficialNone, codeEmpty: mkDay.mappingCodeEmpty,
   unmappedColumns: mkDay.mappingUnmappedColumns, unmappedEmpty: mkDay.mappingUnmappedEmpty,
   unmappedReasons: mkDay.mappingUnmappedReasons, reasonFilter: mkDay.mappingReasonFilter,
@@ -155,10 +156,11 @@ it('keeps the code tail visible, and never leaves the official cell blank or a d
   expect(body[0]!.querySelector('[data-code]')?.getAttribute('title')).toBe('US.CORE_PCE.NSA.YOY')
   expect(body[0]!.querySelector('[data-official]')?.getAttribute('href')).toBe('https://www.bea.gov/x')
   expect(body[0]!.querySelector('[data-official]')?.textContent).toBe('查看')
-  // 待补：纯文字，`title` 给理由，**没有 href**。
+  // 待补：纯文字，`title` 给**白话理由句**——不是内部 token（「没有」与「拿不到」要能分开），**没有 href**。
   const pending = body[1]!.querySelector('[data-official-pending]')!
   expect(pending.textContent).toBe('待核')
-  expect(pending.getAttribute('title')).toBe('official-source-todo')
+  expect(pending.getAttribute('title')).toBe(mkDay.mappingOfficialPendingReasons['official-source-todo'])
+  expect(pending.getAttribute('title')).not.toMatch(/^official-/)
   expect(pending.getAttribute('href')).toBeNull()
   // 不建/退役：破折号，没有链接。
   expect(body[2]!.querySelector('[data-official], [data-official-pending]')).toBeNull()

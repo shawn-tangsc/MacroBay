@@ -19,7 +19,7 @@ import type { MacroRatesReading, MacroRatesSnapshotView } from '../../../../cont
 import { macroRatesSnapshotPublicPolicy } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import { useCrossAssetObservation } from './useCrossAssetObservation'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
-import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
+import { crossAssetMacroReading, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
 import { crossAssetWindows } from './crossAssetWindowReturns'
 import { chartLinesHiddenBy, CrossAssetReturnChart, linesWithoutComparableData, type CrossAssetChartLineId } from './CrossAssetReturnChart'
 import { CircleSlash, TriangleAlert } from 'lucide-react'
@@ -33,7 +33,7 @@ import { CrossAssetQuoteLegStatus } from './CrossAssetQuoteLegStatus'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
 import {
-  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, RowHint, RowName, SourceUnavailableRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
+  AssetStatusRow, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, RowHint, RowName, SourceUnavailableRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
   type MacroDriverId, type RowMetrics, type Text
 } from './crossAssetStatusRows'
 import { crossAssetTextKeys, crossAssetWindowLabelKeys } from './crossAssetTextKeys'
@@ -41,7 +41,6 @@ import type { CrossAssetEventLine } from './crossAssetEventLines'
 import { useCrossAssetEventLines } from './useCrossAssetEventLines'
 import type { MacroMarketViewState } from './useMacroMarketSnapshot'
 import type { MacroRatesViewState } from './useMacroRatesSnapshot'
-import { basisPointsText, crossAssetRatesDailyExtras } from './crossAssetRatesDaily'
 import { macroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
 import { MARKET_ANALYSIS_CONTEXT_CAVEATS } from '../../../../contracts/marketAnalysisContracts'
 
@@ -60,65 +59,13 @@ type CrossAssetRange = typeof crossAssetRanges[number]
 
 type HintLine = { labelKey: string; params?: Readonly<Record<string, string>> }
 
-function RatesStatusRow({ id, reading, rates, text }: {
-  id: 'us10y' | 'realRate'; reading: MacroRatesReading
-  rates: ReadonlyMap<string, MacroRatesReading>; text: Text
-}): React.ReactElement {
-  const extras = crossAssetRatesDailyExtras({ id, reading, rates })
-  const resolveText = useProductTextKey()
-  /**
-   * 「期限利差」与「通胀预期」是同一句话里本来就该并列的两段（同一张表相邻两个读数），所以合一个键：
-   * 组合模板带三个参数，` · ` 是句子的一部分，不是调用点拼出来的结构（产品经理 2026-11-02 定的边界）。
-   * 只有一段时各走单段键——不为少一行硬合，也不许两段拼在调用点。
-   */
-  const spread = extras.termSpreadDelta === undefined
-    ? undefined
-    : `${basisPointsText(extras.termSpreadDelta)}${text.bpUnit}`
-  const inflation = extras.breakeven === undefined
-    ? undefined
-    : { value: extras.breakeven.value.toFixed(2), date: extras.breakeven.date }
-  const detailLine: HintLine | undefined =
-    spread !== undefined && inflation !== undefined
-      ? { labelKey: crossAssetTextKeys.dailySpreadAndInflation, params: { spread, inflation: inflation.value, date: inflation.date } }
-      : spread !== undefined
-        ? { labelKey: crossAssetTextKeys.dailySpreadOnly, params: { spread } }
-        : inflation !== undefined
-          ? { labelKey: crossAssetTextKeys.inflationExpectationWithDate, params: { value: inflation.value, date: inflation.date } }
-          : undefined
-  const detail = detailLine === undefined ? undefined : fillLabelParams(resolveText(detailLine.labelKey), detailLine.params)
-  const change = reading.previous === undefined
-    ? fillLabelParams(resolveText(crossAssetTextKeys.dailyChangeUnknownWithDate), { date: reading.period })
-    : fillLabelParams(resolveText(crossAssetTextKeys.dailyChangeWithDate), { change: `${basisPointsText(reading.actual - reading.previous)}${text.bpUnit}`, date: reading.period })
-  // 气泡里的每一行都是「键 + 它自己的参数」：句子在 `productText`，调用点只给已格式化好的值。
-  const dailyFacts: readonly HintLine[] = [
-    { labelKey: crossAssetTextKeys.dailyFrequency },
-    ...(detailLine === undefined ? [] : [detailLine]),
-    ...(extras.mixedObservationDates ? [{ labelKey: crossAssetTextKeys.dailyMixedDates }] : []),
-    { labelKey: crossAssetTextKeys.dailyCaveat }
-  ]
-  // 这一格不是控件：撤掉浮层与焦点停靠，说明改由可访问名承载（同一件事不占一个键盘站）。
-  const dailyDescription = dailyFacts.map(line => resolveText(line.labelKey)).join(text.hintListSep)
-  return <tr data-status-row={id} data-connected="true" data-observation-date={reading.period}>
-    <th scope="row"><RowName name={text.assetLabels[id]} hint={<RowHint id={id} name={text.assetLabels[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} />} /></th>
-    <td data-asset-price={id}>{reading.actual.toFixed(2)}%</td>
-    <td className="mi-cross-asset__daily" colSpan={crossAssetWindows.length} data-asset-daily={id}
-      aria-label={dailyDescription}
-      data-direction={reading.previous === undefined ? 0 : Math.sign(reading.actual - reading.previous)}
-      data-caveat={macroRatesSnapshotPublicPolicy.caveats.officialDailyClose}
-      {...(extras.mixedObservationDates ? { 'data-mixed-observation-dates': MARKET_ANALYSIS_CONTEXT_CAVEATS.macroRatesMixedPeriods } : {})}>
-      <strong>{change}</strong>{detail ? <small data-asset-daily-detail={id}>{detail}</small> : null}
-    </td>
-  </tr>
-}
-export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readCalendarMonth, onSelectEvent, text, hideStatusRows, rowStates, rowStateLabels, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
+export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, calendar = macroEconomicCalendarClient, readCalendarMonth, onSelectEvent, text, hideStatusRows, rowStates, rowStateLabels, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
   /**
    * 两路读的**结算状态**：没有它，面板分不出「还没读完」与「读完了确实没有」，市场状态表就会先写
    * 「未接入」再改成「已接入」——先给结论再改结论（用户 11-02 报过的同一类毛病）。
    */
   macroState?: MacroMarketViewState
-  rates?: MacroRatesSnapshotView
-  ratesState?: MacroRatesViewState
   /**
    * The panel's own copy, plus the calendar's title vocabulary when the page hands it over.
    *
@@ -193,17 +140,12 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   // An unavailable snapshot contributes nothing: the macro rows fall back to 未接入 rather than to
   // a level the dashboard cannot vouch for.
   // 默认**隐藏**（用户 2026-11-16 定）：开关关了才把这类行显示出来。
-  const [hideUnavailable, setHideUnavailable] = useState(true)
   const readings = macroSnapshot && macroSnapshot.state !== 'unavailable' ? macroSnapshot.readings : []
   /** 快照自己的时刻：判「偏旧」的时钟只取这一处，不读宿主时间（同一屏两次渲染不会给出两种答案）。 */
   const snapshotAsOfMs = macroSnapshot !== undefined && macroSnapshot.state !== 'unavailable'
     ? Date.parse(macroSnapshot.asOf)
     : undefined
-  const rateReadings = rates && rates.state !== 'unavailable' ? rates.readings : []
-  const rateBySeries = new Map(rateReadings.map(reading => [reading.seriesId, reading]))
-  const statusRows = resolveCrossAssetStatusRows(readings, rateReadings, {
-    macro: macroState === 'loading', rates: ratesState === 'loading'
-  })
+  const statusRows = resolveCrossAssetStatusRows(readings, { macro: macroState === 'loading' })
   /**
    * 图表工具条的说明：三行，分别是分析时刻、三条曲线的覆盖、相关性样本数。
    *
@@ -262,9 +204,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
     : noComparableChartLines.length === 0
       ? historyPopover.lines
       : [...historyPopover.lines, { labelKey: crossAssetTextKeys.noComparableDataReason }]
-  // Two kinds of reading live in this table and they answer questions at different speeds: intraday
-  // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
-  // as if they were merely quiet; kept apart, each block's header says what its numbers mean.
+  // 这张表只剩盘中读数（四个窗口）；日频那两行已经在「国债收益率 · 日频」卡里（用户 2026-11-22 定），
+  // 同一屏不留两种说法。
   const renderStatusRow = (row: (typeof statusRows)[number]): React.ReactElement => {
     const state = cellStateLabels === undefined ? undefined : rowStates?.[row.id]
     if (state !== undefined) {
@@ -298,21 +239,15 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         ? <MacroStatusRow key={row.id} id={row.id} text={text} formatTime={formatTime}
             reading={crossAssetMacroReading(readings, row.id)}
             {...(snapshotAsOfMs === undefined ? {} : { asOfMs: snapshotAsOfMs })} />
-        : row.id === 'us10y' || row.id === 'realRate'
-          ? <RatesStatusRow key={row.id} id={row.id} text={text} rates={rateBySeries}
-              reading={rateBySeries.get(crossAssetRatesSeriesIds[row.id])!} />
-          : row.id === 'index'
+        : row.id === 'index'
             ? <IndexStatusRow key={row.id} snapshot={snapshot} text={text} formatTime={formatTime} />
             : <AssetStatusRow key={row.id} id={row.id} snapshot={snapshot} text={text} />
   }
-  const dailyRowIds = ['us10y', 'realRate']
   // 关掉的格整行不画：不是 0，也不是「未接入」那种占位。
-  /** 被供应商永久拒绝的行：勾上「不显示来源不可用的行」时它们整行不出现。 */
-  const unavailableRowIds = (['dxy', 'gold'] as const).filter(id => crossAssetMacroReading(readings, id)?.sourceFailure !== undefined)
-  const visibleRows = (hideStatusRows === undefined || hideStatusRows.length === 0
+  // 来源不可用的行不再有「隐藏」开关（用户 2026-11-25）：它现在总有兜底可读，真被拒时也照实遮一行。
+  const visibleRows = hideStatusRows === undefined || hideStatusRows.length === 0
     ? statusRows
-    : statusRows.filter(row => !hideStatusRows.includes(row.id)))
-    .filter(row => !(hideUnavailable && unavailableRowIds.includes(row.id as 'dxy' | 'gold')))
+    : statusRows.filter(row => !hideStatusRows.includes(row.id))
   // 跨资产图：三条线都不可用才整图不画（至少一条可用就照画）。
   const rowStateOf = (id: CrossAssetStatusId): CellStateKind | undefined => cellStateLabels === undefined ? undefined : rowStates?.[id]
   /** 有没有源没配好（未配置 / 未启用）：决定标题那颗是「启用数据」还是「再试一次」。 */
@@ -327,8 +262,6 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   const chartLineStates = (['index', 'btc', 'eth'] as const).map(id => rowStates?.[id])
   const allChartLinesUnusable = cellStateLabels !== undefined && chartLineStates.every(state => state !== undefined)
   const chartLineUnreadable = chartLineStates.includes('unreadable')
-  const intradayRows = visibleRows.filter(row => !dailyRowIds.includes(row.id))
-  const dailyRows = visibleRows.filter(row => dailyRowIds.includes(row.id))
   /**
    * 标题右边那一颗，**这一张卡上唯一的「补数据」入口**（用户 2026-11-11：状态区里打不开，
    * 要放到「市场状态」标题右边；只要有用到的源没配好就出现）：
@@ -352,12 +285,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
           every input the reading depends on, with the ones still missing named rather than faked. */}
       <div className="mi-cross-asset__quote" data-cross-asset-region="status">
         <CrossAssetStatusHeading text={text} resolveProductText={resolveProductText}
-          {...(titleAction === undefined ? {} : { action: titleAction })}
-          toggle={{
-            label: resolveProductText(crossAssetTextKeys.hideUnavailableRows),
-            checked: hideUnavailable,
-            onChange: setHideUnavailable
-          }} />
+          {...(titleAction === undefined ? {} : { action: titleAction })} />
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
@@ -375,42 +303,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
                 </td>
               </tr></tbody>
             : null}
-          <tbody data-status-section="intraday">{intradayRows.map(renderStatusRow)}</tbody>
-          {/* The daily block repeats the asset and latest headings but not the window columns: an
-              observation per business day has nothing to say about the last fifteen minutes. */}
-          <tbody data-status-section="daily">
-            <tr className="mi-cross-asset__section"><th scope="colgroup" colSpan={2 + crossAssetWindows.length}>
-              {/* 标题与 ⓘ 是一个 flex 容器里的两件东西，不是两个块级兄弟：块级流里 icon 会被挤到下一行，
-                  还会因为没吃到复位而画出浏览器默认的方框（读者 2026-11-08 截图）。 */}
-              <span className="mi-cross-asset__section-heading">{text.dailyFrequency}
-              {/* The block's rhythm, on its heading rather than inside a figure cell: an official daily
-                  close arrives once per trading day, so a row that has not moved for a day or two is
-                  waiting for the source to publish, not stuck. The reader asked that after seeing
-                  10-13 sit unchanged next to a chart timestamped 10-15.
-                  It is one sentence, so it is a hint rather than a panel: the sentence rides on an icon
-                  beside the title (reader, 2026-11-06), with the sentence as both its accessible name and
-                  its tooltip. The heading row keeps one line and the answer stays one hover — or one
-                  focus — away.
-                  Size is the small档 on purpose: this heading is 9.5px, and the 24px step above made the
-                  icon read as a badge hanging over the table (reader, 2026-11-06). 22px is the smallest
-                  trigger the platform offers — it cannot be drawn at text size without a new档, and a new
-                 档 is the component's decision, not this call site's. */}
-              <FocusPopover labelKey={crossAssetTextKeys.dailyCadence} resolveText={resolveProductText}
-                trigger={(triggerProps) => (
-                  // 悬停/聚焦先看，点一下钉住：同一条说明的两种读法都在这颗按钮上，**不留空处理器**——
-                  // 长得像 ⓘ 却点了没反应，读者只会以为坏了（界面设计 2026-11-07，同行那颗图表的 ⓘ 就是这种形状）。
-                  // 点击只接 `onSelect` 一条：`IconButton` 的 `onClick` 之后仍会再调一次 `onSelect`，
-                  // 两条都接就是同一个动作跑两遍——钉住又被立刻取消，点了看着像没反应。
-                  <IconButton ariaLabelKey={crossAssetTextKeys.dailyCadence} className="mi-cross-asset__section-hint"
-                    expanded={triggerProps.expanded} icon={Info} onBlur={triggerProps.onBlur}
-                    onFocus={triggerProps.onFocus} onMouseEnter={triggerProps.onMouseEnter}
-                    onMouseLeave={triggerProps.onMouseLeave} onSelect={triggerProps.onSelect}
-                    resolveText={resolveProductText} size="sm" variant="plain" />
-                )} /></span></th></tr>
-            {dailyRows.map(renderStatusRow)}
-          </tbody>
+          <tbody data-status-section="intraday">{visibleRows.map(renderStatusRow)}</tbody>
         </table>
-        <small>{text.closed}{snapshot ? <IndexObservation snapshot={snapshot} text={text} formatTime={formatTime} /> : null}</small>
       </div>
       {crossAssetReadingEnabled && !allChartLinesUnusable ? <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <FocusPopover

@@ -383,8 +383,9 @@ const catalogEntries: IntelligenceSourceCatalogEntry[] = [
     reliabilityTier: 'aggregator',
     eventFamily: 'metric-event',
     readiness: 'live',
+    readinessNote: '首轮一次拉 365 天（日频），之后每轮仍取整段、按源日去重：同一天只有一条，来稿不旧于已存才覆盖。回填条目不进翻译与评估队列。',
     supportedImpactScopes: ['crypto-market'],
-    adapterConfig: { endpointUrl: 'https://api.alternative.me/fng/?limit=1' }
+    adapterConfig: { endpointUrl: 'https://api.alternative.me/fng/?limit=365' }
   }),
   source({
     sourceId: 'defillama-stablecoins',
@@ -464,6 +465,27 @@ const catalogEntries: IntelligenceSourceCatalogEntry[] = [
       limit: 22
     }
   }),
+  source({
+    sourceId: 'deribit-options',
+    displayName: 'Deribit Options',
+    sourceGroup: 'exchange-announcement',
+    adapterType: 'rest-api-poller',
+    category: 'exchange-announcement',
+    defaultScopePolicy: 'watchlist-priority',
+    parserStrategy: 'deribit-options-v1',
+    intelligenceLayer: 'asset',
+    dataDomain: 'asset-market',
+    reliabilityTier: 'exchange-api',
+    eventFamily: 'metric-event',
+    readiness: 'live',
+    readinessNote: '代理可达时按一小时一轮采 BTC 期权链、算 30 天 25Δ 风险反转；直连不通，需要代理。',
+    /* 采集归产品自有作业（`optionSkewRuntime`），没有通用「立即运行」入口：拨开开关的那一刻会先跑一轮，
+       之后的节奏是 60 分钟。声明成 product 才能让跨表审计与 `provider.runNow: 'none'` 对上。 */
+    collectionOwner: 'product',
+    supportsRunNow: false,
+    supportedImpactScopes: ['symbol', 'watchlist'],
+    adapterConfig: { baseUrl: 'https://www.deribit.com/api/v2/public' }
+  })
 ]
 
 export const newsCryptoCatalogEntries = Object.freeze(catalogEntries)

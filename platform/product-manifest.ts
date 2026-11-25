@@ -81,8 +81,24 @@ export interface ProductSettingsDrawerContribution {
   id: string
 }
 
+/**
+ * 产品提供的**一次性窗口入口**（2026-11-22，自动推送带图那批）。
+ *
+ * 用途：主进程要在一个不显示的窗口里把某个产品页面渲染成图片（简报海报就是第一个），
+ * 这个页面不进展台菜单、也不能让壳层硬编码产品路径——所以由产品声明一个模块，生成器出
+ * 一个 loader，壳层按启动参数加载它。
+ *
+ * `id` 是产品内标识；`module` 是受生成器校验的产品内相对入口，必须存在。
+ */
+export interface ProductWindowEntryContribution {
+  id: string
+  module: string
+}
+
 export interface ProductShellContributions {
   menuPages: readonly ProductMenuPageContribution[]
+  /** 见 `ProductWindowEntryContribution`：不进菜单、只在主进程起一次性窗口时加载。 */
+  windowEntries?: readonly ProductWindowEntryContribution[]
   settingsSections: readonly ProductSettingsSectionContribution[]
   panels?: readonly ProductWorkspacePanelContribution[]
   /** 声明「本产品有设置抽屉，它有哪些屏」；未声明 = 壳层不出任何指向它的入口。 */

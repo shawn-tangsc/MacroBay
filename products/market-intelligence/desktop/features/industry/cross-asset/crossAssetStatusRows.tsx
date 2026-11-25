@@ -2,7 +2,6 @@ import { LiveBadge } from './CrossAssetLiveBadge'
 import { crossAssetWindows, type CrossAssetWindow } from './crossAssetWindowReturns'
 import { crossAssetWindowReturns } from './crossAssetWindowReturns'
 import type { CrossAssetId, CrossAssetMetric, CrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
-import { macroMarketSnapshotPublicPolicy } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroMarketSnapshotReading } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 import type { productText } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
@@ -65,7 +64,8 @@ export function livePriceText(price: string): string {
 }
 
 export type Text = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
-export type MacroDriverId = 'dxy' | 'gold' | 'us10y' | 'realRate'
+/** 市场状态表里的宏观驱动行：美债 10Y 与实际利率已搬进「国债收益率 · 日频」卡（2026-11-22）。 */
+export type MacroDriverId = 'dxy' | 'gold'
 export type RowMetrics = Readonly<Record<CrossAssetWindow, CrossAssetMetric>>
 export function priceOf(snapshot: CrossAssetSnapshot | undefined, asset: CrossAssetId): string {
   const quote = snapshot?.quotes?.[asset]
@@ -195,13 +195,6 @@ export function IndexStatusRow({ snapshot, text, formatTime }: {
     <WindowCells id="index" metrics={assetMetrics(snapshot, 'index')} text={text} />
   </tr>
 }
-/** The last closed bar of the index row, in the snapshot's own clock. */
-export function IndexObservation({ snapshot, text, formatTime }: {
-  snapshot: CrossAssetSnapshot; text: Text; formatTime: (value: string, precision: 'second') => string
-}): React.ReactElement | null {
-  const at = snapshot.lastClosed?.index?.at
-  return at ? <>{` · ${text.lastClosedBar} `}<time>{formatTime(at, 'second')}</time></> : null
-}
 
 /**
  * 美元 / 黄金这两行：水平、四个窗口，以及行名旁那句「偏旧 · 截至 …」。
@@ -234,15 +227,20 @@ export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
     <th scope="row">
       {/* 名字 + ⓘ 是一组、不换行；标签（合成/实时）跟在后面，窄列时它们各自换行，图标不离开名字。 */}
       <RowName name={text.assetLabels[id]} hint={<RowHint id={id} name={text.assetLabels[id]}
-        lines={[...(text.statusReads[id] ? [text.statusReads[id]] : []), ...(age === undefined ? [] : [age])]} />} />
-      {/* The synthetic label rides with the level: a level this product computed is never shown as
-          if it were the licensed index, and the caveat sentence is one hover away. */}
-      {reading?.synthetic ? <em className="mi-cross-asset__synthetic" data-synthetic={id}
-        aria-label={text.syntheticCaveat}
-        data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex}>{text.syntheticTag}</em> : null}
-      {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
-          after the price reads as if it qualified the number itself. */}
-      {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
+        lines={[
+          ...(text.statusReads[id] ? [text.statusReads[id]] : []),
+          ...(age === undefined ? [] : [age]),
+          /* 实时价来自未闭合的流，四个窗口仍按已闭合 K 线算——这句话住进行名旁的 ⓘ（用户 2026-11-25：
+             「黄金下面那个实时 tag 给我去掉」）。停更那档仍挂 pill：那是提醒，不是噪声。 */
+          ...(live === undefined ? [] : [fillLabelParams(
+            resolveText('pages.intelligence.portal.dashboard.crossAsset.liveHint'),
+            { time: formatTime(new Date(live.atMs).toISOString(), 'second') }
+          )]),
+          ...(reading?.synthetic ? [text.syntheticCaveat] : [])
+        ]} />} />
+      {/* 合成这件事不再挂 pill（用户 2026-11-25）：那句话住进行名旁的 ⓘ，和这一行的其它说明同一处。 */}
+      {/* 停更/不可用那两档仍挂 pill（那是提醒）；「实时」这一档不挂，原因在行名旁的 ⓘ 里。 */}
+      {live && live.state !== 'live' ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
     </th>
     <td data-asset-price={id}>{live ? livePriceText(live.price) : levelText(reading)}</td>
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />

@@ -4,8 +4,9 @@ import { CROSS_ASSET_INDEX_COLLECT_JOB_ID } from '../cross-asset/crossAssetIndex
 import { CALENDAR_EVENT_REMINDER_JOB_ID } from '../macro-calendar/calendarEventReminderJob'
 import { MACRO_MARKET_COLLECT_JOB_ID } from '../macro-market/macroMarketJob'
 import { REAL_MARKET_API_DXY_COLLECT_JOB_ID } from '../macro-market/realMarketApiDxyJob'
+import { OPTION_SKEW_COLLECT_JOB_ID } from '../option-skew/optionSkewJobId'
 import { MARKET_HISTORY_RETENTION_JOB_ID } from '../retention/marketHistoryRetentionJob'
-import { INTELLIGENCE_COLLECT_SOURCE_JOB, INTELLIGENCE_JOB_IDS } from './intelligenceJobIds'
+import { INTELLIGENCE_COLLECT_SOURCE_JOB, INTELLIGENCE_JOB_IDS, INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB } from './intelligenceJobIds'
 
 /**
  * 作业 → 「这次写入影响哪些面板 / 哪些来源」。
@@ -31,6 +32,8 @@ const BY_HANDLER_ID: Readonly<Record<string, DataChangedTarget>> = {
   [INTELLIGENCE_COLLECT_SOURCE_JOB]: NONE,
   // 新闻/情绪管线写的是看板在读的库（情绪卡、分析证据）。
   'market-intelligence.normalizeRawRecords': { panels: DASHBOARD, sources: [] },
+  // 定时回捞写的是同一批条目与判定，所以影响面与 normalize 相同（不是「什么也没动」）。
+  [INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB]: { panels: DASHBOARD, sources: [] },
   'market-intelligence.assessChangedItems': { panels: DASHBOARD, sources: [] },
   'market-intelligence.refreshSentimentAggregates': { panels: DASHBOARD, sources: [] },
   'market-intelligence.reevaluateClusters': { panels: DASHBOARD, sources: [] },
@@ -43,6 +46,8 @@ const BY_HANDLER_ID: Readonly<Record<string, DataChangedTarget>> = {
   [MACRO_MARKET_COLLECT_JOB_ID]: { panels: DASHBOARD, sources: [] },
   [REAL_MARKET_API_DXY_COLLECT_JOB_ID]: { panels: DASHBOARD, sources: [] },
   [CROSS_ASSET_INDEX_COLLECT_JOB_ID]: { panels: DASHBOARD, sources: [] },
+  // 期权偏斜写的是看板在读的点库；来源固定是它自己那一格。
+  [OPTION_SKEW_COLLECT_JOB_ID]: { panels: DASHBOARD, sources: ['deribit-options'] },
   [MARKET_HISTORY_RETENTION_JOB_ID]: NONE,
   // 日历侧：经济日历面板。
   'market-intelligence.refreshMacroCalendar': { panels: CALENDAR, sources: [] },
@@ -94,6 +99,7 @@ export const REGISTERED_DATA_CHANGED_HANDLER_IDS: readonly string[] = [
   MACRO_MARKET_COLLECT_JOB_ID,
   REAL_MARKET_API_DXY_COLLECT_JOB_ID,
   CROSS_ASSET_INDEX_COLLECT_JOB_ID,
+  OPTION_SKEW_COLLECT_JOB_ID,
   MARKET_HISTORY_RETENTION_JOB_ID,
   'market-intelligence.refreshMacroCalendar',
   'market-intelligence.syncBlsScheduleAndValues',

@@ -24,32 +24,6 @@ afterEach(() => { vi.useRealTimers() })
 const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
   createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
 
-/**
- * 同一个面板，但**壳层语言**是英文。
- *
- * 日频那几行在换成平台气泡后由 `useProductTextKey()` 解析（和所有已迁的调用点一致），
- * 所以「读者语言」由壳层语言决定，而不是由传入的 `text` 决定——写用例也得按这条来。
- */
-const EnglishScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellLanguageProvider, {
-    language: 'en-US',
-    children: createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
-  })
-
-/** The real daily closes: 5.24 after 5.22 on 10-09 (+2bp), 2.91 after 2.87 (+4bp), 2Y 4.80, breakeven 2.33. */
-function ratesView(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    state: 'available', asOf: '2026-10-14T12:00:00.000Z', caveats: ['official-daily-close'],
-    readings: [
-      { seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.24, previous: 5.22, period: '2026-10-09' },
-      { seriesId: 'DFII10', metricKey: 'US_REAL_YIELD_10Y', actual: 2.91, previous: 2.87, period: '2026-10-09' },
-      { seriesId: 'DGS2', metricKey: 'US_2Y_YIELD', actual: 4.8, previous: 4.72, period: '2026-10-09' },
-      { seriesId: 'T10YIE', metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.33, period: '2026-10-13' }
-    ],
-    ...overrides
-  }
-}
-
 describe('cross-asset observation workspace', () => {
   it('keeps the status table a table: a class name that already means `display: flex` cost a day', async () => {
     const css = readFileSync('products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css', 'utf8')
@@ -73,25 +47,6 @@ describe('cross-asset observation workspace', () => {
     expect(css).toContain(".mi-cross-asset__status-table thead th + th, .mi-cross-asset__status-table tbody td + td { border-left: 1px solid")
     expect(css).toMatch(/\.mi-cross-asset__status-table tbody td \{[^}]*font-size: 9\.5px/)
     expect(css).toMatch(/\.mi-cross-asset__status-table th, \.mi-cross-asset__status-table td \{ padding: 3px 2px/)
-    // 说明图标与「日频」之间要留一格：22px 的按钮紧贴 9.5px 的标题会读成同一个词（读者 2026-11-06）。
-
-  })
-
-  it('keeps the daily heading and its icon on one flex line, not two block siblings', () => {
-    // 读者 2026-11-08：icon 换行到第二行，还带默认按钮方框。判据三条一起钉住，
-    // 把容器改回 block、或删掉 `flex: none`，这条就红。
-    const css = readFileSync('products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css', 'utf8')
-    const panel = readFileSync('products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx', 'utf8')
-    const heading = css.match(/\.mi-cross-asset__section-heading \{([^}]*)\}/)?.[1] ?? ''
-    expect(heading).toContain('display: inline-flex')
-    expect(heading).toContain('align-items: center')
-    expect(heading).toContain('gap:')
-    expect(heading).toContain('white-space: nowrap')
-    const hint = css.match(/\.mi-cross-asset__section-hint \{([^}]*)\}/)?.[1] ?? ''
-    expect(hint).toContain('flex: none')
-    // 两者在同一个父容器里，不是两个块级兄弟。
-    expect(panel).toContain('className="mi-cross-asset__section-heading">{text.dailyFrequency}')
-    expect(panel).toContain('className="mi-cross-asset__section-hint"')
   })
 
   it('prints the inputs it does not have as missing, with no figure anywhere in those rows', async () => {
@@ -107,38 +62,16 @@ describe('cross-asset observation workspace', () => {
       const rows = [...host.querySelectorAll<HTMLTableRowElement>('[data-status-row]')]
       // The whole reading order, macro drivers first: the block states its own coverage instead of
       // leaving the reader to wonder why the dollar is absent.
-      // Intraday rows first, then the daily block: the two answer questions at different speeds and the
-      // table now keeps them apart, with the daily block stating its own frequency.
-      expect(rows.map(row => row.dataset.statusRow)).toEqual(['dxy', 'gold', 'index', 'btc', 'eth', 'us10y', 'realRate'])
+      // **只有盘中这五排**：日频那两行已经有「国债收益率 · 日频」卡（用户 2026-11-22 定），
+      // 这张表里再出现一次就是同一条数据两种说法。
+      expect(rows.map(row => row.dataset.statusRow)).toEqual(['dxy', 'gold', 'index', 'btc', 'eth'])
+      expect(host.querySelector('[data-status-section="daily"]')).toBeNull()
+      expect(host.textContent).not.toContain('日频')
+      expect(host.querySelectorAll('[data-asset-daily]')).toHaveLength(0)
       // The index row has no reading here either: with no stored bar from either leg it says 未接入
       // rather than showing the number a row with data would show.
       const missing = rows.filter(row => row.dataset.connected === 'false')
-      expect(missing.map(row => row.dataset.statusRow)).toEqual(['dxy', 'gold', 'index', 'us10y', 'realRate'])
-      // The daily section announces itself instead of borrowing the window headings above it — and
-      // its rhythm sentence is now a hint on an icon beside the title (reader, 2026-11-06): the heading
-      // reads only 日频, the sentence is the icon's name, so a mouse and a keyboard both reach it.
-      const dailyHeading = host.querySelector('[data-status-section="daily"] .mi-cross-asset__section')
-      expect(dailyHeading?.textContent).toBe(text.dailyFrequency)
-      const cadenceTrigger = dailyHeading?.querySelector<HTMLButtonElement>('button')!
-      expect(cadenceTrigger.getAttribute('aria-label')).toBe(text.dailyCadence)
-      // 尺寸钉成最小档：这一行标题 9.5px，24 那档挂上去像一枚徽章（读者 2026-11-06 现场）。
-      // 22 是平台最小的触发器，改回 24 必须是一次有理由的显式决定，不该被顺手改掉。
-      expect(cadenceTrigger.style.width).toBe('22px')
-      // 「悬停才显示」不是把句子藏起来：句子不在标题里，落在按钮的说明上，焦点到位也开，
-      // 所以键盘用户与读屏拿到的是同一句，不是只有鼠标才看得到的装饰。
-      await act(async () => { cadenceTrigger.focus() })
-      await vi.waitFor(() => {
-        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(text.dailyCadence)
-      })
-      // 点它不是空动作（界面设计 2026-11-07）：聚焦只是「看一眼」，离开就收；点一下是「钉住」，
-      // 离开还开着。长得像 ⓘ 却点了没反应，读者只会以为坏了——这三步就是那条判据。
-      expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true')
-      await act(async () => { cadenceTrigger.blur() })
-      await vi.waitFor(() => { expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('false') })
-      await act(async () => { cadenceTrigger.click() })
-      await vi.waitFor(() => { expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true') })
-      await act(async () => { cadenceTrigger.blur() })
-      expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true')
+      expect(missing.map(row => row.dataset.statusRow)).toEqual(['dxy', 'gold', 'index'])
       for (const row of missing) {
         // The honesty guard, stated structurally: a planned row has no price and no return cell at
         // all, and its one value cell names the gap instead of filling it. A label may contain a
@@ -176,8 +109,8 @@ describe('cross-asset observation workspace', () => {
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
-  it('waits for the macro and rates reads instead of claiming 未接入 first', async () => {
-    // 用户 11-02 报过「先闪一下获取失败再出数据」，同类：四行在 macro / rates 未结算时曾落回注册表的
+  it('waits for the macro read instead of claiming 未接入 first', async () => {
+    // 用户 11-02 报过「先闪一下获取失败再出数据」，同类：两行在 macro 未结算时曾落回注册表的
     // `planned`（未接入），读完再变「已接入」。未结算就是加载态，不许先给一个结论。
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
@@ -185,8 +118,8 @@ describe('cross-asset observation workspace', () => {
     const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
     try {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
-        { client: client as never, macroState: 'loading', ratesState: 'loading', text })))
-      for (const id of ['dxy', 'gold', 'us10y', 'realRate']) {
+        { client: client as never, macroState: 'loading', text })))
+      for (const id of ['dxy', 'gold']) {
         const row = host.querySelector(`[data-status-row="${id}"]`)
         expect(row?.getAttribute('data-status-loading'), id).toBe('true')
         expect(row?.textContent, id).not.toContain(text.notConnected)
@@ -215,14 +148,9 @@ describe('cross-asset observation workspace', () => {
       expect(host.querySelector('[data-asset-price="dxy"]')?.textContent).toBe('101.42')
       expect(host.querySelector('[data-asset-return="dxy:15m"]')?.textContent).toBe('+0.12%')
       expect(host.querySelector('[data-asset-return="dxy:7d"]')?.textContent).toBe('+0.56%')
-      // The synthetic label rides with the level and carries the caveat the wire published.
-      const tag = host.querySelector('[data-synthetic="dxy"]')
-      expect(tag?.textContent).toBe(text.syntheticTag)
-      // 不是真控件就不迁：没有 title、没有 tabindex，说明挂到可访问名上。
-      expect(tag?.getAttribute('title')).toBeNull()
-      expect(tag?.getAttribute('tabindex')).toBeNull()
-      expect(tag?.getAttribute('aria-label')).toBe(text.syntheticCaveat)
-      expect(tag?.getAttribute('data-caveat')).toBe('synthetic-dollar-index')
+      // 合成不再挂 pill（用户 2026-11-25）：wire 上的 caveat 仍带着，界面改在行名旁的 ⓘ 里说。
+      expect(host.querySelector('[data-synthetic="dxy"]')).toBeNull()
+      expect(macro.caveats).toContain('synthetic-dollar-index')
       expect(host.querySelector('[data-status-row="gold"][data-connected="true"]')).not.toBeNull()
       expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toBe('3412.55')
       // 7d was not in the gold reading: the cell is a dash, not a zero. Its accessible name now says
@@ -237,7 +165,6 @@ describe('cross-asset observation workspace', () => {
       expect(missing?.getAttribute('data-unavailable')).toBe('true')
       expect(host.querySelector('[data-asset-return="dxy:15m"]')?.getAttribute('data-unavailable')).toBeNull()
       expect(host.querySelector('[data-status-row="gold"] [data-synthetic]')).toBeNull()
-      for (const id of ['us10y', 'realRate']) expect(host.querySelector(`[data-status-row="${id}"][data-connected="false"]`)).not.toBeNull()
       const headers = [...host.querySelectorAll('.mi-cross-asset__status-table thead th')].map(th => th.textContent)
       expect(headers).toEqual([text.statusColumns.asset, text.statusColumns.latest, '15m', '1h', '24h', '7d'])
     } finally { await act(async () => root.unmount()); host.remove() }
@@ -432,30 +359,27 @@ describe('cross-asset observation workspace', () => {
       const price = host.querySelector('[data-asset-price="gold"]')!
       expect(price.textContent).toContain('3413.90')
       expect(host.querySelector('[data-asset-price="gold"] [data-live-state]')).toBeNull()
-      const badge = host.querySelector('[data-status-row="gold"] th [data-live-state]')!
-      expect(badge.getAttribute('data-live-state')).toBe('live')
-      expect(badge.textContent).toBe(text.liveStateLabels.live)
-      expect(badge.getAttribute('title')).toBeNull()
-      expect(badge.getAttribute('tabindex')).toBe('0')
-      await act(async () => { (badge as HTMLElement).focus() })
-      // 提示是一句语言模板 + `{time}`：模板那句必须在，且后面真的被填了观测时间——
-      // 只断言「包含模板」会让「时间没填进去」也算通过（模板里本来就有那句话）。
+      // 「实时」这一档不再挂 pill（用户 2026-11-25）；那句话住在行名旁的 ⓘ 里，仍然带观测时间。
+      expect(host.querySelector('[data-status-row="gold"] th [data-live-state]')).toBeNull()
+      // ⓘ 里那句话仍在，而且填了观测时间：模板里的 `{time}` 不能空着。
+      const infoButton = host.querySelector<HTMLButtonElement>('[data-status-row="gold"] th button')!
+      await act(async () => { infoButton.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); infoButton.focus() })
+      const hintText = document.querySelector('[data-row-hint="gold"]')?.textContent ?? document.body.textContent ?? ''
       const hintHead = text.liveHint.split('{time}')[0]!.trim()
-      const bubbles = [...document.querySelectorAll('.ant-tooltip-inner')].map(node => node.textContent ?? '')
-      expect(bubbles.some(line => line.startsWith(hintHead) && line.length > hintHead.length)).toBe(true)
-      expect(badge.getAttribute('data-live-observed')).toBe(String(atMs + 5_000))
+      expect(hintText.startsWith(hintHead) || hintText.includes(hintHead)).toBe(true)
+      expect(hintText).not.toContain('{time}')
       // The four windows are still the closed-bar figures: the live tick moved none of them.
       expect(host.querySelector('[data-asset-return="gold:15m"]')?.textContent).toBe('+0.05%')
       expect(host.querySelector('[data-asset-return="gold:24h"]')?.textContent).toBe('−0.40%')
       // The dollar row carries no live badge, even though it is the other connected macro row.
       expect(host.querySelector('[data-status-row="dxy"] [data-live-state]')).toBeNull()
 
-      // A delayed tick keeps the badge, with the delayed wording rather than a live claim.
+      // A delayed tick still keeps the badge: that one is a warning, not a live claim.
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
         { client: client as never, macroSnapshot: macro({ state: 'stale', price: '3413.90', atMs }) as never, text })))
       expect(host.querySelector('[data-status-row="gold"] th [data-live-state]')?.textContent).toBe(text.liveStateLabels.stale)
 
-      // No live field: the cell falls back to the stored level, with no badge and no invented figure.
+      // No live field: the cell falls back to the stored level, with no invented figure.
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
         { client: client as never, macroSnapshot: macro() as never, text })))
       const stored = host.querySelector('[data-asset-price="gold"]')!
@@ -466,7 +390,7 @@ describe('cross-asset observation workspace', () => {
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
-  it('keeps the live badge and the four closed windows side by side in both languages', async () => {
+  it('leaves the four closed windows untouched when a live tick arrives, in both languages', async () => {
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
     const asOf = '2026-09-14T12:00:00.000Z'
@@ -480,162 +404,14 @@ describe('cross-asset observation workspace', () => {
           readings: [{ seriesId: 'xau-usd', level: 3412.55, atMs, returns: {}, live: { state: 'live' as const, price: '3413.90', atMs } }]
         }
         await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, macroSnapshot: macro as never, text })))
-        const badge = host.querySelector('[data-live-state]')!
-        expect(badge.textContent).toBe(text.liveStateLabels.live)
-        expect(badge.textContent?.length).toBeGreaterThan(0)
+        // 实时那一档不挂 pill；价格照旧是流上的价，四个窗口仍是已闭合 K 线的答案。
+        expect(host.querySelector('[data-live-state]')).toBeNull()
+        expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toContain('3413.90')
         // Every window the store could not answer stays a dash: a live price never fills a hole.
         for (const window of ['15m', '1h', '24h', '7d']) {
           expect(host.querySelector(`[data-asset-return="gold:${window}"]`)?.textContent).toBe(text.windowNoData)
         }
       }
-    } finally { await act(async () => root.unmount()); host.remove() }
-  })
-
-  it('prints the official daily closes with basis-point changes in one merged cell per rate row', async () => {
-    const host = document.createElement('div'); document.body.append(host)
-    const root = createRoot(host)
-    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
-    const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
-    try {
-      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
-        { client: client as never, rates: ratesView() as never, text })))
-
-      expect(host.querySelector('[data-status-row="us10y"][data-connected="true"]')).not.toBeNull()
-      expect(host.querySelector('[data-status-row="realRate"][data-connected="true"]')).not.toBeNull()
-      // 最新: two decimals and a percent sign, whatever the provider sent.
-      expect(host.querySelector('[data-asset-price="us10y"]')?.textContent).toBe('5.24%')
-      expect(host.querySelector('[data-asset-price="realRate"]')?.textContent).toBe('2.91%')
-      // The four intraday columns are replaced by one daily cell: a bp change with its observation date.
-      const daily = host.querySelector<HTMLTableCellElement>('[data-asset-daily="us10y"]')
-      expect(daily?.colSpan).toBe(4)
-      expect(daily?.textContent).toContain('日频 +2bp（截至 2026-10-09）')
-      expect(host.querySelector('[data-asset-daily="realRate"]')?.textContent).toContain('日频 +4bp（截至 2026-10-09）')
-      // No window cell survives on these rows: a daily close is not a 15m return.
-      for (const id of ['us10y', 'realRate']) {
-        expect(host.querySelector(`[data-status-row="${id}"] [data-asset-return]`)).toBeNull()
-      }
-      // The optional extras ride in the same cell, as small text and as the cell title. The
-      // expectation is its own series, so it carries its own observation date (10-13 here) rather than
-      // borrowing the row's day — the row is 10-09.
-      expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('期限利差 +44bp · 通胀预期 2.33%（截至 2026-10-13）')
-      expect(daily?.getAttribute('title')).toBeNull()
-      await act(async () => { daily?.focus() })
-      expect(document.body.textContent).toContain('期限利差 +44bp')
-      expect(daily?.getAttribute('data-caveat')).toBe('official-daily-close')
-      // Two legs on one day is not a mixed-observation-date row.
-      expect(daily?.getAttribute('data-mixed-observation-dates')).toBeNull()
-      // The signed change reuses the table's own direction mechanism rather than inventing a colour.
-      expect(daily?.getAttribute('data-direction')).toBe('1')
-      // The real rate has no 2Y leg, so its detail names only the inflation expectation.
-      expect(host.querySelector('[data-asset-daily-detail="realRate"]')?.textContent).toBe('通胀预期 2.33%（截至 2026-10-13）')
-    } finally { await act(async () => root.unmount()); host.remove() }
-  })
-
-  it('withholds the term spread when its two legs describe different trading days, and says why', async () => {
-    // 2026-10-15, the live case: the 10-year and the real yield were 10-13, the 2-year had not caught
-    // up, and the breakeven was already 10-14. A difference between two days describes no day, so the
-    // cell states neither the number nor a caveat-free row — the analysis side refuses the same
-    // arithmetic (`macroRatesFactProjection.ts`).
-    const host = document.createElement('div'); document.body.append(host)
-    const root = createRoot(host)
-    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
-    const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
-    const readings = [
-      { seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.21, previous: 5.24, period: '2026-10-13' },
-      { seriesId: 'DFII10', metricKey: 'US_REAL_YIELD_10Y', actual: 2.88, previous: 2.91, period: '2026-10-13' },
-      { seriesId: 'DGS2', metricKey: 'US_2Y_YIELD', actual: 4.8, previous: 4.79, period: '2026-10-09' },
-      { seriesId: 'T10YIE', metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.35, period: '2026-10-14' }
-    ]
-    try {
-      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
-        { client: client as never, rates: ratesView({ readings }) as never, text })))
-      const daily = host.querySelector<HTMLTableCellElement>('[data-asset-daily="us10y"]')!
-      // The level and its own day-over-day change are unaffected: a withheld extra costs the extra.
-      expect(host.querySelector('[data-asset-price="us10y"]')?.textContent).toBe('5.21%')
-      expect(daily.textContent).toContain('日频 −3bp（截至 2026-10-13）')
-      expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('通胀预期 2.35%（截至 2026-10-14）')
-      expect(daily.textContent).not.toContain(text.termSpread)
-      // The caveat id comes from its owner; the sentence rides on the cell's accessible name, because
-      // this cell is not a control and must not become a keyboard stop just to explain itself.
-      expect(daily.getAttribute('data-mixed-observation-dates')).toBe('macro-rates-mixed-observation-dates')
-      expect(daily.getAttribute('title')).toBeNull()
-      expect(daily.getAttribute('tabindex')).toBeNull()
-      expect(daily.getAttribute('aria-label')).toContain(text.dailyMixedDates)
-    } finally { await act(async () => root.unmount()); host.remove() }
-  })
-
-  it('renders the daily change in the reader language rather than a hard-coded one', async () => {
-    const host = document.createElement('div'); document.body.append(host)
-    const root = createRoot(host)
-    const text = productText['en-US'].pages.intelligence.portal.dashboard.crossAsset
-    const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
-    try {
-      await act(async () => root.render(createElement(EnglishScopedCrossAssetObservationPanel,
-        { client: client as never, rates: ratesView() as never, text })))
-      expect(host.querySelector('[data-asset-daily="us10y"]')?.textContent).toContain('Daily +2bp (as of 2026-10-09)')
-      expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('Term spread +44bp · Inflation expectation 2.33% (as of 2026-10-13)')
-      // 模板化句子的通用判据（Chief 2026-11-02）：渲染结果里不许残留 `{`。
-      expect(host.querySelector('[data-asset-daily="us10y"]')?.textContent).not.toContain('{')
-    } finally { await act(async () => root.unmount()); host.remove() }
-  })
-
-  it('shows a dash, never a fabricated number, when the prior trading day is unknown', async () => {
-    const host = document.createElement('div'); document.body.append(host)
-    const root = createRoot(host)
-    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
-    const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
-    const view = ratesView({ readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5.24, period: '2026-10-09' }] })
-    try {
-      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
-        { client: client as never, rates: view as never, text })))
-      const daily = host.querySelector('[data-asset-daily="us10y"]')!
-      expect(daily.textContent).toBe('日频 —（截至 2026-10-09）')
-      // The only digits on the cell are the observation date: no bp figure was invented for a change
-      // this snapshot cannot compute, and no detail line sneaks one in either.
-      expect(daily.textContent).not.toContain('bp')
-      expect(daily.querySelector('small')).toBeNull()
-      expect(host.querySelector('[data-asset-price="us10y"]')?.textContent).toBe('5.24%')
-      // The other rate row has no reading at all, so it stays unconnected and figureless.
-      expect(host.querySelector('[data-status-row="realRate"][data-connected="false"]')).not.toBeNull()
-    } finally { await act(async () => root.unmount()); host.remove() }
-  })
-
-  it.each([
-    ['no daily rates snapshot at all', undefined],
-    ['an unavailable rates snapshot', { state: 'unavailable' }],
-    ['an empty rates snapshot', { state: 'empty', asOf: '2026-10-14T12:00:00.000Z', readings: [], caveats: ['official-daily-close'] }]
-  ])('keeps both rate rows unconnected and free of any figure with %s', async (_name, rates) => {
-    const host = document.createElement('div'); document.body.append(host)
-    const root = createRoot(host)
-    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
-    const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
-    try {
-      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
-        { client: client as never, ...(rates === undefined ? {} : { rates: rates as never }), text })))
-      for (const id of ['us10y', 'realRate']) {
-        const row = host.querySelector(`[data-status-row="${id}"][data-connected="false"]`)!
-        expect(row.querySelectorAll('[data-asset-price], [data-asset-return], [data-asset-daily]')).toHaveLength(0)
-        expect(row.querySelector('.mi-cross-asset__not-connected')?.textContent).toContain(text.notConnected)
-      }
-      expect(host.textContent).not.toContain('5.24')
-    } finally { await act(async () => root.unmount()); host.remove() }
-  })
-
-  it('promotes a rate row only for the series the daily snapshot actually carries', async () => {
-    const host = document.createElement('div'); document.body.append(host)
-    const root = createRoot(host)
-    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
-    const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
-    // A snapshot holding only the 2Y cannot fill either row: a rate row never borrows another series.
-    const view = ratesView({ readings: [{ seriesId: 'DGS2', metricKey: 'US_2Y_YIELD', actual: 4.8, period: '2026-10-09' }] })
-    try {
-      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
-        { client: client as never, rates: view as never, text })))
-      for (const id of ['us10y', 'realRate']) {
-        expect(host.querySelector(`[data-status-row="${id}"][data-connected="false"]`)).not.toBeNull()
-        expect(host.querySelector(`[data-asset-price="${id}"]`)).toBeNull()
-      }
-      expect(host.textContent).not.toContain('4.80')
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
@@ -661,7 +437,10 @@ describe('cross-asset observation workspace', () => {
     expect(css).toContain('--mi-cross-asset-gold: var(--mi-dashboard-chart-gold)')
     // The return chart is sized to sit level with the status column, and the plot and empty state
     // must keep consuming the token.
-    expect(css).toContain('--mi-cross-asset-chart-height: 100px')
+    // 窄档（单栏）地板 150：五条线的浮层要 157，栏高 150 + 刻度 30 = 180、可用 164 才装得下；
+    // 同时单栏绘图区约 538 宽，100 那版 538×88 ≈ 6.1:1 把五条归一曲线压成一条带。
+    expect(css).toContain('--mi-cross-asset-chart-height: 150px')
+    // 宽档地板沿用既有 116（2026-11-23 定的：不新造数字，行高改了之后块高由行数决定）。
     expect(css).toContain('--mi-cross-asset-chart-height-wide: 116px')
     // The plot's height is the grid row's, not a constant: the status table beside it sets how tall the
     // row is, and the chart has to end on the same line. The tokens are floors under the frame, so a
@@ -677,10 +456,32 @@ describe('cross-asset observation workspace', () => {
     expect(css).not.toContain('border-top-style: dotted')
     expect(css).toContain('minmax(0, var(--mi-cross-asset-quote-wide))')
     expect(css).toContain('box-sizing: border-box')
-    // The daily rate cell reuses the table's type scale and muted token; it may only allow its context
-    // line to break, not bring a look of its own.
-    expect(css).toMatch(/\.mi-cross-asset__status-table td\.mi-cross-asset__daily \{\s*white-space: normal;\s*\}/)
-    expect(css).toMatch(/\.mi-cross-asset__daily small \{[^}]*color: var\(--muted\)[^}]*font-size: 9px/)
+    // 高度怎么分（用户 2026-11-23：行太高，要矮一点）：**行高固定 44，整行没有下限，图吃剩下的余量**。
+    // 夹具在容器 1164（＝1280 窗口）上量的：
+    //   五行：行高全是 44，表 240.5，整行 280.5，图框 183.5（绘图区 171.5）
+    //   四行：行高全是 44，表 196.5，整行 236.5，图框 139.5（绘图区 127.5）
+    //   三行：行高全是 44，表 152.5，整行 213（图框吃 116 的地板，绘图区 104）
+    // 四行与五行的行高逐行相同（差 0px）——行不再随总高度被拉开；上一版是给整行加 342/330 的下限，
+    // 四行分下来每行 80 上下，才是用户截图的形状。
+    expect(css).not.toMatch(/\.mi-cross-asset__body \{[^}]*min-height/)
+    expect(css).toContain('--mi-cross-asset-chart-height-wide: 116px')
+    expect(css).toMatch(/\.mi-cross-asset__status-table tbody tr \{ height: 44px; \}/)
+    // 表不许吃余量（`flex: 1` 会把行拉松）。
+    expect(css).toMatch(/\.mi-cross-asset__status-table \{[^}]*flex: none/)
+    // 表下面那句「已闭合涨跌 · 最后一根已收盘 K 线 …」已删（用户 2026-11-24：废话、而且那是纳指那一行
+    // 自己的收盘时刻，挂在整张表下面说「谁的」不清楚）。连它那条只把它压到栏底的规则一起收掉。
+    expect(css).not.toMatch(/\.mi-cross-asset__quote > small/)
+    // 图框地板要能生效：svg 必须脱离文档流，否则它拿 viewBox 的 1000×200 内在比例（宽 × 0.2）
+    // 把地板整个盖过去（界面设计 2026-11-23 探到的那处）。
+    expect(css).toMatch(/\.mi-cross-asset__plot svg \{[^}]*position: absolute;[^}]*inset: 0/)
+    expect(css).toMatch(/\.mi-cross-asset__plot \{[^}]*position: relative/)
+    // 单栏（<800）没有旁边那张图，图框地板仍是 100：不写规则。
+    expect(css).not.toMatch(/@container mi-cross-asset \(min-width: 720px\)/)
+    // 浮层按**图框 + 刻度**这一栏定位与限高，不按绘图区（用户 2026-11-23：五行裁 3、四行 25、三行 27）。
+    // 那一栏必须自己成定位祖先并且继续吃余量，否则 `max-height: 100%` 又落回绘图区。
+    expect(css).toMatch(/\.mi-cross-asset__chart-area \{[^}]*position: relative/)
+    expect(css).toMatch(/\.mi-cross-asset__chart-area \{[^}]*flex: 1/)
+    expect(css).toContain('max-height: calc(100% - var(--mi-cross-asset-tooltip-inset) - var(--mi-cross-asset-tooltip-inset))')
   })
 
   it('withholds the reading lines without deleting the copy they are written from', async () => {
@@ -867,9 +668,9 @@ describe('首次进入的状态顺序', () => {
       const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
       await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
-      // 结构留着：表头六列都在，七行行位都在，状态句在表头下第一行。
+      // 结构留着：表头六列都在，五行行位都在，状态句在表头下第一行。
       expect(host.querySelectorAll('.mi-cross-asset__status-table thead th')).toHaveLength(6)
-      expect(host.querySelectorAll('tr[data-status-row]')).toHaveLength(7)
+      expect(host.querySelectorAll('tr[data-status-row]')).toHaveLength(5)
       expect(host.querySelector('tbody[data-channel-state="unavailable"] td .mi-source-state[data-state="unreadable"]')).not.toBeNull()
       // 重试只有一颗，在标题行；图区不再自己画一块带重试的状态面。
       const retryLabel = productText['zh-CN'].pages.intelligence.portal.data.retry

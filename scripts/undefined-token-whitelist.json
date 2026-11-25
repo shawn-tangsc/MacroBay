@@ -79,9 +79,14 @@
     "file": "products/market-intelligence/desktop/settings/intelligence-sources/BusinessSettingsView.tsx",
     "reason": "--cell-items 是运行时按「这一格/这个模块有几个源」算出来的列跨度，一张卡一个值；写进 tokens.css 等于给它一个假的固定值，和布局算法漂开。"
   },
-  "--o": {
-    "injectedBy": "ClockCard.tsx:172（行内 style 写在每块环牌 `.mi-clock__node` 上）",
+  "--mi-clock-center-x": {
+    "injectedBy": "ClockCard.tsx:192（行内 style 写在卡根节点上）",
     "file": "products/market-intelligence/desktop/pages/intelligence/ClockCard.tsx",
-    "reason": "--o 是每块环牌的不透明度，由「离今天的天数」现算（0.5 + (天数÷30)² × 0.5）——是数据不是主题；CSS 侧 `opacity: var(--o, 1)` 只是接住它，写进 tokens.css 会给它一个和天数脱钩的假值。"
+    "reason": "环心的横坐标由几何常量 clockCardCenter.svgX 算出，随卡片尺寸与圆环半径变；CSS 侧 transform-origin 里的 var(--mi-clock-center-x, 50%) 只是兜底，写进 tokens.css 会把旋转轴钉在一个与几何脱钩的值上。"
+  },
+  "--mi-clock-center-y": {
+    "injectedBy": "ClockCard.tsx:192（行内 style 写在卡根节点上）",
+    "file": "products/market-intelligence/desktop/pages/intelligence/ClockCard.tsx",
+    "reason": "环心的纵坐标由几何常量 clockCardCenter.svgY 算出，随卡片尺寸与圆环半径变；CSS 侧 transform-origin 里的 var(--mi-clock-center-y, 50%) 只是兜底，写进 tokens.css 会把旋转轴钉在一个与几何脱钩的值上。"
   }
 }

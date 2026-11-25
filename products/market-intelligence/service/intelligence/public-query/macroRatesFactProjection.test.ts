@@ -18,16 +18,17 @@ const SERIES = macroRatesSnapshotPublicPolicy.series
 
 /** The four readings the dashboard's daily block renders, as the query returns them. */
 function readings(): MacroRatesReading[] {
+  const day = (period: string, value: number) => [{ period, value }]
   return [
-    { seriesId: SERIES.us10y, metricKey: 'US_10Y_YIELD', actual: 4.15, previous: 4.13, period: '2026-10-13' },
-    { seriesId: SERIES.realRate, metricKey: 'US_REAL_YIELD_10Y', actual: 1.85, previous: 1.82, period: '2026-10-13' },
-    { seriesId: SERIES.us2y, metricKey: 'US_2Y_YIELD', actual: 4.0, period: '2026-10-13' },
-    { seriesId: SERIES.breakevenInflation, metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.3, period: '2026-10-13' }
+    { seriesId: SERIES.us10y, metricKey: 'US_10Y_YIELD', actual: 4.15, previous: 4.13, period: '2026-10-13', window: day('2026-10-13', 4.15) },
+    { seriesId: SERIES.real10y, metricKey: 'US_REAL_YIELD_10Y', actual: 1.85, previous: 1.82, period: '2026-10-13', window: day('2026-10-13', 1.85) },
+    { seriesId: SERIES.us2y, metricKey: 'US_2Y_YIELD', actual: 4.0, period: '2026-10-13', window: day('2026-10-13', 4.0) },
+    { seriesId: SERIES.breakeven10y, metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.3, period: '2026-10-13', window: day('2026-10-13', 2.3) }
   ]
 }
 
 function snapshot(overrides: Partial<Extract<MacroRatesSnapshot, { state: 'available' | 'empty' }>> = {}): MacroRatesSnapshot {
-  return { state: 'available', asOf: AS_OF, readings: readings(), caveats: [MACRO_RATES_READ_CAVEAT], ...overrides }
+  return { state: 'available', asOf: AS_OF, readings: readings(), spreads: [], caveats: [MACRO_RATES_READ_CAVEAT], ...overrides }
 }
 
 function project(input: MacroRatesSnapshot | undefined, asOf = AS_OF) {
@@ -88,7 +89,7 @@ describe('projectMacroRates', () => {
 
   it('produces no fact at all for a series the query could not answer', () => {
     const { facts } = project(snapshot({
-      readings: readings().filter(reading => reading.seriesId !== SERIES.breakevenInflation)
+      readings: readings().filter(reading => reading.seriesId !== SERIES.breakeven10y)
     }))
 
     expect(metric(facts, MACRO_RATES_FACT_METRICS.breakevenInflation)).toBeUndefined()
@@ -107,7 +108,10 @@ describe('projectMacroRates', () => {
 
   it('drops a reading whose trading day the analysis clock has not reached', () => {
     const { facts, observation } = project(snapshot({
-      readings: [{ seriesId: SERIES.us10y, metricKey: 'US_10Y_YIELD', actual: 4.15, period: '2026-10-20' }]
+      readings: [{
+        seriesId: SERIES.us10y, metricKey: 'US_10Y_YIELD', actual: 4.15, period: '2026-10-20',
+        window: [{ period: '2026-10-20', value: 4.15 }]
+      }]
     }))
 
     expect(facts).toEqual([])
@@ -119,7 +123,7 @@ describe('projectMacroRates', () => {
     expect(unwired.facts).toEqual([])
     expect(unwired.observation).toMatchObject({ queryState: 'unavailable', freshness: 'unavailable' })
 
-    const empty = project({ state: 'empty', asOf: AS_OF, readings: [], caveats: [MACRO_RATES_READ_CAVEAT] })
+    const empty = project({ state: 'empty', asOf: AS_OF, readings: [], spreads: [], caveats: [MACRO_RATES_READ_CAVEAT] })
     expect(empty.facts).toEqual([])
     expect(empty.observation.queryState).toBe('empty')
     expect(empty.observation.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.queryEmpty)

@@ -21,7 +21,9 @@ const BASE: NewsArrivalNoticeInput & { sourceName: string } = {
   sourceName: 'CoinDesk RSS',
   polarity: 'bullish',
   publishedAt: '2026-10-24T12:00:00.000Z',
-  timeZone: 'Asia/Shanghai'
+  timeZone: 'Asia/Shanghai',
+  // 常态：判定发生在发布后一小时，落在 6 小时新鲜窗口内。
+  now: '2026-10-24T13:00:00.000Z'
 }
 
 describe('isNewsArrivalWorthNotifying', () => {
@@ -118,5 +120,68 @@ describe('notifyNewsArrival', () => {
 
   it('does nothing at all when no submission point is wired', async () => {
     await expect(notifyNewsArrival(undefined, BASE)).resolves.toBeUndefined()
+  })
+})
+
+/**
+ * 用户 2026-11-22：**发布时间距今超过 6 小时不弹**。
+ *
+ * 事故现场：归一化队列被行情数据饿死约 45 小时，恢复后一次性补建 11-20 的条目；到达判据只看
+ * 「本轮是不是第一次建出条目」，于是 11-20 的公告在 11-22 凌晨被当成新消息集中弹出。
+ * 这里钉的是「补建、补判都不是新消息」——判定迟到不能把旧闻变成提醒。
+ */
+describe('only a freshly published story may ring (six-hour freshness window)', () => {
+  const accepted = async (): Promise<unknown> => ({ kind: 'accepted', recordId: 'r' })
+
+  it('stays silent when the story was published more than six hours before the judgment', async () => {
+    const submit = vi.fn(accepted)
+    await notifyNewsArrival(submit, {
+      ...BASE,
+      publishedAt: '2026-10-24T06:59:59.999Z',
+      now: '2026-10-24T13:00:00.000Z'
+    })
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  it('still rings inside the window, and the exact six-hour edge still rings', async () => {
+    const submit = vi.fn(accepted)
+    await notifyNewsArrival(submit, {
+      ...BASE,
+      itemId: 'item-edge',
+      publishedAt: '2026-10-24T07:00:00.000Z',
+      now: '2026-10-24T13:00:00.000Z'
+    })
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a whole late backlog quiet: five backfilled stories judged now ring zero times', async () => {
+    // 今天凌晨的真实时间：条目 2026-11-20T09:32:10.513Z 发布，判定 2026-11-21T20:49:29.982Z。
+    const submit = vi.fn(accepted)
+    for (let index = 0; index < 5; index += 1) {
+      await notifyNewsArrival(submit, {
+        ...BASE,
+        itemId: `item-backlog-${index}`,
+        publishedAt: '2026-11-20T09:32:10.513Z',
+        now: '2026-11-21T20:49:29.982Z'
+      })
+    }
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  it('treats a clock-skewed future timestamp as fresh rather than swallowing the alert', async () => {
+    const submit = vi.fn(accepted)
+    await notifyNewsArrival(submit, {
+      ...BASE,
+      publishedAt: '2026-10-24T13:00:30.000Z',
+      now: '2026-10-24T13:00:00.000Z'
+    })
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses to guess when either timestamp is unreadable — fail closed', async () => {
+    const submit = vi.fn(accepted)
+    await notifyNewsArrival(submit, { ...BASE, publishedAt: 'not-a-date', now: '2026-10-24T13:00:00.000Z' })
+    await notifyNewsArrival(submit, { ...BASE, now: 'not-a-date' })
+    expect(submit).not.toHaveBeenCalled()
   })
 })

@@ -72,4 +72,27 @@ describe('helpTrigger 的读屏名', () => {
     expect(SOURCE).toContain('ariaLabelKey={HELP_TRIGGER_KEY}')
     expect(SOURCE).toContain('useHelpTriggerText()')
   })
+
+  it('renders one line per hint when the caller has several, and keeps the same name', async () => {
+    // 通知详情里逐通道的原因是一行一条通道：拼成一句就读不出「哪条通道说了什么」。
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(createElement(ShellLanguageProvider, {
+        language: 'zh-CN',
+        children: helpTrigger({ lines: ['甲：通道未收下', '乙：图没能取到'] })
+      }))
+    })
+    const button = host.querySelector('button')
+    expect(button?.getAttribute('aria-label')).toBe('查看说明')
+    await act(async () => {
+      button?.focus()
+    })
+    const panel = document.body.textContent ?? ''
+    expect(panel).toContain('甲：通道未收下')
+    expect(panel).toContain('乙：图没能取到')
+    // 逐行，不是拼成一句：两条之间有一个换行元素。
+    expect(document.querySelectorAll('.ant-popover br').length).toBeGreaterThanOrEqual(1)
+  })
 })

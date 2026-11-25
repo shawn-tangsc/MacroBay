@@ -2,6 +2,8 @@ import { decisionEventMetricKeyForTitleKey, filterVisibleByTier, tierVisibilityP
   from '../../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
 import { getMacroCalendarReleaseValueMapping }
   from '../../../../service/intelligence/macro-calendar/macroCalendarReleaseValueMappingPolicy'
+import { linkedCalendarImportance }
+  from '../../../../service/intelligence/macro-calendar/calendarEventImportance'
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import type { EconomicCalendarEventView } from './economicCalendarModel'
 
@@ -45,11 +47,20 @@ export function calendarDisplayTime(instant: string, timeZone: string): string {
   return formattersFor(timeZone).time.format(new Date(instant))
 }
 /**
+ * 这一行的档。**官方条目若已配上一条市场行（`linkedMarket`）**，档取那一对的那个值——
+ * `linkedCalendarImportance` 与简报共用同一处优先级：标准行有码、判据更硬，它的档先；
+ * 标准行未分级才回退官方；都没有就是未分级。
+ *
  * 判不出重要性**不算**最高一档（与 `projectUpcomingCalendarCard` 同一口径）：官方那条也读记录自己的值。
  * 记录里没有这个字段，就只是「未提供」——行不戴高标记、无障碍名不说「高」。
  */
+export function calendarItemImportance(item: CalendarDayItem): MarketCalendarEvent['importance'] {
+  if (item.source === 'market') return item.event.importance
+  return linkedCalendarImportance(item.linkedMarket?.importance, item.event.importance)
+}
+
 export function isHighImportanceCalendarItem(item: CalendarDayItem): boolean {
-  return item.event.importance === EconomicCalendarUnifiedDayPolicy.visibleImportance
+  return calendarItemImportance(item) === EconomicCalendarUnifiedDayPolicy.visibleImportance
 }
 
 /**

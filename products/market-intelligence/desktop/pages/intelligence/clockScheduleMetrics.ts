@@ -60,6 +60,8 @@ export type ClockCardFact = Readonly<{
   value?: number
   previousAsPublished?: number
   unit?: 'percent' | 'thousands'
+  /** 本期共识（数据商问卷）：窗口内「已发布」那一态拿它算「高于/低于预期」。 */
+  consensus?: Readonly<{ value: number }>
   next?: Readonly<{
     releaseAt: string
     expected?: Readonly<{ value: number; provenance?: 'market-implied' | 'source-survey' }>
@@ -83,33 +85,41 @@ export function clockScheduleMetrics(input: Readonly<{
   for (const metric of clockRingConcepts) {
     const isThisConcept = (metricKey: string): boolean => metricConceptOf(metricKey) === metric.concept
     const fact = input.facts.find((entry) => isThisConcept(entry.metricKey))
-    const dates = input.events
+    /**
+     * 日程里的每一场发布：**日期算天数、时刻算中央窗口**（42 号文件 §二：按时刻，不按日期）。
+     * 两个都留，不许在读取层就把时刻丢掉——丢掉之后中央就只能按日算，窗口会差半天。
+     */
+    const releases = input.events
       .filter((event) => (event.measureKeys ?? []).some((key) => isThisConcept(key)) && Number.isFinite(Date.parse(event.scheduledAt)))
-      .map((event) => clockDateOf(event.scheduledAt))
-      .sort()
-    const past = dates.filter((date) => date <= input.today)
-    const lastDate = past.at(-1) ?? (fact?.releasedAt === undefined ? undefined : clockDateOf(fact.releasedAt))
-    const previousDate = past.at(-2)
+      .map((event) => ({ date: clockDateOf(event.scheduledAt), at: event.scheduledAt }))
+      .sort((left, right) => left.date.localeCompare(right.date) || left.at.localeCompare(right.at))
+    const past = releases.filter((entry) => entry.date <= input.today)
+    const lastRelease = past.at(-1) ?? (fact?.releasedAt === undefined ? undefined : { date: clockDateOf(fact.releasedAt), at: fact.releasedAt })
+    const previousRelease = past.at(-2)
     // 下一期：日程里「今天之后」最近一条；日程没有就用读数里的 `next.releaseAt`（同一份日历的读模型）。
-    const scheduleNext = dates.find((date) => date > input.today)
-    const nextDate = scheduleNext ?? (fact?.next === undefined ? undefined : clockDateOf(fact.next.releaseAt))
-    const periodDays = lastDate === undefined ? undefined
-      : previousDate !== undefined ? clockDayGap(previousDate, lastDate)
-        : nextDate !== undefined ? clockDayGap(lastDate, nextDate)
+    const scheduleNext = releases.find((entry) => entry.date > input.today)
+    const nextRelease = scheduleNext ?? (fact?.next === undefined ? undefined : { date: clockDateOf(fact.next.releaseAt), at: fact.next.releaseAt })
+    const periodDays = lastRelease === undefined ? undefined
+      : previousRelease !== undefined ? clockDayGap(previousRelease.date, lastRelease.date)
+        : nextRelease !== undefined ? clockDayGap(lastRelease.date, nextRelease.date)
           : undefined
+    /** 本期实际减本期共识：两个都齐才算，缺一个就不给（不拿上期或盘口顶）。 */
+    const delta = fact?.value === undefined || fact.consensus?.value === undefined ? undefined : fact.value - fact.consensus.value
     metrics.push({
       // 牌的身份用概念串：同一概念的两个变体不会在卡上分成两个指标。
       metricKey: metric.concept,
       nameKey: metric.nameKey,
-      ...(lastDate === undefined ? {} : {
+      ...(lastRelease === undefined ? {} : {
         lastRelease: {
-          date: lastDate,
+          date: lastRelease.date,
+          at: lastRelease.at,
           ...(fact === undefined ? {} : formatFactValue(fact))
         }
       }),
-      ...(nextDate === undefined ? {} : {
+      ...(nextRelease === undefined ? {} : {
         nextRelease: {
-          date: nextDate,
+          date: nextRelease.date,
+          at: nextRelease.at,
           ...(fact?.next?.expected === undefined ? {} : { expected: formatNumber(fact.next.expected.value, fact.unit) }),
           /**
            * **这个候选有没有盘口预期**（用户 2026-11-21）：环上只挂「有盘口预期的」那一个；
@@ -118,7 +128,15 @@ export function clockScheduleMetrics(input: Readonly<{
           ...(fact?.next?.expected?.provenance === 'market-implied' ? { expectedFromMarket: true as const } : {})
         }
       }),
-      ...(periodDays === undefined || !Number.isFinite(periodDays) || periodDays <= 0 ? {} : { periodDays })
+      ...(periodDays === undefined || !Number.isFinite(periodDays) || periodDays <= 0 ? {} : { periodDays }),
+      // 中央「窗口内」那几态要的三个值：本期实际、上一期、本期共识。缺哪个就不给哪个。
+      ...(fact?.value === undefined ? {} : { actualValue: formatNumber(fact.value, fact.unit) }),
+      ...(fact?.previousAsPublished === undefined ? {} : { previousValue: formatNumber(fact.previousAsPublished, fact.unit) }),
+      ...(fact?.consensus === undefined ? {} : { consensusValue: formatNumber(fact.consensus.value, fact.unit) }),
+      ...(delta === undefined ? {} : {
+        deltaAmount: formatSigned(delta, fact?.unit),
+        deltaDirection: delta >= 0 ? 'above' as const : 'below' as const
+      })
     })
   }
   const policy = input.policy
@@ -148,6 +166,17 @@ export function formatNumber(value: number, unit: ClockCardFact['unit']): string
   if (unit === 'percent') return `${value.toFixed(2)}%`
   if (unit === 'thousands') return `${value >= 0 ? '+' : '−'}${Math.abs(Math.round(value))}K`
   return String(value)
+}
+
+/**
+ * 与共识的差：百分比按**百分点**写（`+0.10pp`），千人按 `±K`。
+ * 这里只给数值差，方向（高于/低于）由文案表决定，模型不碰句子。
+ */
+export function formatSigned(value: number, unit: ClockCardFact['unit']): string {
+  const sign = value < 0 ? '−' : '+'
+  if (unit === 'percent') return `${sign}${Math.abs(value).toFixed(2)}pp`
+  if (unit === 'thousands') return `${sign}${Math.abs(Math.round(value))}K`
+  return `${sign}${Math.abs(value)}`
 }
 
 /** `2026-11-13T13:30:00.000Z` → `2026-11-13`：日期来自日程，按日程自己的日历日算天数。 */

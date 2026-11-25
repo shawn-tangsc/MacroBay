@@ -20,6 +20,7 @@ import { containsUnsafeOutput, formatUnsafeOutputRedaction, isPlainRecord, redac
 export { formatUnsafeOutputRedaction } from './analysisOutputRedaction'
 export type { AnalysisOutputRedaction } from './analysisOutputRedaction'
 import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
+import { catalystsReferToKnownCalendarEvents, hasKnownReferences } from './analysisReferenceRules'
 
 import { policyProbabilityDefect, untracedProsePercentageDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
@@ -115,7 +116,13 @@ export const analysisValidationRules = Object.freeze({
    * 与 `direction-evidence-mismatch` **不合并**：那条管"引用了不存在的证据"，修法是把引用补成
    * 存在的那个；这条管"结论与已有证据相反"，修法是改判断。合成一个码，模型会去补一个根本不存在的引用。
    */
-  divergenceContradiction: 'divergence-contradiction'
+  divergenceContradiction: 'divergence-contradiction',
+  /**
+   * 催化剂指向日历上某一场，但写的 `calendarEventKey` 与快照里日历事实的 `eventKey` 对不上
+   * （用户 2026-11-24）。判据是数据：键在快照日历事实的 eventKey 集合里就算对，不读那句话怎么写。
+   * **不降级成「没写键也照发」**——写了错的键和不写是两件事，前者是把读者指到一场不存在的事件上。
+   */
+  calendarEventKey: 'unknown-calendar-event'
 })
 
 export type AnalysisValidationRule = typeof analysisValidationRules[keyof typeof analysisValidationRules]
@@ -269,6 +276,10 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
     return missingEvidence(analysisValidationRules.directionEvidenceMismatch)
   }
   if (!hasKnownReferences(output, factIds, evidenceRefIds)) return missingEvidence(analysisValidationRules.unknownReference)
+  // 催化剂说它指向日历上的哪一场：写了键就必须是快照里真的那一场，否则这句不发布。
+  if (!catalystsReferToKnownCalendarEvents(output.nextCatalysts, snapshot.facts)) {
+    return missingEvidence(analysisValidationRules.calendarEventKey)
+  }
   const evidenceByFact = new Map(snapshot.facts.map(fact => [fact.factId, fact.evidenceRefId]))
   const matchesFacts = (ids: readonly string[], refs: readonly string[]): boolean => {
     const expected = ids.map(id => evidenceByFact.get(id))
@@ -434,8 +445,16 @@ function hasCompleteDirectionHorizons(directions: readonly DirectionAdvice[]): b
 }
 
 function isCatalysts(value: unknown): value is Catalyst[] {
-  return isBoundedCollection(value) && value.every((item) => hasExactKeys(item, ['statement', 'evidenceRefIds']) &&
-    isBoundedText(item.statement) && isNonEmptyStringCollection(item.evidenceRefIds))
+  return isBoundedCollection(value) && value.every((item) => isCatalyst(item))
+}
+
+/** `calendarEventKey` 可选；写了就必须是一个非空的有界字符串（是否指向真的那一场由规则判）。 */
+function isCatalyst(item: unknown): item is Catalyst {
+  if (!isPlainRecord(item)) return false
+  const hasCalendarKey = item.calendarEventKey !== undefined
+  if (!hasExactKeys(item, hasCalendarKey ? ['statement', 'evidenceRefIds', 'calendarEventKey'] : ['statement', 'evidenceRefIds'])) return false
+  return isBoundedText(item.statement) && isNonEmptyStringCollection(item.evidenceRefIds) &&
+    (!hasCalendarKey || isBoundedText(item.calendarEventKey))
 }
 
 /**
@@ -447,25 +466,6 @@ function isCatalysts(value: unknown): value is Catalyst[] {
  * that fact's `observedAt` at minute precision; a percentage next to 「概率」 or 「定价」 that no
  * policy fact carries is rejected as an invented number.
  */
-function hasKnownReferences(output: ValidatedAnalysisModelOutput, factIds: ReadonlySet<string>, evidenceRefIds: ReadonlySet<string>): boolean {
-  const referencedFactIds = [
-    ...output.knownFacts.map((claim) => claim.factId),
-    ...output.marketReaction.flatMap((claim) => claim.factIds)
-  ]
-  const referencedEvidenceIds = [
-    ...output.knownFacts.flatMap((claim) => claim.evidenceRefIds),
-    ...output.transmissionHypotheses.flatMap((claim) => claim.evidenceRefIds),
-    ...output.marketReaction.flatMap((claim) => claim.evidenceRefIds),
-    ...output.supportingEvidence.map((claim) => claim.evidenceRefId),
-    ...output.counterEvidence.map((claim) => claim.evidenceRefId),
-    ...output.nextCatalysts.flatMap((claim) => claim.evidenceRefIds),
-    ...output.directions.flatMap(entry => entry.evidenceRefIds),
-    ...output.evidenceRefs
-  ]
-  return referencedFactIds.every((reference) => factIds.has(reference)) &&
-    referencedEvidenceIds.every((reference) => evidenceRefIds.has(reference))
-}
-
 function isDirectionHorizon(value: unknown): value is AnalysisDirectionHorizon {
   return typeof value === 'string' && (marketAnalysisValidationPolicy.directionHorizons as readonly string[]).includes(value)
 }

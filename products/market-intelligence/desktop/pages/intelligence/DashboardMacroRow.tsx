@@ -4,6 +4,7 @@ import type { CellReadDecision } from './dashboardCellEnabled'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarDisplayDate } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { ClockCardSlot } from './ClockCardSlot'
+import { clockCardGeometry } from './clockPlaqueLayout'
 import { ExpectationPanel } from './ExpectationPanel'
 import type { ExpectationSeriesEvent } from './useExpectationSeries'
 
@@ -12,8 +13,9 @@ type DashboardText = Readonly<{ policyPath: typeof productText['zh-CN' | 'en-US'
 /**
  * 看板左栏顶部那一排（用户 2026-11-15）：钟表卡 + 利率数学期望。
  *
- * 两块**内部一行不改**：钟表仍是 336×330、`transform` 为单位矩阵；期望图只换外层容器宽度
- * （内部曲线、分箱、悬停读数都还是它自己的）。这一排没有左右内距，间距只有 8。
+ * 两块**内部一行不改**：钟表按 A 方案 252×248、`transform` 为单位矩阵；期望图只换外层容器尺寸
+ * （内部曲线、分箱、悬停读数都还是它自己的），高度与钟表卡同源（`clockCardGeometry.cardHeight`）。
+ * 这一排没有左右内距，间距只有 8。
  *
  * 两块读**同一次**读数：都由宿主传下来的那一个 `PolicyPathReading` 驱动，同一个 `asOf`。
  */
@@ -39,12 +41,14 @@ export function DashboardMacroRow({
   /** 第一次读数还没回来：两块都先不画结论，也不说「读不到」。 */
   pending?: boolean
 }>): React.ReactElement {
-  const today = calendarDisplayDate(now().toISOString(), useShellTimeZone())
+  const nowIso = now().toISOString()
+  const today = calendarDisplayDate(nowIso, useShellTimeZone())
   return <div className="mi-crypto-dashboard__macro-row">
     <ClockCardSlot
       locale={locale}
       text={text}
       today={today}
+      nowIso={nowIso}
       events={events}
       facts={facts}
       {...(reading === undefined ? {} : { reading })}
@@ -58,6 +62,8 @@ export function DashboardMacroRow({
       resolveKey={resolveKey} />
     <ExpectationPanel
       pending={pending}
+      /* 与钟表卡同高：高度只有 `clockCardGeometry` 一处来源，这一格不再自带默认高度。 */
+      height={clockCardGeometry.cardHeight}
       locale={locale}
       policyText={text.policyPath}
       {...(reading === undefined ? {} : { policyReading: reading })}

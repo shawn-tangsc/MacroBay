@@ -1,4 +1,6 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import type { EditionPosterRow, NotificationDeliveryPathState, NotificationPosterEvidence } from './notificationPosterContracts'
+import type { NotificationCenterAction, NotificationCenterItem } from './notificationCenterContracts'
 import type { NotificationSurfaceSelection } from './notificationSurfaceSelection'
 import type { NotificationSubmitRejection, NotificationSubmitRejectionReason } from './notificationSubmitRejection'
 import type { NotificationCopyParam, NotificationCopyRef } from './notificationCopyPort'
@@ -68,7 +70,7 @@ export type NotificationAction = {
    * `url` 是真链接，Telegram 自己会把它变成可点。两者混用会得到一句做不到的话
    * （手机上点不动），所以提交期分四种情形拒收，见 `notificationSubmitPlan.ts`。
    */
-  kind: 'open' | 'acknowledge' | 'dismiss' | 'snooze' | 'custom' | 'open-external'
+  kind: NotificationActionKind
   /**
    * 只在 `kind === 'open-external'` 时出现：**只收 http/https 绝对地址**。
    *
@@ -79,8 +81,8 @@ export type NotificationAction = {
   deeplink?: NotificationDeeplink
 }
 
-/** 一条投递路径的四档（契约 §8）。闭集：多通道聚合也不许出现第五档。 */
-export type NotificationDeliveryPathState = 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
+export type { EditionPosterRow, NotificationDeliveryPathState, NotificationPosterEvidence, NotificationPosterReasonKind } from './notificationPosterContracts'
+export type { NotificationCenterAction, NotificationCenterItem } from './notificationCenterContracts'
 
 /**
  * 逐通道投递结果（多通道方案 §3）：一次通知在每条可用通道上各一行。
@@ -155,6 +157,31 @@ export type NotificationContentByLanguage = {
   'en-US'?: { title: string; body: string; reason: string }
 }
 
+/**
+ * 动作类型的**运行时闭集**（类型从它派生，不再手抄一份联合）。
+ *
+ * 为什么要一份运行时的：界面只消费其中几种，其余（`acknowledge` / `dismiss` / `snooze` / `custom`）
+ * 今天没有消费者。闭集留在类型里，就没法写「每个 kind 要么有消费者、要么登记过没消费者」的守卫——
+ * 加了新 kind 没人认也是绿的。守卫在 `notificationActionKinds.test.ts`。
+ */
+export const NOTIFICATION_ACTION_KINDS = [
+  'open',
+  'open-external',
+  'acknowledge',
+  'dismiss',
+  /**
+   * **未接、别上界面**（2026-11-24 用户裁决：这一版不做）。主进程能力是完整的：
+   * IPC `platform:notifications-snooze`、运行时 `snooze(id, until)`、存储状态 `snoozed` +
+   * `snoozedUntil` 都在，`defaultSnoozeMinutes` 也有值；但**渲染层 0 调用、界面上 0 入口**。
+   * 将来要接，先要有读者能点的「稍后提醒」按钮与默认时长——那是一个新功能，不是补一个控件；
+   * 不许在没接按钮的情况下把 `snooze` 摆到通知中心的动作位上（会变成点了没反应的假控件）。
+   */
+  'snooze',
+  'custom'
+] as const
+
+export type NotificationActionKind = (typeof NOTIFICATION_ACTION_KINDS)[number]
+
 export type NotificationRecord = {
   id: string
   owner: 'platform' | 'product'
@@ -164,8 +191,13 @@ export type NotificationRecord = {
   eventTypeId: string
   /** 合并进来的其它事件类型（含首条，契约 §16.2）。 */
   mergedEventTypes?: string[]
-  /** 每个表面的投递证据（契约 §8）。旧记录归一化为空对象。 */
-  delivery: Partial<Record<'toast' | 'popup' | 'desktop' | 'push', NotificationDeliveryState>>
+  /**
+   * 每个表面的投递证据（契约 §8）。旧记录归一化为空对象。
+   *
+   * `pushImage` 只给**简报海报**那一条（方案 §12.1）：正文那档仍写 `push`，海报单独记账——
+   * 图没发出去不能把「正文发出去了」说成失败，也不能把「图没发」藏起来。
+   */
+  delivery: Partial<Record<'toast' | 'popup' | 'desktop' | 'push' | 'pushImage', NotificationDeliveryState>>
   /**
    * 老形状：标题文案键 + 参数，读取时按语言解析。**新记录不再写它**（写成品句子），
    * 双形状兼容到「库里 `titleKey` 非空记录数 = 0」为止（契约 v2.56 §3.3）。
@@ -195,6 +227,13 @@ export type NotificationRecord = {
   safeMetadata?: Record<string, unknown>
   /** 读者眼前那一版的标识（`redeliverPush` 靠它核对）；**历史记录没有它，一律按不匹配处理**。 */
   edition?: { editionId: string; locale: string }
+  /**
+   * 这一版海报的内容 hash（方案 §12.3）：推送时**只按它**取图，不读「当前版次」。
+   * 缺席 = 这一版没有海报（出图失败/超时/旧版次），只发正文。合并时**带了才覆盖**，不带不清空。
+   */
+  editionPoster?: { contentHash: string }
+  /** 推送那一刻这一版的**海报表行**（#46）：`null`＝那一刻表里没有行（不是失败）；字段缺席＝不知道。 */
+  editionPosterRow?: EditionPosterRow | null
   occurrenceCount: number
   /** 熔断折叠掉的原文条数；只有聚合记录有。原文不落库，但这个事实必须留下。 */
   collapsedCount?: number
@@ -209,57 +248,6 @@ export type NotificationRecord = {
 
 export type SafeNotificationRecord = Omit<NotificationRecord, 'safeMetadata'> & {
   safeMetadata?: Record<string, unknown>
-}
-
-/**
- * 通知自带动作在界面上的样子：标签已经是句子，不再是键。
- *
- * 为什么动作标签也要在主进程解析：渲染层一旦拿得到 `labelKey`，它就得有一张文案表去查——
- * 那张表正是 `notification.event.…` 被印到屏幕上的入口。所以键与引用都不进这份载荷。
- */
-export type NotificationCenterAction = Omit<NotificationAction, 'labelKey' | 'labelRef'> & { label: string }
-
-/**
- * 渲染层看到的一条通知（落地约束 v1.2 §1）：句子已由主进程在**读的那一刻**按当前界面语言解析。
- *
- * 键与参数**不在这份载荷里**——渲染层拿不到键，就印不出 `notification.event.…` 这种串，
- * 不靠评审记得。记录本身仍存 ref（契约 §3.3），所以切了语言，历史通知跟着变。
- *
- * `category` 与 `createdAt` 是**结构字段**，不参与文案解析：文案解析失败、整条降级成兜底句时，
- * 它们照旧在——否则「点开看详情」只剩一句兜底句，等于点了没反应。
- */
-export type NotificationCenterItem = Omit<
-  SafeNotificationRecord,
-  'titleKey' | 'titleParams' | 'bodyKey' | 'bodyParams' | 'reasonKey' | 'reasonParams' | 'actions'
-> & {
-  /** 标题句；解析不到时是平台兜底句，**不是键**。 */
-  title: string
-  /** 正文句；没有正文是空串。 */
-  body: string
-  /** 「为什么推了」的解析句；没有就省略，不拿键顶上。 */
-  reason?: string
-  /** 动作标签已解析；解析不出标签的动作整条不出现（按不动的按钮不该摆在读者面前）。 */
-  actions: NotificationCenterAction[]
-  /**
-   * 类型标签（契约 v2.34）。目录里已经没有这条事件（旧记录、已撤事件）时没有标签——
-   * 界面不编一个，缺失本身是事实。
-   */
-  category?: NotificationCategory
-  /**
-   * 「今天一共发生过 N 次」那一句；**只在真的合并过时才有**（`occurrenceCount > 1`）。
-   *
-   * 恒出会让读者看到「共 1 次」——一个他没见过的第二个东西，比不显示更糟。
-   * 句子在主进程解析，渲染层拿到的就是这句话，不自己拼数。
-   */
-  occurrenceLabel?: string
-  /**
-   * 「手机这一档为什么没发出去」的唯一一句（多通道方案 §5-4）。**只在一种处境出现**：
-   * 一条可用通道都没有（`failed` + `push-unavailable`）。别的失败处境各有各的逐通道结果，
-   * 不在这里编一句通用话；逐通道的行等界面设计定稿后再画。
-   *
-   * 句子在主进程解析（与标题同一条口径），渲染层拿到的就是这句话。
-   */
-  deliveryHint?: string
 }
 
 export type NotificationRequest = {
@@ -289,6 +277,10 @@ export type NotificationRequest = {
   expiresAt?: string
   /** 读者眼前那一版；合并时**带了才覆盖**，没带就保持记录原样（不许清空）。 */
   edition?: { editionId: string; locale: string }
+  /** 这一版海报的内容 hash；与 `edition` 同一口径——带了才覆盖，没带不清空（否则手动重投会抹掉海报）。 */
+  editionPoster?: { contentHash: string }
+  /** 这一版海报行的状态（#46）：与 `edition` 同一口径，带了才覆盖；`null` 也是带（＝没有行）。 */
+  editionPosterRow?: EditionPosterRow | null
 }
 
 export type NotificationListQuery = {
@@ -355,6 +347,7 @@ export type NotificationRuntimeSettings = {
    * 必须同时给出真的清理任务，否则这个值永远只是数字。不许在没接清理的情况下把它摆到界面上。
    */
   retentionDays: number
+  /** 未接、别上界面：同 `snooze` 动作（见 `NOTIFICATION_ACTION_KINDS` 的注记）。 */
   defaultSnoozeMinutes: number
   quietHours?: {
     enabled: boolean

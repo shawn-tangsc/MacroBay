@@ -26,8 +26,30 @@ export const newsArrivalNoticePolicy = Object.freeze({
    * 所以桌面与手机是同一批条目——不是两套尺子。两处数值各自有主（这里是桌面，门槛在
    * `newsSentimentTiers`），**改一处必须同时看另一处**。
    */
-  minimumStrength: 3
+  minimumStrength: 3,
+  /**
+   * 「新到达」必须是「新发布」：**发布时间距今超过 6 小时不弹**（用户 2026-11-22 定）。
+   *
+   * 事故：归一化队列被行情数据饿死约 45 小时，恢复后一次性补建了 11-20 的条目；判定判据只看
+   * 「本轮是不是第一次建出条目」，于是 11-20 的公告在 11-22 凌晨被当成新消息集中弹出。
+   * 补建、补判都不是新消息——读者要的是「刚发生的事」。正常实时链路发布到判定只有几分钟，
+   * 6 小时足够覆盖慢源，又不会把两天前的旧闻重新叫醒。
+   */
+  maximumAgeMs: 6 * 60 * 60 * 1000
 })
+
+/**
+ * 这条是不是「刚发布的」——`publishedAt` 距今不超过 `maximumAgeMs`。
+ *
+ * 时钟偏差（发布时间略晚于现在）按新鲜处理：截断读者不该看见的提醒，比多弹一条更糟。
+ */
+export function isNewsArrivalFresh(input: Readonly<{ publishedAt: string; now: string }>): boolean {
+  const publishedAt = Date.parse(input.publishedAt)
+  const now = Date.parse(input.now)
+  // 读不出的时刻不猜：宁可少一条提醒，也不把两年前的旧闻当刚发生的。
+  if (!Number.isFinite(publishedAt) || !Number.isFinite(now)) return false
+  return now - publishedAt <= newsArrivalNoticePolicy.maximumAgeMs
+}
 
 /** 该不该发：只判强度与例行公告，**不判方向**。 */
 export function isNewsArrivalWorthNotifying(input: Readonly<{
@@ -49,6 +71,8 @@ export type NewsArrivalNoticeInput = Readonly<{
   publishedAt: string
   /** 读者时区（设置里那个），决定正文里那个时刻怎么写。 */
   timeZone: string
+  /** 判定「新鲜」用的现在时刻；省略就取真实当前时间。测试靠它固定时钟。 */
+  now?: string
 }>
 
 /**
@@ -106,6 +130,7 @@ export async function notifyNewsArrival(
   input: NewsArrivalNoticeInput
 ): Promise<void> {
   if (!submit) return
+  if (!isNewsArrivalFresh({ publishedAt: input.publishedAt, now: input.now ?? new Date().toISOString() })) return
   const request = buildNewsArrivalRequest(input)
   if (!request) return
   try {

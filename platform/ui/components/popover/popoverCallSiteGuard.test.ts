@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { looksLikeTextKey } from '../textKeyShape'
+import { judgeTextKey, looksLikeTextKey } from '../textKeyShape'
 
 /**
  * `Popover` 的调用点守卫。
@@ -124,7 +124,8 @@ describe('Popover call sites', () => {
         const window = tagEnd === -1 ? raw : raw.slice(0, tagEnd + 1)
         const literal = /labelKey\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/.exec(window)?.[1]
         // 传变量/常量的调用点由定义处判，这里只判字面量。
-        if (literal === undefined || looksLikeTextKey(literal)) continue
+        // 先展开同文件字符串常量再判；展开不了就跳过（与传变量同级，不扩张判据）。
+        if (literal === undefined || judgeTextKey(text, literal) !== 'reject') continue
         offenders.push({ file: relativeToRoot(file), literal })
       }
     }

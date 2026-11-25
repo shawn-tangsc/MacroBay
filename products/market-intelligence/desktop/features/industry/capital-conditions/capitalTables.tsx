@@ -79,7 +79,7 @@ export function StablecoinTable({ state, text, notice, cellOff }: Readonly<{
   const statusRow: Readonly<{ kind: 'cell-off' | 'unavailable'; tone: 'disabled' | 'unreadable'; sentence: string; action?: Readonly<{ label: string; run: () => void }> }> | undefined =
     cellOff === undefined
       ? notice === undefined ? undefined : { kind: 'unavailable', tone: 'unreadable', sentence: notice.sentence, action: notice.action }
-      : { kind: 'cell-off', tone: 'disabled', sentence: `${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）` }
+      : { kind: 'cell-off', tone: 'disabled', sentence: format(dataText('pages.intelligence.portal.data.sourcesNotEnabledWithSource'), { source: cellOff.sourceLabel }) }
   // state-ternary: reviewed — 只决定要不要给百分号小格子挂方向属性；五列表头两种状态下都在。
   const head = (label: string, flow: 'change1dUsd' | 'change7dUsd' | 'change30dUsd', percent: 'change1dPercent' | 'change7dPercent' | 'change30dPercent'): React.ReactElement =>
     <th scope="col">{label}<span className="mi-capital-conditions__pct" {...(state === undefined ? {} : { 'data-flow-direction': flowDirection(state[flow]) })}>{state === undefined ? '' : `(${state[percent]})`}</span></th>
@@ -150,7 +150,7 @@ export function CellSourceWord({ availability }: Readonly<{ availability: Dashbo
   const dataText = useProductTextKey() as (key: string) => string
   return <span className="mi-source-state" data-state="disabled">
     <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
-    <span>{`${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${availability.sourceLabel}）`}</span>
+    <span>{format(dataText('pages.intelligence.portal.data.sourcesNotEnabledWithSource'), { source: availability.sourceLabel })}</span>
   </span>
 }
 
@@ -197,7 +197,7 @@ export function EtfTable({ reading, text, onRetry, skeleton = false, cellOff }: 
             <div className="mi-capital-conditions__status-inline">
               <span className="mi-source-state" data-state="disabled">
                 <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
-                <span>{`${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）`}</span>
+                <span>{format(dataText('pages.intelligence.portal.data.sourcesNotEnabledWithSource'), { source: cellOff.sourceLabel })}</span>
               </span>
             </div>
           </td>

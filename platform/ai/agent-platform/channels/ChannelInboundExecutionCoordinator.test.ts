@@ -296,7 +296,7 @@ describe('ChannelInboundExecutionCoordinator', () => {
       text: null,
       attachments: [{ kind: 'image', stableRef: 'qq:file:stable-1', name: null, mimeType: 'image/png', sizeBytes: 1024 }]
     }
-    const turns: string[] = []
+    const turns: Array<{ text: string; displayText?: string }> = []
     const inbound = {
       admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode(JSON.stringify(payload)), keyRef: 'ref', keyRevision: 1 })),
       getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
@@ -313,13 +313,15 @@ describe('ChannelInboundExecutionCoordinator', () => {
         encrypt: async () => ({ ciphertext: new Uint8Array([1]), keyRef: 'ref', keyRevision: 1 })
       } as never,
       runtime: {
-        sendMessage: vi.fn(async ({ text }: { text: string }) => {
-          turns.push(text)
+        sendMessage: vi.fn(async (request: { text: string; displayText?: string }) => {
+          turns.push(request)
           return { assistantMessage: { data: { parts: [{ type: 'text', text: '收到这张图片了。' }] } }, state: {} }
         })
       } as never,
-      attachmentsOnlyText: (attachments: readonly { kind: string; mimeType: string; stableRef: string }[]) =>
-        `收到一张图片，没有文字。\n${attachments.map((attachment) => `${attachment.mimeType} · ${attachment.stableRef}`).join('\n')}`,
+      attachmentsOnlyTurn: (attachments: readonly { kind: string; mimeType: string; stableRef: string }[]) => ({
+        displayText: '收到 1 张图片，没有文字。',
+        text: `收到 1 张图片，没有文字。\n[attachments]\n${attachments.map((attachment) => `${attachment.mimeType} · ${attachment.stableRef}`).join('\n')}\n\nDo not describe or guess what the picture shows.`
+      }),
       runs: runs as never
     })
 
@@ -327,14 +329,16 @@ describe('ChannelInboundExecutionCoordinator', () => {
 
     // 助手侧不是空回合：这一轮有内容，而且带着可引用的稳定引用。
     expect(turns).toHaveLength(1)
-    expect(turns[0]?.trim().length).toBeGreaterThan(0)
-    expect(turns[0]).toContain('收到一张图片，没有文字。')
-    expect(turns[0]).toContain('qq:file:stable-1')
+    expect(turns[0]?.text.trim().length).toBeGreaterThan(0)
+    expect(turns[0]?.text).toContain('qq:file:stable-1')
+    // 读者气泡只看到那一句；引用与「不许猜画面」的要求只在模型那一半，不进气泡。
+    expect(turns[0]?.displayText).toBe('收到 1 张图片，没有文字。')
+    expect(turns[0]?.text).toContain('Do not describe or guess')
   })
 
   it('leaves a plain text turn and an empty one exactly as they were', async () => {
-    const send = async (payload: unknown): Promise<string[]> => {
-      const turns: string[] = []
+    const send = async (payload: unknown): Promise<Array<{ text: string; displayText?: string }>> => {
+      const turns: Array<{ text: string; displayText?: string }> = []
       const inbound = {
         admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode(JSON.stringify(payload)), keyRef: 'ref', keyRevision: 1 })),
         getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
@@ -350,12 +354,12 @@ describe('ChannelInboundExecutionCoordinator', () => {
           encrypt: async () => ({ ciphertext: new Uint8Array([1]), keyRef: 'ref', keyRevision: 1 })
         } as never,
         runtime: {
-          sendMessage: vi.fn(async ({ text }: { text: string }) => {
-            turns.push(text)
+          sendMessage: vi.fn(async (request: { text: string; displayText?: string }) => {
+            turns.push({ text: request.text, ...(request.displayText === undefined ? {} : { displayText: request.displayText }) })
             return { assistantMessage: { data: { parts: [{ type: 'text', text: 'ok' }] } }, state: {} }
           })
         } as never,
-        attachmentsOnlyText: () => '不该被用到',
+        attachmentsOnlyTurn: () => ({ displayText: '不该被用到', text: '不该被用到' }),
         runs: { get: vi.fn(() => null), start: vi.fn(() => true), complete: vi.fn(), markResult: vi.fn() } as never
       })
       await coordinator.execute(claim)
@@ -364,8 +368,8 @@ describe('ChannelInboundExecutionCoordinator', () => {
 
     // 有配文：逐字照旧，不追加附件说明（改了会让每一轮历史消息都变样）。
     await expect(send({ providerMessageKey: 'm-2', providerUserKey: 'u-1', text: '看图', attachments: [{ kind: 'image', stableRef: 'qq:file:stable-2', name: null, mimeType: 'image/png', sizeBytes: 1 }] }))
-      .resolves.toEqual(['看图'])
+      .resolves.toEqual([{ text: '看图' }])
     // 既没文字也没附件：本来就没有东西可转述，保持原样（不在这一笔里改它）。
-    await expect(send({ providerMessageKey: 'm-3', providerUserKey: 'u-1', text: null, attachments: [] })).resolves.toEqual([''])
+    await expect(send({ providerMessageKey: 'm-3', providerUserKey: 'u-1', text: null, attachments: [] })).resolves.toEqual([{ text: '' }])
   })
 })

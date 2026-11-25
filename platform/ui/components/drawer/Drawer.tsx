@@ -15,7 +15,8 @@ import { fillLabelParams } from '../textKeyParams'
  *
  * 三条写进类型或结构、不靠评审：
  * - `size` 是四档闭集（`narrow` 420 / `large` 640 / `wide` 860 / `full` 1280），**不收 `width`、
- *   不收 `style`、不收 `styles`**；超宽屏上限 `94vw` 也在这里定，调用方不写第二份；
+ *   不收 `style`、不收 `styles`**；超宽屏上限 `94vw` 也在这里定，调用方不写第二份。正文只开一个
+ *   **类名**挂载点（`bodyClassName`），照样不收样式——挂容器查询是第一用途，改内距不是；
  * - 头部只有两档：`titleKey`（有标题）或 `ariaLabelKey`（无头，但必须有名字）——没有名字的
  *   对话框，读屏只会念「对话框」；
  * - `mode` 只有 `modal` / `inline`，遮罩、Esc、焦点锁定、容器归它决定，不收对应布尔。
@@ -56,6 +57,16 @@ type DrawerBase = {
   footer?: ReactNode
   children: ReactNode
   className?: string
+  /**
+   * 正文节点的**挂载点**类名，透传给 antd 的 `classNames.body`。
+   *
+   * 用途只有一个：调用方要在正文上挂 `container-type` 之类、按抽屉自身宽度做收放时，有一个**属于
+   * 我们**的类可用，不必依赖 `.ant-drawer-body` 这个内部类名（antd 改一次，容器就静默消失）。
+   *
+   * **平台样式里对这个类不写任何声明**：内距仍归 `drawer.css` 的 `--default` / `--flush` 两档，
+   * 滚动容器仍是 antd 的 body。给样式就等于允许调用方改正文内距，第二个「正文内距」的来源就是事故。
+   */
+  bodyClassName?: string
   resolveText: (key: string) => string
   /**
    * 与相邻抽屉的关系：`false` = **不推开别人**。antd 默认会把外层的抽屉推开 180px
@@ -123,7 +134,7 @@ type DrawerHeaderShape =
 export type DrawerProps = DrawerBase & DrawerModeShape & DrawerHeaderShape
 
 export function Drawer(props: DrawerProps): ReactElement {
-  const { open, onClose, size, footer, children, className, resolveText, destroyOnHidden, push } = props
+  const { open, onClose, size, footer, children, className, bodyClassName, resolveText, destroyOnHidden, push } = props
   const inline = props.mode === 'inline'
   const headless = props.header === 'none'
   const width = `min(${SIZE_PX[size]}px, ${VIEWPORT_CAP})`
@@ -190,6 +201,11 @@ export function Drawer(props: DrawerProps): ReactElement {
       */
       {...(inline ? { autoFocus: false, getContainer: false as const, 'aria-modal': undefined } : {})}
       {...(headless ? { styles: { header: { display: 'none' } } } : {})}
+      /*
+        不传就不发：`classNames` 只在有值时出现，antd 那边的 DOM 与今天一模一样。
+        传了只补正文这一类；头与页脚不开口子，那两个槽各有各的组件规则。
+      */
+      {...(bodyClassName === undefined ? {} : { classNames: { body: bodyClassName } })}
       rootClassName={['drawer', `drawer--${size}`, `drawer--${props.mode}`, inline ? `drawer--${props.side ?? 'right'}` : '']
         .filter(Boolean)
         .join(' ')}

@@ -259,3 +259,43 @@ it('never says an event that publishes no value is waiting for one', () => {
   expect(all.find(row => row.eventKey === 'financial')?.awaitingData).toBe(false)
   expect(all.find(row => row.eventKey === 'central-bank')?.awaitingData).toBe(false)
 })
+
+/**
+ * 短名单先给指标、事件只补位（用户 2026-11-24）。
+ *
+ * 截图那次的现场：4 行全是讲话/会议，PCE 排在后面被截掉——规则写着「一二级指标都进」，
+ * 但排序只看时间，讲话就把指标顶掉了。这两条用例守的是同一件事的两面：
+ * ① 还有空位时，三条讲话 + 一条一级指标必须都在名单里（这条今天就是绿的，防回归）；
+ * ② 空位被讲话和金融事件占满时，一级指标仍必须挤进名单（这条是这次的真红证）。
+ */
+it('keeps a tier-1 indicator alongside three speeches when there is room', () => {
+  const speeches = ['10:05', '13:30', '16:35'].map((time, index) => event({
+    eventKey: `speech-${index}`, titleKey: 'speech', tier: null, importance: 'high',
+    category: 'central-bank-activity',
+    scheduledDate: '2026-10-11', scheduledAt: `2026-10-11T${time}:00.000Z`
+  }))
+  const indicator = event({ eventKey: 'pce-tier1', tier: 1,
+    scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T12:30:00.000Z' })
+
+  const result = projectUpcomingCalendarCard([...speeches, indicator], asOf)
+  expect(result.upcoming.map(row => row.eventKey)).toContain('pce-tier1')
+})
+
+it('puts a tier-1 indicator in the short list even when events already fill every slot', () => {
+  // 讲话 3 条 + 高重要性金融事件 1 条，都早于指标：只看时间的话 4 个格子被占满，指标被截掉。
+  const speeches = ['10:05', '13:30', '16:35'].map((time, index) => event({
+    eventKey: `speech-${index}`, titleKey: 'speech', tier: null, importance: 'high',
+    category: 'central-bank-activity',
+    scheduledDate: '2026-10-11', scheduledAt: `2026-10-11T${time}:00.000Z`
+  }))
+  const financial = event({ eventKey: 'financial', titleKey: 'financial', tier: null, importance: 'high',
+    category: 'financial-event', scheduledDate: '2026-10-11', scheduledAt: '2026-10-11T18:00:00.000Z' })
+  const indicator = event({ eventKey: 'pce-tier1', tier: 1,
+    scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T12:30:00.000Z' })
+
+  const result = projectUpcomingCalendarCard([...speeches, financial, indicator], asOf)
+  const keys = result.upcoming.map(row => row.eventKey)
+  expect(keys).toContain('pce-tier1')
+  // 指标档在前：它不能排在补位的讲话后面。
+  expect(keys.indexOf('pce-tier1')).toBeLessThan(keys.indexOf('speech-0'))
+})

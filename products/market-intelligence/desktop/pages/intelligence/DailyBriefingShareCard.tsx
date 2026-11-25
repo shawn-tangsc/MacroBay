@@ -187,11 +187,16 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       </div>
     </section> : null}
 
-    {doc.next.items.length > 0 || doc.next.focus ? <section className="mi-brief-poster__next">
+    {/* R44：整周有事件、却一条已分级的都没有时，这一栏**有话说**（句子取签字文案）；
+        零事件与「确实没有高影响」两种空态仍然整块不渲染（用户 2026-11-15）。 */}
+    {doc.next.items.length > 0 || doc.next.focus || doc.next.note === 'next-7d-importance-unknown' ? <section className="mi-brief-poster__next">
       <div className="mi-brief-poster__next-head">
         <h2>{text.sections.next}</h2>
-        <span>{text.next.count.replace('{count}', String(doc.next.items.length + (doc.next.focus ? 1 : 0)))}</span>
+        {doc.next.items.length + (doc.next.focus ? 1 : 0) > 0
+          ? <span>{text.next.count.replace('{count}', String(doc.next.items.length + (doc.next.focus ? 1 : 0)))}</span>
+          : null}
       </div>
+      {doc.next.note === 'next-7d-importance-unknown' ? <p>{text.nextImportanceUnknown.sentence}</p> : null}
       {focusEvent ? <div className="mi-brief-poster__next-focus">
         <div className="mi-brief-poster__next-focus-head">
           <span className="mi-brief-poster__next-tag">{text.next.focus}</span>

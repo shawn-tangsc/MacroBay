@@ -886,16 +886,29 @@ describe('the two restored blocks read exactly as before', () => {
 
   it('renders nothing at all for either block when there is nothing to put in it', async () => {
     const base = briefing()
-    const host = await render({ ...base, news: { ...base.news, macro: [], notes: {} }, next: { items: [], note: 'next-7d-importance-unknown' } })
+    // R44 之后只有「未来 7 天零事件 / 确实没有高影响」这两档还是整块消失；「我们还没分级」
+    // 有话说（下一条用例）。用户 2026-11-15 的「空就整块不出现」管前两档。
+    const host = await render({ ...base, news: { ...base.news, macro: [], notes: {} }, next: { items: [], note: 'next-7d-no-high-impact-event' } })
     expect(host.querySelector('.mi-brief-poster__macro-head')).toBeNull()
     expect(host.querySelector('.mi-brief-poster__next')).toBeNull()
     const body = host.textContent ?? ''
     expect(body).not.toContain(text.sections.macro)
     expect(body).not.toContain(text.sections.next)
-    // 用户 2026-11-15：空就整块不出现，不写占位句。这一处 DOM 同时是导出海报的来源
-    // （`useBriefingShareActions` 对同一张 poster 调 `toPng`），所以这条断言覆盖屏幕与导出。
+    // 这一处 DOM 同时是导出海报的来源（`useBriefingShareActions` 对同一张 poster 调 `toPng`），
+    // 所以这条断言覆盖屏幕与导出。
     for (const placeholder of ['无法判定', '0 个', '暂无', '没有高影响事件']) {
       expect(body, placeholder).not.toContain(placeholder)
     }
+  })
+
+  it('tells the reader the week is not rated yet, without printing a count of zero', async () => {
+    // R44 §6.2：整周有事件、却一条已分级的都没有——这一栏要出那句话；「0 个」不许出现。
+    const base = briefing()
+    const host = await render({ ...base, next: { items: [], note: 'next-7d-importance-unknown' } })
+    const section = host.querySelector('.mi-brief-poster__next')
+    expect(section).not.toBeNull()
+    expect(section?.textContent ?? '').toContain(text.nextImportanceUnknown.sentence)
+    expect(section?.textContent ?? '').not.toContain('0 个')
+    expect(section?.textContent ?? '').not.toContain('暂无')
   })
 })

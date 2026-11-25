@@ -71,7 +71,6 @@ const never = async () => ({ state: 'unavailable' })
 const dashboardProps = {
   text: portal.dashboard,
     client: calendar,
-  fearGreedClient: { querySnapshot: never } as never,
   fundingRateClient: { query: never } as never,
   now: () => new Date(asOf),
   onConfigureSources: () => undefined,
@@ -140,10 +139,11 @@ describe('a chart line selects a calendar event without opening the conversation
     const drawer = host.querySelector('[data-test-event-drawer]')
     expect(drawer?.getAttribute('data-test-event-drawer')).toBe(calendarEvent.eventKey)
     expect(drawer?.textContent).toBe(portal.analysisWorkspace.readableNames.eventName.cpi)
-    // 2. Nothing opened the conversation and nothing switched the workspace.
+    // 2. Nothing opened the conversation, and there is no switch row left to switch the workspace
+    //    with（用户 2026-11-24：窄档撤掉「市场看板 / 数字货币解读」切换，看板永远是底盘）。
     expect(host.querySelector('.mi-agent-floating')).toBeNull()
     expect(host.querySelector('[data-agent-floating-button]')?.getAttribute('aria-expanded')).toBe('false')
-    expect(host.querySelector('.mi-analysis-dashboard-layout')?.getAttribute('data-compact-view')).toBe('dashboard')
+    expect(host.querySelector('.mi-analysis-dashboard-layout__switch')).toBeNull()
 
     // 3. Recorded: when the reader does open the conversation, it is already bound to that event.
     await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())

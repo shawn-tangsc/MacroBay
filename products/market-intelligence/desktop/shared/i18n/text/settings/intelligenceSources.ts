@@ -189,6 +189,7 @@ export const intelligenceSourcesText = {
     'cryptopanic': '加密新闻聚合，按币种归类',
     'defillama-stablecoins': '稳定币总供给及其近期变化',
     'defillama-tvl': '各链锁仓总值及其近期变化',
+    'deribit-options': 'Deribit 期权的隐含波动率偏斜；默认一小时一轮，需要代理',
     'ethereum-foundation-blog': '维护备用，暂不向读者提供内容',
     'federal-reserve-rss': '维护备用，暂不向读者提供内容',
     'fred': '旧版指标采集，已被利率与流动性取代',
@@ -232,7 +233,7 @@ export const intelligenceSourcesText = {
     'binance-spot-market': '币安现货行情', 'binance-futures-positioning': '币安合约持仓',
     'okx-latest-announcements': 'OKX 最新公告',
     'okx-api-announcements': 'OKX API 公告', 'coingecko-market': 'CoinGecko 行情',
-    'defillama-stablecoins': 'DeFiLlama 稳定币', 'defillama-tvl': 'DeFiLlama TVL',
+    'defillama-stablecoins': 'DeFiLlama 稳定币', 'defillama-tvl': 'DeFiLlama TVL', 'deribit-options': 'Deribit 期权',
     'alternative-fear-greed': '恐惧与贪婪指数', 'coindesk-rss': 'CoinDesk 新闻',
     'ethereum-foundation-blog': '以太坊基金会博客', cryptopanic: 'CryptoPanic 新闻',
     coinmarketcal: 'CoinMarketCal 新闻（旧）', 'macro-calendar-coinmarketcal': 'CoinMarketCal 事件日历',
@@ -248,7 +249,7 @@ export const intelligenceSourcesText = {
     fed: '美联储', bea: '美国经济分析局', bls: '美国劳工统计局', fred: 'FRED', 'policy-path': 'Polymarket',
     treasury: '美国财政部', sec: '美国证监会', cftc: '美国商品期货交易委员会',
     binance: '币安', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
-    'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': '以太坊基金会',
+    'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': '以太坊基金会', deribit: 'Deribit',
     cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter', narwhal: 'Narwhal', cryptoetf: 'CryptoETF',
     realmarketapi: 'RealMarketAPI', 'twelve-data': 'Twelve Data', coinbase: 'Coinbase',
     kraken: 'Kraken', solana: 'Solana', github: 'GitHub'
@@ -539,6 +540,16 @@ export const intelligenceSourcesText = {
     'value-shape-rejected': '采到了，但值的形状被拒，没写进标准表',
   },
   writeFailureAria: '这一行的值是旧的：最近一次采集成功，但没写进标准表。原因：{reason}',
+  /**
+   * **采集有没有产出**（用户 2026-11-21）：这两句回答「这个源还在不在工作」，与上面的「采到了没写进
+   * 标准表」是两件事。**两者不许合并成一句**——「没抓到」和「抓到了但处理不了」是两种病：
+   * 前者要查源/网络，后者要查我们的解析；写成一句话，读者永远不知道该去查哪边。
+   * 值来自采集侧闭集 `staleReason`；读不到状态时走既有的「状态暂时读不到」，没有第三句话。
+   */
+  staleReason: {
+    'no-output': '这个源已经 {hours} 小时没有新内容了',
+    'normalize-failing': '这个源连续 {count} 次解析失败，抓到了但没变成条目',
+  },
   /**
    * 「核心指标」那组配置的文案（用户 2026-11-14）。
    *
@@ -895,6 +906,7 @@ export const intelligenceSourcesText = {
     'cryptopanic': 'Aggregated crypto headlines, grouped by coin',
     'defillama-stablecoins': 'Total stablecoin supply and its recent change',
     'defillama-tvl': 'Total value locked per chain and its recent change',
+    'deribit-options': 'Implied-volatility skew from Deribit options; collected hourly, needs a proxy',
     'ethereum-foundation-blog': 'Maintenance only; nothing here is shown to readers yet',
     'federal-reserve-rss': 'Maintenance only; nothing here is shown to readers yet',
     'fred': 'Legacy indicator feed, replaced by rates and liquidity',
@@ -931,7 +943,7 @@ export const intelligenceSourcesText = {
     'binance-spot-market': 'Binance spot market', 'binance-futures-positioning': 'Binance futures positioning',
     'okx-latest-announcements': 'OKX latest announcements',
     'okx-api-announcements': 'OKX API announcements', 'coingecko-market': 'CoinGecko market data',
-    'defillama-stablecoins': 'DeFiLlama stablecoins', 'defillama-tvl': 'DeFiLlama TVL',
+    'defillama-stablecoins': 'DeFiLlama stablecoins', 'defillama-tvl': 'DeFiLlama TVL', 'deribit-options': 'Deribit options',
     'alternative-fear-greed': 'Fear and greed index', 'coindesk-rss': 'CoinDesk news',
     'ethereum-foundation-blog': 'Ethereum Foundation blog', cryptopanic: 'CryptoPanic news',
     coinmarketcal: 'CoinMarketCal news (legacy)', 'macro-calendar-coinmarketcal': 'CoinMarketCal event calendar',
@@ -947,7 +959,7 @@ export const intelligenceSourcesText = {
     fed: 'Federal Reserve', bea: 'Bureau of Economic Analysis', bls: 'Bureau of Labor Statistics', fred: 'FRED', 'policy-path': 'Polymarket',
     treasury: 'US Treasury', sec: 'US SEC', cftc: 'US CFTC',
     binance: 'Binance', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
-    'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': 'Ethereum Foundation',
+    'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': 'Ethereum Foundation', deribit: 'Deribit',
     cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter', narwhal: 'Narwhal', cryptoetf: 'CryptoETF',
     realmarketapi: 'RealMarketAPI', 'twelve-data': 'Twelve Data', coinbase: 'Coinbase',
     kraken: 'Kraken', solana: 'Solana', github: 'GitHub'
@@ -1205,6 +1217,12 @@ export const intelligenceSourcesText = {
     'value-shape-rejected': 'Collected, but the value shape was rejected before writing',
   },
   writeFailureAria: 'This row is showing an older value: the last collection succeeded but was never written to the standard table. Reason: {reason}',
+  /** Collection **output**, not collection success: "nothing fetched" and "fetched but unprocessable" are two
+   * different illnesses and must stay two sentences — the reader's next step differs (source/network vs parser). */
+  staleReason: {
+    'no-output': 'This source has produced nothing new for {hours} hours',
+    'normalize-failing': 'This source failed to parse {count} times in a row: items were fetched but never became entries',
+  },
   coreIndicators: {
     title: 'Core indicators',
     metrics: { cpiYoy: 'CPI (YoY)', coreCpiYoy: 'Core CPI (YoY)', nonfarmPayrolls: 'Nonfarm payrolls', corePceYoy: 'Core PCE (YoY)' },

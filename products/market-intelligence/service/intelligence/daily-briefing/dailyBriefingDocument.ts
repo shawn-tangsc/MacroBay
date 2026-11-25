@@ -19,6 +19,8 @@ import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefin
 import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlocks'
 import { proseLanguageBreach } from './dailyBriefingProseLanguage'
 import { macroEmptyCode, macroEmptyHours, newsEmptyCode, nextEmptyCode } from './dailyBriefingEmptyCodes'
+import { briefingEventInNextWindow } from './dailyBriefingCalendarWindow'
+import { selectTier1UpcomingReleases } from './dailyBriefingTier1Upcoming'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import {
   highImpactEventsInWindow,
@@ -31,7 +33,6 @@ import {
 
 // 选取口径原本就在这个文件里、被外部 import：搬家不改调用方。
 export { maximumBriefingMacroItems, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocumentMacro'
-import { briefingFirstTierFamily } from './briefingFirstTierEvents'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 /**
@@ -75,6 +76,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
   }
   const nextCandidates = selectNextCandidates(packet)
   const next = selectNext(packet, nextCandidates)
+  const tier1Upcoming = tier1UpcomingForUnratedWeek(packet)
   const built = buildConclusion(packet)
   const policyBlock = buildPolicyPathBlock(packet, input.previous)
   const policyPathData = policyBlock.policyPath
@@ -151,7 +153,10 @@ export function buildDailyBriefingDocument(input: Readonly<{
       items: next.items,
       ...(next.focus ? { focus: next.focus } : {}),
       ...(nextCandidates.length > 0 ? { candidates: nextCandidates } : {}),
-      ...(next.items.length > 0 || next.focus ? {} : { note: nextEmptyCode(packet) })
+      ...(next.items.length > 0 || next.focus ? {} : { note: nextEmptyCode(packet) }),
+      // 「整周有事件、但一条已分级的都没有」时，除了那句「我们还没分级」，还要给读者真实排期
+      // （R44 §6.2）。排期是我们自己的一级清单，不是「高影响事件」——两者不混。
+      ...(tier1Upcoming.length > 0 ? { tier1Upcoming } : {})
     }),
     citations: built.citations,
     provenance: Object.freeze({
@@ -300,31 +305,37 @@ function hasEnglishName(event: Pick<DailyBriefingCalendarEvent, 'title' | 'title
   return !/[\u3400-\u9fff]/.test(name)
 }
 
+/**
+ * 整周有事件、却一条已分级的都没有时的真实排期（R44 §6.2）。
+ *
+ * 判据与空态理由同一份：窗口里**有事件**（未取消）、且**一条已分级的都没有**。
+ * 只要有一场定了档，这一栏就不是「我们还没判」，排期也不该顶替那句「没有高影响事件」。
+ * 未分级＝`importance` 缺省（R44：列可空三值，不引入第四档）。
+ */
+function tier1UpcomingForUnratedWeek(packet: DailyBriefingFactPacket): readonly ReturnType<typeof selectTier1UpcomingReleases>[number][] {
+  if (packet.calendar.state !== 'available') return Object.freeze([] as const)
+  const window = { end: packet.windowEnd, timeZone: packet.timeZone }
+  const upcoming = packet.calendar.events
+    .filter((event) => event.lifecycleState !== 'cancelled' && briefingEventInNextWindow(event, window))
+  if (upcoming.length === 0 || !upcoming.every((event) => event.importance === undefined)) return Object.freeze([] as const)
+  return selectTier1UpcomingReleases(upcoming, packet.windowEnd)
+}
+
 function selectNextCandidates(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([] as const)
-  const today = localDate(packet.windowEnd, packet.timeZone)
-  const horizon = addDays(today, 7)
   const candidates = packet.calendar.events
-    // 一级事件按**身份**进候选，不按重要性：narwhal 那批行重要性是空的，而它们恰是 CPI/非农/
-    // 纪要这类最该出现的事件；重要性缺失是我们没有这个字段，不是「它不重要」。
-    .filter((event) => event.lifecycleState === 'scheduled'
-      && (event.importance === 'high' || briefingFirstTierFamily({
-        eventKey: event.eventKey, title: event.title, titleKey: event.titleKey, metricKey: event.metricKey
-      }) !== undefined))
+    // 只认**档**（R44 S3）：`importance` 读的就是日历侧判出来的 `importance_grade`，高才进候选。
+    // 以前这里还按身份放行 FOMC/CPI/非农（源没给重要性的那批），那是第二套「谁该出现」，
+    // 会和档打架——未分级的事件被抬进来，读者看到的是一场我们还没判过的事件排在「高影响」里。
+    // 未分级（`undefined`）不兜底成低、也不冒充高：它不进这一栏，由空态那句说「我们还没分级」。
+    .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
     // 英文版次只列**有英文名**的事件（`02` `A0.9`）：源里只有中文名的（如央行讲话那条源）不列，
     // 不许把中文名塞进英文版。少列几条是允许的，不报缺口——那是源的能力限制，不是这次读失败。
     .filter((event) => packet.locale !== 'en-US' || hasEnglishName(event))
-    .filter((event) => {
-      // 时刻没公布的事件只有日期：按**日期**分栏，不拿日期位当瞬时（它的零点可能早于截止时刻）。
-      // 今天还没发生的那一场归这里；同日已发生/已取消的归「过去 24 小时」，两栏不重叠。
-      if (event.releaseTimeNotPublished) {
-        const day = event.releaseDate
-        return day !== undefined && day >= today && day <= horizon
-      }
-      const at = Date.parse(event.scheduledAt)
-      const day = localDate(event.scheduledAt, packet.timeZone)
-      return Number.isFinite(at) && at > Date.parse(packet.windowEnd) && day <= horizon
-    })
+    // 时刻没公布的事件只有日期：按**日期**分栏，不拿日期位当瞬时（它的零点可能早于截止时刻）。
+    // 今天还没发生的那一场归这里；同日已发生/已取消的归「过去 24 小时」，两栏不重叠。
+    // 窗口只定义一次（`briefingEventInNextWindow`）：空态那一栏要用同一套边界。
+    .filter((event) => briefingEventInNextWindow(event, { end: packet.windowEnd, timeZone: packet.timeZone }))
     .flatMap((event): readonly BriefingNextItem[] => {
       // 没有角色的事件不占席位：候选是给编辑模型读的，放进去等于让它替一个猜测排序。
       const relevance = scoreBriefingNextRelevance(event)
@@ -441,6 +452,8 @@ class CitationCollector {
   private readonly indexes = new Map<string, number>()
   private readonly evidence: ReadonlyMap<string, Readonly<{ sourceLabel?: string; observedAt?: string; itemId?: string }>>
   private readonly statements = new Map<string, string>()
+  /** 已经挂出去的句子：一句话只留在第一条引用上，别在证据清单里数三遍。 */
+  private readonly claimed = new Set<string>()
 
   constructor(evidenceRefs: readonly Readonly<{ evidenceRefId: string; sourceLabel: string; itemId: string | null; occurredAt: string | null; publishedAt: string | null; visibleAt: string }>[]) {
     this.evidence = new Map(evidenceRefs.map((ref) => [ref.evidenceRefId, {
@@ -452,9 +465,16 @@ class CitationCollector {
 
   cite(refs: readonly string[], statement?: string): readonly number[] {
     const numbers: number[] = []
+    // 一条理由引用三条证据时，读者在「证据」里会看到同一句重复三遍——那不是三条证据，
+    // 是一句话被数了三遍（用户 2026-11-24）。句子留在第一条引用上，其余条目只给来源。
+    let assigned = statement === undefined || this.claimed.has(statement)
     for (const ref of refs) {
       if (!ref) continue
-      if (statement && !this.statements.has(ref)) this.statements.set(ref, statement)
+      if (statement !== undefined && !assigned && !this.statements.has(ref)) {
+        this.statements.set(ref, statement)
+        this.claimed.add(statement)
+        assigned = true
+      }
       let index = this.indexes.get(ref)
       if (index === undefined) {
         index = this.indexes.size + 1
@@ -529,21 +549,6 @@ export function combineDailyBriefingReadingStates(
   if (states.some((state) => state === 'available')) return 'available'
   if (states.some((state) => state === 'stale')) return 'stale'
   return 'unavailable'
-}
-
-function localDate(instant: string, timeZone: string): string {
-  const parsed = Date.parse(instant)
-  if (!Number.isFinite(parsed)) return ''
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(parsed))
-  } catch {
-    return new Date(parsed).toISOString().slice(0, 10)
-  }
-}
-
-function addDays(date: string, days: number): string {
-  const parsed = Date.parse(`${date}T00:00:00.000Z`)
-  return Number.isFinite(parsed) ? new Date(parsed + days * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10) : date
 }
 
 function normalizeTitle(value: string): string {

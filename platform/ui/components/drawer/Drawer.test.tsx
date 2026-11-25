@@ -11,7 +11,7 @@ import { Drawer, DRAWER_SIZES, type DrawerProps } from './Drawer'
 import { DRAWER_CLOSE_KEY, resolveDrawerText } from './drawerText'
 
 /**
- * `min(420px, 92vw)` 这类值在 happy-dom 里会被样式解析器丢掉，量 `style.width` 只会得到空串。
+ * `min(420px, 94vw)` 这类值在 happy-dom 里会被样式解析器丢掉，量 `style.width` 只会得到空串。
  * 所以把传给 antd `Drawer` 的 props 拦下来断言，同时照常渲染真正的组件——DOM 行为照样测。
  */
 const passedProps: Record<string, unknown>[] = []
@@ -123,6 +123,39 @@ describe('Drawer 的 destroyOnHidden 透传', () => {
     render(false)
     // 断言子节点是否存在，不断言 antd 内部类名——后者等于把实现细节写进我们的测试。
     expect(document.body.querySelector('[data-probe="content"]')).toBeNull()
+  })
+})
+
+/**
+ * 正文类名是**挂载点**，不是第二套内距（`#44`：日历要挂 `container-type`，却只能挂在
+ * `.ant-drawer-body` 这个 antd 内部类名上——antd 改一次，容器就静默消失）。
+ */
+describe('Drawer 的正文类名挂载点', () => {
+  it('puts the caller class on the body node', async () => {
+    await mount({ bodyClassName: 'probe-body-mount' })
+
+    const body = document.querySelector<HTMLElement>('.ant-drawer-body')
+    expect(body).not.toBeNull()
+    expect(body?.classList.contains('probe-body-mount')).toBe(true)
+    // 只落在正文这一处：头与页脚不跟着多一类，它们各有各的规则。
+    expect(document.querySelectorAll('.probe-body-mount')).toHaveLength(1)
+  })
+
+  it('sends no classNames at all when the caller passes none', async () => {
+    await mount()
+
+    // 不传＝不发：antd 收到的 props 里没有 `classNames`，正文节点的类名与今天完全一致。
+    expect(passedProps.at(-1)).toBeDefined()
+    expect('classNames' in passedProps.at(-1)!).toBe(false)
+    expect(document.querySelector<HTMLElement>('.ant-drawer-body')?.className).toBe('ant-drawer-body')
+  })
+
+  it('takes a class name only, never a style twin', () => {
+    // 「只给类名、不给 style」是这条口子的边界：给样式就等于允许调用方改正文内距，
+    // 而内距只该有两个来源（`--default` 16px 与 `--flush` 0）。
+    expect(source).toMatch(/bodyClassName\?:\s*string/)
+    expect(source).not.toMatch(/bodyStyle\s*[:=?]/)
+    expect(source).not.toMatch(/bodyClassName\?:\s*React\.CSSProperties/)
   })
 })
 

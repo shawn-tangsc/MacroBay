@@ -1,6 +1,7 @@
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefingSourceDeps } from './dailyBriefingSource'
+import { linkedCalendarImportance } from '../macro-calendar/calendarEventImportance'
 import type { TimelineItem } from './dailyBriefingFactSnapshot'
 import { assessMarketCalendarSurprise, toCalendarSurpriseView } from '../../../contracts/macro/marketCalendarSurprise'
 import {
@@ -86,8 +87,16 @@ export async function readCalendar(
           // 标准表那一行的值可能是值对象的 JSON 串（2026-11-18 事故）：补值也走同一个解释出口。
           const consensus = displayTextOf(event.consensus)
           const previous = displayTextOf(event.providerPrevious)
+          /**
+           * 档取 **linked 对**的那一个（技术方案 §4.1 末条）：标准行有码、判据更硬，所以它的档先；
+           * 标准行未分级才回退官方那条；都没有就不写这个键（未分级，不是低）。
+           * 与日历的日模型共用 `linkedCalendarImportance`——两处各写一遍就会「同一条在日历是高、
+           * 在简报是未分级」。
+           */
+          const linkedImportance = linkedCalendarImportance(event.importance, official.importance)
           events.set(linked, Object.freeze({
             ...official,
+            ...(linkedImportance === undefined ? {} : { importance: linkedImportance }),
             ...(official.consensus ? {} : consensus === undefined ? {} : { consensus }),
             ...(official.previous ? {} : previous === undefined ? {} : { previous }),
             ...(official.countryCode ? {} : event.countryCode ? { countryCode: event.countryCode } : {}),

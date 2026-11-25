@@ -171,8 +171,10 @@ export class ChannelDeliveryService {
         retryable: false,
         now: this.now()
       })
+      // 上游说的「等多久再试」原样交出去（只有限流会带）：调用点据此内联重发一次，不自己编退避。
+      const retryAfterMs = result.kind === 'failed' ? result.retryAfterMs : undefined
       return committed
-        ? { status: result.kind, attemptId: attempt.id, errorCode }
+        ? { status: result.kind, attemptId: attempt.id, errorCode, ...(retryAfterMs === undefined ? {} : { retryAfterMs }) }
         : { status: 'unknown-after-send', attemptId: attempt.id, errorCode: 'delivery-lifecycle-fenced' }
     } catch {
       if (owner) {

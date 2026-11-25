@@ -40,8 +40,13 @@ describe('resolveMacroMetricFetchTargets', () => {
 
   it('asks FRED for a whole trading year of closes, not the newest five rows', () => {
     const targets = resolveMacroMetricFetchTargets(macroConfig('fred-rates-liquidity'))
-    const rates = targets.filter((target) => ['DGS2', 'DGS10', 'DFII10', 'T10YIE'].includes(target.seriesId ?? ''))
-    expect(rates).toHaveLength(4)
+    const rateIds = [
+      'DGS1MO', 'DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS3', 'DGS5', 'DGS7', 'DGS10', 'DGS20', 'DGS30',
+      'DFII5', 'DFII7', 'DFII10', 'DFII20', 'DFII30', 'T5YIE', 'T10YIE', 'T5YIFR'
+    ]
+    const rates = targets.filter((target) => rateIds.includes(target.seriesId ?? ''))
+    // 整条曲线：每一条都是一个请求，各自要整窗（19 条，一个都不能漏）。
+    expect(rates.map((target) => target.seriesId)).toEqual(rateIds)
     for (const target of rates) {
       expect(new URL(target.url).searchParams.get('limit')).toBe('400')
     }
@@ -65,9 +70,11 @@ describe('resolveMacroMetricFetchTargets', () => {
 
   it('builds one FRED request per configured series', () => {
     const targets = resolveMacroMetricFetchTargets(macroConfig('fred-rates-liquidity'))
-    expect(targets).toHaveLength(9)
+    expect(targets).toHaveLength(24)
     expect(targets.map((target) => target.seriesId)).toEqual([
-      'DGS2', 'DGS10', 'DFII10', 'T10YIE', 'DTWEXBGS', 'WALCL', 'DFEDTARU', 'DFEDTARL', 'EFFR'
+      'DGS1MO', 'DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS3', 'DGS5', 'DGS7', 'DGS10', 'DGS20', 'DGS30',
+      'DFII5', 'DFII7', 'DFII10', 'DFII20', 'DFII30', 'T5YIE', 'T10YIE', 'T5YIFR',
+      'DTWEXBGS', 'WALCL', 'DFEDTARU', 'DFEDTARL', 'EFFR'
     ])
     for (const target of targets) {
       expect(target.url).toContain('series_id=')

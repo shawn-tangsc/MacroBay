@@ -4,6 +4,8 @@ import { createChannelImageSource } from '../channelImageSource'
 import { createChannelPosterSend } from '../channelPosterSend'
 import { getChannelPosterOutbox } from '../../../storage/channelPosterOutbox'
 import type { PosterPublish } from '../../../ai/agent-platform/channels/channelPosterPublishRegistry'
+import { getBriefingPosterRead } from '../../../ai/agent-platform/channels/briefingPosterReadRegistry'
+import { configureChannelPosterPushSource } from '../../../ai/agent-platform/channels/channelPosterPushRegistry'
 
 /**
  * 「把助手聊天里的图消息发到频道」的装配分片（多通道方案 §4b 定稿 A）。
@@ -27,6 +29,11 @@ export type ChannelImageWiring = {
   send: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) => Promise<ChannelImageSendResult>
   /** 日报海报：按通道能力选形态（图 + 导读 / 纯导读），逐通道结果写回同一条记录。 */
   posterPublish: PosterPublish
+  /**
+   * 单条通道的显示名与图片能力（#46 通知详情那行海报）：能力只认路由表那一份声明，
+   * 与投递层判 `delivery-image-unsupported` 同源；查不到这条通道时只有能力、没有名字。
+   */
+  capability: (channelId: string) => { channelName?: string; supportsImage: boolean }
 }
 
 type MessageLike = { data?: { parts?: unknown } }
@@ -50,12 +57,12 @@ export function createChannelImageWiring(deps: {
   const channelImageSource = createChannelImageSource({
     read: (fileName) => deps.readImage(fileName),
     getMessage,
-    // 日报海报那一支：读的是进程内同一个暂存区（没装配就如实说「没有」，不猜、不扫目录）。
-    readPoster: (edition) => {
-      const outbox = getChannelPosterOutbox()
-      return outbox === null
-        ? Promise.resolve({ ok: false as const, code: 'delivery-image-unavailable' as const, detail: 'poster-outbox-unavailable' })
-        : outbox.read(edition)
+    // 简报海报那一支：只按记录里的内容 hash 取图，读入口由简报侧注册（没注册 = 如实说拿不到，不猜、不扫目录）。
+    readBriefingPoster: (contentHash) => {
+      const read = getBriefingPosterRead()
+      return read === null
+        ? Promise.resolve({ ok: false as const, code: 'poster-not-found' as const, detail: 'poster-reader-unconfigured' })
+        : read(contentHash)
     }
   })
   const send = createChannelImageSend({
@@ -113,6 +120,17 @@ export function createChannelImageWiring(deps: {
     return { kind: 'published', delivery: { state: sent.state, ...(sent.code === null ? {} : { reason: sent.code }), at: new Date().toISOString(), channels: sent.channels }, channels: sent.channels }
   }
 
+  // 简报**随推送**发海报（方案 §12.1）：推送执行器在通知运行时里，装配期只把两个开关交出去。
+  // 注册放在这里而不是组合根：取图与图片投递这两样**本来就是这个分片的依赖**，多一处搬运就多一处漂移。
+  // 没注册时那条链路自动退回「只发正文」。
+  configureChannelPosterPushSource({
+    resolve: (contentHash) => channelImageSource.resolve({ kind: 'briefing-poster', contentHash }),
+    // 目标解析已经保证「恰好一条会话」，所以逐个取第一条；空结果如实记「没目标」，不猜。
+    deliverImage: async (request) =>
+      (await deps.delivery.deliverImageToEnabledTargets(request))[0]
+      ?? { status: 'failed', attemptId: null, errorCode: 'delivery-no-target-bound' }
+  })
+
   return {
     target() {
       const ready = deps.channels.list().filter((channel) => channel.state === 'runtime-ready')
@@ -127,7 +145,18 @@ export function createChannelImageWiring(deps: {
       return channels.length === 0 ? null : { channels }
     },
     send,
-    posterPublish
+    posterPublish,
+    /**
+     * 通道的显示名与图片能力（#46 海报行）：读侧只问这两件。能力只认路由表那一份声明
+     * （与投递层判 `delivery-image-unsupported` 同源），不另建名单、不猜。
+     */
+    capability(channelId: string) {
+      const channel = deps.channels.list().find((entry) => entry.id === channelId)
+      return {
+        ...(channel === undefined ? {} : { channelName: channel.name }),
+        supportsImage: deps.router.supportsImage(channelId)
+      }
+    }
   }
 }
 

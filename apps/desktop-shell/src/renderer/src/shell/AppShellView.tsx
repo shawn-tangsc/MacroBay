@@ -395,6 +395,8 @@ export function AppShellView(props: AppShellViewProps): React.ReactElement {
       <NotificationCenterDrawer
         open={notificationCenterOpen}
         onOpenDeeplink={openNotificationTarget}
+        // 外链动作（舆情那条「看原文」）走浏览器：与落点分开，别让抽屉自己判这是网址还是页面。
+        onOpenExternal={(url) => window.platform.app.openExternal(url)}
         settingsEntry={notificationSettingsEntry}
         {...(notificationSettingsEntry === null ? {} : { onOpenSettings: openNotificationCenterSettings })}
         onClose={() => {

@@ -285,6 +285,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     mode="modal"
     size="full"
     className="mk-drawer"
+    /* 正文挂我们自己的类（平台 `bodyClassName`）：容器查询与内距都挂它，不再拿 antd 的
+       `.ant-drawer-body` 当锚点——那是平台内部实现，改名就静默失效。
+       内距走 `flush`（正文自带 chrome）：这一格本来就要自己排版（flex + min-height + 容器查询）。 */
+    bodyClassName="mk-drawer__body"
+    contentPadding="flush"
     /* 内层（事件详情）打开时会通过 antd 的 context 推开外层抽屉 180px；这一格是**外层自己的**
        推开距离，设成 0 它才不会往左挪——加在详情上是没用的（那只控制详情的子抽屉）。 */
     push={false}

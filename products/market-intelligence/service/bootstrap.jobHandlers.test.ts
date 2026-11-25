@@ -69,6 +69,9 @@ const EXPECTED_HANDLER_IDS: readonly string[] = [
   'market-intelligence.analysisSessionSlots',
   'market-intelligence.archiveCompaction',
   'market-intelligence.assessChangedItems',
+  // AI 解读的后端补生成（高档「已发布且有实际值」才挑，10 分钟一轮、一轮上限 3）：
+  // 注册在 boot 主 runtime 上，漏登记＝这条作业第一次跑才会炸。
+  'market-intelligence.calendar-event-interpretation',
   'market-intelligence.calendar-event-reminder',
   'market-intelligence.calendar-integrity-audit',
   'market-intelligence.collect-cross-asset-index',
@@ -84,6 +87,9 @@ const EXPECTED_HANDLER_IDS: readonly string[] = [
   'market-intelligence.parquetExport',
   'market-intelligence.purge',
   'market-intelligence.recoverMarketAnalysisRuns',
+  // 原始记录回捞（0.4.5 #44，`53a6b9f47`）：定时把积压的原始记录拉回来，注册在 boot 主 runtime 上。
+  // 那条线提交时漏了这里，快照把它当「多出来的一个 handler」报出来——补登记，不是放宽断言。
+  'market-intelligence.recoverPendingRawRecords',
   'market-intelligence.reevaluateClusters',
   'market-intelligence.reevaluateSentimentScopes',
   'market-intelligence.refreshBeaOfficialReleases',

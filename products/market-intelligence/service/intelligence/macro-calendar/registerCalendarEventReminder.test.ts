@@ -116,6 +116,25 @@ describe('registerCalendarEventReminder wiring', () => {
     expect(asked).toEqual(['2026-11', '2026-12'])
   })
 
+  /**
+   * §8.5：同一次发布含多个指标（CPI 与核心 CPI）→ **一次发布只响一条**，档取最高。
+   * 删掉聚合这条就红（三条变五条、一次 CPI 连响几声）。
+   */
+  it('一次发布只给一条：CPI 与核心 CPI 同时刻合成一条，档取高；别的族不并', () => {
+    const wiring = wiringWith(() => page('2026-11', [
+      marketEvent({ eventNameKey: 'US.CPI.NSA.YOY', eventKey: 'cpi-hmac', observationKey: 'cpi-yoy',
+        title: 'CPI 年率', importance: 'high' }),
+      marketEvent({ eventNameKey: 'US.CORE_CPI.NSA.YOY', eventKey: 'core-hmac', observationKey: 'core-cpi-yoy',
+        title: '核心 CPI 年率', importance: 'high' }),
+      marketEvent({ eventNameKey: 'US.RETAIL_SALES.SA.MOM', eventKey: 'retail-hmac', observationKey: 'retail-sales',
+        title: '零售销售', importance: 'medium' })
+    ]))
+    const events = wiring.readEvents()
+    expect(events).toHaveLength(2)
+    expect(events[0]).toMatchObject({ eventKey: 'cpi-yoy', title: 'CPI 年率', importance: 'high' })
+    expect(events[1]).toMatchObject({ eventKey: 'retail-sales', importance: 'medium' })
+  })
+
   it('treats an unavailable month as no events instead of failing the whole read', () => {
     const wiring = wiringWith((query) =>
       query.month === '2026-11'

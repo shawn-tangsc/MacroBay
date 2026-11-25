@@ -20,10 +20,12 @@
 | Single choice | `Segmented` / `Select` (closed set) | two control types in one row | **human review** |
 | On / off | antd `Switch` | hand-written `role="switch"` | **human review** |
 | Drawer / modal header action | the header's `actions` slot (12px from close, one action) | stretching the title row with product CSS | **human review** (component test only) |
+| Dialog width | the closed tier set (`Modal` `width`); a wide table uses `full` and scrolls inside its own wrapper | product/shell CSS writing `width` on `.ant-modal`; a pixel number at the call site | `modalWidthGuard` |
 | Buttons | primary / secondary / icon / inline text / destructive — one tier per action | a hand-drawn pill, a 28px icon button, red only on hover | **human review** |
 | Inline text action (a "retry / shorten the lede / show details" inside a sentence, a notice bar, or a status line) | `<Button type="text" size="small" className="text-action">` | `type="link"` (antd `colorLink` is not a token — it introduces a second interaction colour); a hand-written `<button>`; per-call-site antd default overrides (`height` / `padding` / `font-size`) | **human review**: `type="link"` may only go down (baseline 2026-11-12: **12 sites in 8 files**, to be cleared); once it reaches 0, any new one is rejected |
 | Explanatory prose | the `ⓘ` beside that row's or group's title (`IconButton` + `Popover`), collapsed by default | a sentence, half-sentence, parenthetical or em-dash supplement in the body | `check:body-prose` |
 | Card-level action | **on the card title row, right side**: one action (enable source / retry) whenever any source the card depends on is unconfigured or unreadable; the body only names the missing cell | a second copy of that action inside the card; two entries for one action on a screen | **human review** (criterion below) |
+| Small text the reader must read (11px `--font-meta` and above) | `--text` / `--text-secondary`; hierarchy from weight or position | `--muted` on text the reader must see | **human review**: measured contrast against the surface it actually sits on ≥ **4.5:1** — measure it, never judge by eye |
 
 **A disabled control's reason: first ask whether it is already visible (narrowed 2026-11-20; the user had the redundant sentence deleted).** Two tests:
 
@@ -51,13 +53,15 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | Group heading | 11.5 / 1.6 / 600 | `--font-section` / `--line-section` |
 | Reading note | 11.5 / 1.6 / 400 | same |
 | Page name (the screen's subject, e.g. a detail header) | 16 / 1.35 / 650 / `--text-strong` | **missing** (literal 16; the screen subject only — never a section title, never a row, **never a card header**: the config drawer's in-card title was removed, `3403c15`) |
-| Card / section title | 13 / 1.4 / 650 | **missing** |
+| Card / section title | 13 / 1.4 / 650 | `--font-card-title` / `--line-card-title` |
 | Settings label | 13 / 1.4 / 400 | **missing** |
 | Table figure, axis | 11 / 1 / 400 or 600 + `tabular-nums` | **missing** |
+| Display figure (a reading or a large number, e.g. the gauge score) | 24 / 30 / 42 / 600 + `tabular-nums` | `--font-metric-sm` / `--font-metric-md` / `--font-metric-lg` |
 
 - A row title is one step lighter than its group heading (500 vs 600): content is lighter than structure.
 - **A collapsible group's header row uses the group-heading tier**: `--font-section` / `--line-section` / 600 / `--muted-strong`. The platform `CollapsibleGroup` must use the same values, or shell and pages drift apart again.
-- Card title 13 still has **no token**; use the literal.
+- Card title 13 has a token now (`--font-card-title` / `--line-card-title`, added 2026-11-22): reference it, never a literal.
+- **The display figure scale is its own branch** (24 / 30 / 42) and does not join the body scale: a gauge score uses `--font-metric-sm` (from 2026-11-22), never a derived value such as `body × 2`; source `docs-private/05-desktop/ui-audit/ui-component-baseline.md:23`.
 - **Equivalent replacement only**: swap 12 / 11 / 11.5 for the references, visually unchanged. Raising 10 / 10.5 / 9.5 to 11 is a **visible change** — separate commit, with a before/after comparison.
 - **Never substitute 10 / 10.5 / 9.5.**
 
@@ -86,9 +90,14 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | `--accent` | the single interaction colour | **warnings, errors, "important"** |
 | `--danger` | destructive and failure text | decoration, emphasis |
 | `--warning` | caution that is not a failure | errors |
+| `--caution` | stale / degraded (first meaning), and the **expected value** in the clock ring's category popover (second meaning, registered 2026-11-24) | a general "important"; being the only carrier of "this is an expectation" | **human review**: strip the colour and the sentence still says `预期` / `expected`; both themes ≥ 4.5:1 against the popover surface |
 | `--success` | confirmed / healthy | "no data" |
 | `--info` | **Direction**: "below expectation" border/ink; on the light theme it outlines rather than fills | Any good/bad verdict — a high CPI is not "good" |
 | `--mi-dashboard-*` | dashboard semantic colours | borrowing across modules |
+
+**Small text that must be read never uses `--muted` (2026-11-21; the clock plaque measured 3.82:1).** `--muted` is for meta the reader may skip. A number or word the reader must catch keeps `--text` or `--text-secondary`, and hierarchy comes from weight or position rather than from dimming it. Criterion: the contrast between the small text and **the surface it actually sits on** (plaque fill, card fill) is ≥ 4.5:1, computed from the real values of that surface — measuring, not eyeballing. Counterexample: the clock plaque's "4 days away" sat on `#293958` in `--muted`, **3.82:1**; raising it to `--text` 650 gives **9.50:1**, with the value stepping back to `--text-secondary` 500 at **6.29:1**.
+
+**`--caution` carries two meanings; the second one is registered (2026-11-24).** First meaning: "stale or degraded — look at this". Second: the **expected value** in the clock ring's category popover, where the chart already marks the same expectation in the same orange, so the two agree inside that card. Three conditions stop it from drifting into a third meaning: (1) **colour is reinforcement, never the label** — the sentence itself says `预期` / `expected` (`{name} 预期 {value} · {when}`), so a greyscale screenshot, a colour-blind reader and a screen reader all still get it; (2) it never stands in for `--danger` or `--warning` on a failure; (3) contrast is measured per theme against the popover's own surface (`colorBgElevated`) — **5.64:1 dark, 4.59:1 light** — with a ratchet in `tokens.test.ts` that fails when `--caution` is lightened. Do not "fix" it to a deeper orange: the chart's expectation marker is the same token, and a second orange would break that pairing.
 
 Three gates, each with one hole:
 

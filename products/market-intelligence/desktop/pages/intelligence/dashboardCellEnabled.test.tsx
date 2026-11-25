@@ -24,11 +24,15 @@ afterEach(() => {
 /** 一格都不关时的基线：跨资产那一路问一次快照（BTC/ETH 要它）。 */
 function clients() {
   const crossAssetQuery = vi.fn(async () => ({ state: 'unavailable' as const, cause: 'query' as const }))
-  const fearGreedQuery = vi.fn(async () => ({ state: 'empty' as const, asOf }))
+  // 恐惧贪婪搬到「恐惧与防跌溢价」卡之后，看板只从这一条复合查询读两半。
+  const sentimentOptionsQuery = vi.fn(async (input: { asOf: string; timeZone: string }) => ({
+    asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+    fearGreed: { state: 'empty' as const }, optionSkew: { state: 'not-connected' as const }
+  }))
   const macroQuery = vi.fn(async (_input?: { dollarSourceId?: string }) => ({ state: 'unavailable' as const }))
   return {
     crossAssetQuery,
-    fearGreedQuery,
+    sentimentOptionsQuery,
     macroQuery,
     crossAssetClient: {
       acquire: vi.fn(async () => ({ state: 'active' as const, leaseId: 'lease-1' })),
@@ -37,7 +41,7 @@ function clients() {
       refresh: vi.fn(async () => undefined),
       query: crossAssetQuery
     },
-    fearGreedClient: { querySnapshot: fearGreedQuery },
+    sentimentOptionsClient: { query: sentimentOptionsQuery },
     macroMarketClient: { query: macroQuery }
   }
 }
@@ -54,7 +58,7 @@ async function render(cellEnabledIo: CellEnabledIo | undefined, extraProps: Reco
         timeZone: 'UTC',
         children: createElement(CryptoIntelligenceDashboard, {
           client: { queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }) },
-          fearGreedClient: built.fearGreedClient,
+          sentimentOptionsClient: built.sentimentOptionsClient,
           fundingRateClient: { query: async () => ({ state: 'empty' as const, asOf }) },
           openInterestClient: { query: async () => ({ state: 'empty' as const, asOf, window: '7d' as const }) },
           crossAssetClient: built.crossAssetClient as never,
@@ -89,6 +93,28 @@ describe('dashboard cells read only when the reader left them on', () => {
     expect(rows).toContain('eth')
   })
 
+  it('keeps the dollar row a data row while only its fallback cell is on', async () => {
+    // 真机 2026-11-25：读者关掉「美元（RealMarketAPI）」那格、只开「美元（备用）」，合成美元已经采到，
+    // 行却被整行遮成「没启用」——行状态与取源一样只看主格。一行有两格时，任一格能读就是数据行。
+    const main = QUOTES_STATUS_ROW_CELLS.dxy[0]!
+    const fallback = QUOTES_STATUS_ROW_CELLS.dxy[1]!
+    const onlyFallback = await render({
+      read: async () => ({ [main]: false, [fallback]: true }),
+      readSelection: async () => ({ [fallback]: 'twelve-data-market' })
+    })
+    const row = onlyFallback.container.querySelector('[data-status-row="dxy"]')!
+    // 遮罩行带 `data-source-state`；数据行/待接入行没有它。
+    expect(row.getAttribute('data-source-state')).toBeNull()
+    // 而且取源走的是备用格那一个（不是主格的 RealMarketAPI）。
+    expect(onlyFallback.macroQuery).toHaveBeenCalledWith({ dollarSourceId: 'twelve-data-market' })
+  })
+
+  it('says the row is off only when every cell of that row is off', async () => {
+    const [main, fallback] = QUOTES_STATUS_ROW_CELLS.dxy
+    const bothOff = await render({ read: async () => ({ [main!]: false, [fallback!]: false }) })
+    expect(bothOff.container.querySelector('[data-status-row="dxy"]')?.getAttribute('data-source-state')).toBe('disabled')
+  })
+
   it('drops the disabled 纳指 row, keeps BTC/ETH, and leaves the shared collection untouched', async () => {
     const ndxCell = QUOTES_STATUS_ROW_CELLS.index[0]!
     const on = await render(undefined)
@@ -121,11 +147,13 @@ describe('dashboard cells read only when the reader left them on', () => {
     expect(off.container.querySelector('[data-status-row="index"]')?.getAttribute('data-source-state')).toBe('disabled')
   })
 
-  it('does not read the fear-and-greed snapshot when its only cell is off', async () => {
+  it('keeps the card read when the fear-and-greed cell is off, and shows the disabled row', async () => {
     const off = await render({ read: async () => ({ [dashboardCellId('fear-greed', 'index')]: false }) })
-    expect(off.fearGreedQuery).not.toHaveBeenCalled()
+    // 这一条查询同时喂两半：关掉恐惧贪婪那一格不等于关掉偏斜那半，所以请求照发；
+    // 被关掉的是左半的读数，由下面那行「没启用」说出来，不是不发请求。
+    expect(off.sentimentOptionsQuery).toHaveBeenCalled()
     // 卡仍在（用户 2026-11-11：不能因为没启用就不渲染），读数区被遮罩盖住。
-    const card = off.container.querySelector('.mi-crypto-dashboard__sentiment')
+    const card = off.container.querySelector('.mi-defensive-premium')
     expect(card).not.toBeNull()
     // 关掉的格不再盖遮罩（界面设计 2026-11-11）：图照画，图下方那一行说「没启用」。
     expect(card!.querySelector('.mi-source-veil')).toBeNull()
@@ -148,10 +176,38 @@ describe('dashboard cells read only when the reader left them on', () => {
     expect(defaulted.macroQuery).toHaveBeenCalledWith({})
   })
 
+  it('asks for the fallback cell’s source when the reader turned the primary dollar cell off', async () => {
+    // 真机 2026-11-24：读者把「美元（RealMarketAPI）」那格关掉、只开「美元（备用）Twelve Data」，
+    // 美元行却还是空的——取源只看主格，仍去要真实 DXY（被套餐拒）。行是"任一格启用就在读"，
+    // 取源也必须跟着启用的那一格走，否则数据到了也不显示。
+    const fallback = await render({
+      read: async () => ({
+        [dashboardCellId('quotes', 'usd')]: false,
+        [dashboardCellId('quotes', 'usd-fallback')]: true
+      }),
+      readSelection: async () => ({
+        [dashboardCellId('quotes', 'usd')]: 'realmarketapi-market',
+        [dashboardCellId('quotes', 'usd-fallback')]: 'twelve-data-market'
+      })
+    })
+    expect(fallback.macroQuery).toHaveBeenCalledWith({ dollarSourceId: 'twelve-data-market' })
+  })
+
+  it('keeps the primary cell’s source while that cell is on, whatever the fallback cell says', async () => {
+    const both = await render({
+      read: async () => ({}),
+      readSelection: async () => ({
+        [dashboardCellId('quotes', 'usd')]: 'realmarketapi-market',
+        [dashboardCellId('quotes', 'usd-fallback')]: 'twelve-data-market'
+      })
+    })
+    expect(both.macroQuery).toHaveBeenCalledWith({ dollarSourceId: 'realmarketapi-market' })
+  })
+
   it('reads everything when the enable map cannot be read (缺省 = 启用)', async () => {
-    const { crossAssetQuery, fearGreedQuery, container } = await render({ read: async () => { throw new Error('unreadable') } })
+    const { crossAssetQuery, sentimentOptionsQuery, container } = await render({ read: async () => { throw new Error('unreadable') } })
     expect(crossAssetQuery).toHaveBeenCalled()
-    expect(fearGreedQuery).toHaveBeenCalled()
+    expect(sentimentOptionsQuery).toHaveBeenCalled()
     expect(container.querySelector('[data-status-row="index"]')).not.toBeNull()
   })
 })

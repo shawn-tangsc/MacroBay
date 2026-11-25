@@ -93,6 +93,35 @@ describe('metricRestApiAdapter.collect', () => {
     expect(records[1]?.sourceDedupeKey).toContain('BTCUSDT')
     expect(records[0]?.sourceDedupeKey).not.toEqual(records[1]?.sourceDedupeKey)
   })
+
+  /**
+   * 国债曲线是 19 条序列、19 个请求。一条挂了只该让那一条缺：把整轮判成失败，会顺带把另外十八条
+   * 已经拿到的数据一起丢掉，而它们下一轮才会再来。
+   */
+  it('keeps the records that answered when one target of the batch fails', async () => {
+    const definition = getIntelligenceSourceDefinition('fred-rates-liquidity')!
+    const { config } = resolveAndValidateRuntimeConfig({ definition, profile: createDefaultSourceProfile(definition) })
+    const fetchText = vi.fn(async (url: string) => {
+      if (url.includes('series_id=DGS20')) throw new Error('HTTP 500')
+      return JSON.stringify({ observations: [{ date: '2026-11-19', value: '4.4' }] })
+    })
+
+    const records = await metricRestApiAdapter.collect({ config, runId: 'run-fred', fetchText })
+
+    expect(records).toHaveLength(23)
+    expect(records.some((record) => record.payloadMetaJson?.includes('DGS20'))).toBe(false)
+    // 别的序列照旧在：缺的那一条不是整轮的结论。
+    expect(records.some((record) => record.payloadMetaJson?.includes('DGS10'))).toBe(true)
+  })
+
+  it('fails the run when no target answered, so an empty run is never read as a healthy one', async () => {
+    const definition = getIntelligenceSourceDefinition('fred-rates-liquidity')!
+    const { config } = resolveAndValidateRuntimeConfig({ definition, profile: createDefaultSourceProfile(definition) })
+    const fetchText = vi.fn(async () => { throw new Error('HTTP 503') })
+
+    await expect(metricRestApiAdapter.collect({ config, runId: 'run-fred', fetchText }))
+      .rejects.toThrow(/all 24 metric targets failed/)
+  })
 })
 
 function loadFixture(name: string): string {

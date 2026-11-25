@@ -133,7 +133,7 @@ it('writes the line’s own prompt and skill versions onto the run row', () => {
     repository.appendSnapshot(snapshot())
     const market = claimedRun(repository, 'market', 'mi-ar-market').id
     const news = claimedRun(repository, 'news', 'mi-ar-news').id
-    expect(repository.getRun(market)).toMatchObject({ analysisKind: 'market', promptVersion: 'market-analysis-v2', skillVersion: 'market-analysis-v1' })
+    expect(repository.getRun(market)).toMatchObject({ analysisKind: 'market', promptVersion: 'market-analysis-v3', skillVersion: 'market-analysis-v1' })
     expect(repository.getRun(news)).toMatchObject({ analysisKind: 'news', promptVersion: 'news-analysis-v2', skillVersion: 'news-analysis-v1' })
   } finally {
     repository.close()

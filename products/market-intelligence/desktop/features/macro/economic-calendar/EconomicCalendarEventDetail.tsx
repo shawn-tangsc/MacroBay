@@ -7,15 +7,17 @@ import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEcono
 import { resolveCalendarConsensus, type CalendarConsensusValue } from '../../../../contracts/macro/calendarConsensus'
 import { useConfirm } from '@platform/ui/components/confirm'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { LoadingState } from '@platform/ui/components/loading'
 import { helpTrigger } from '@platform/ui/components/popover'
 import { Popover } from '@platform/ui/components/popover'
-import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { CalendarEventInterpretation } from './CalendarEventInterpretation'
+import { calendarEventOfficialExplanation } from './calendarEventExplanation'
 import type { EconomicCalendarText } from './economicCalendarText'
 import type { EconomicCalendarEventView } from './economicCalendarModel'
 
@@ -41,6 +43,8 @@ import {
  * the second one would show fewer facts, or name the same fact differently — so both render this
  * one, inside the same drawer shell (`CalendarInspector`).
  */
+
+import type { MacroCalendarInterpretationView } from '../../../../contracts/macro/economicCalendarQueryContracts'
 
 export type EconomicCalendarRefreshOperation = 'bls' | 'fomc'
 export type EconomicCalendarRefreshFeedback = 'updated' | 'unchanged' | 'unavailable'
@@ -89,7 +93,7 @@ function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalenda
   return time
 }
 
-export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice, blsRefreshBlocked, blsRefreshBlockedCode }: {
+export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice, blsRefreshBlocked, blsRefreshBlockedCode, interpretationClient }: {
   event: EconomicCalendarEventView
   /**
    * The official consensus, when the view carries one. The projection does not surface it today —
@@ -126,6 +130,11 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
    * 由 `blsRefreshBlockedReasonCode` 与行内句走同一道闸门给来，所以不会「句子在、码不在」。
    */
   blsRefreshBlockedCode?: string
+  /**
+   * 解读的读写口（R36 #34 第二半）。**可选**：没有注入就不出现那一段——解读是可选能力，
+   * 详情其余部分不因为它缺席而少一行。
+   */
+  interpretationClient?: Pick<MacroEconomicCalendarClient, 'readEventInterpretation' | 'requestEventInterpretation'>
 }): ReactElement {
   const timeZone = useShellTimeZone()
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
@@ -152,6 +161,11 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
   const period = economicCalendarCaveats(event).includes('official-period-not-published-in-ics')
     ? text.periods.officialNotPublished
     : event.periodKey
+  /**
+   * 事件说明（R36 #34）：官方标题键 → 概念键，**只对 (titleKey, US) 生效**。
+   * 未列标题键、`unknown`、非美国辖区都拿到 `undefined` → 整段不渲染（不留空行、不写兜底句）。
+   */
+  const explanation = calendarEventOfficialExplanation(event.titleKey, event.countryCode, text.explanations)
 
   return <aside className="mi-economic-calendar__inspector" aria-live="polite">
     {/* The drawer's own header already names the surface; the body starts with the event. */}
@@ -166,12 +180,22 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
           拿到非空现值那刻的**来源观测时刻**。缺就不画，不拿别的时刻顶上。 */}
       {event.createdAt ? <Meta label={text.recordTimes.createdAt} value={formatTime(event.createdAt, 'second')} /> : null}
       {event.actualDetectedAt ? <Meta label={text.recordTimes.actualDetectedAt} value={formatTime(event.actualDetectedAt, 'second')} /> : null}
-      {/* 重要性只照记录自己带的值渲染；记录里没有就写「未提供」——不假定「高」，也不假定任何一档。 */}
+      {/* 重要性只照记录自己带的值渲染；记录里没有就写「未分级（这类事件我们还没有分级）」——
+          不假定「高」，也不假定任何一档；更不写「暂无」：那是「没有」，这里是「我们还没定」。
+          这句留正文、不进 ⓘ：它是「这一格为什么是空的」的答案。 */}
       <Meta label={text.details.importance} value={event.importance === undefined
-        ? text.market.missingValue
+        ? text.market.importanceUnratedDetail
         : text.market.importance[event.importance]} />
       <Meta label={text.details.state} value={text.states[event.lifecycleState]} />
     </dl>
+    {/* 静态参考，不进播报：宿主 `<aside>` 是 aria-live="polite"，不关这一层的话，
+        读者每选一条事件就会被整段说明朗读一遍（≈500 字）。子层 off，宿主那行不动。 */}
+    {explanation === undefined ? null : <section className="mi-calendar-explanation" data-calendar-explanation
+      aria-live="off">
+      {explanation.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+    </section>}
+    {/* AI 解读（R36 #34 第二半）：与上面的固定说明是两块、两个节点，互不顶替。 */}
+    {interpretationClient === undefined ? null : <CalendarEventInterpretation eventKey={event.eventKey} text={text} client={interpretationClient} />}
     <div className="mi-economic-calendar__values">
       {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? missingValueSentence}</strong></div>)}
       {/* 官方三源（Fed/BLS/BEA）不提供预期；能用的只有挂着的那条市场观测，所以标出来源。

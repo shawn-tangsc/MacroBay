@@ -34,6 +34,10 @@ export function mergeDuplicateNotification(
     // 版次：**带了才覆盖成最新那次，没带就保持原样**——自动路径不带 edition，
     // 不能让它把记录里已有的版次抹掉（否则按钮又会判「版次不符」）。
     ...(incoming.edition === undefined ? {} : { edition: incoming.edition }),
+    // 海报 hash 同一口径：这次带了新海报才换，没带就保留既有（手动重投不带它，抹掉就再也发不出去）。
+    ...(incoming.editionPoster === undefined ? {} : { editionPoster: incoming.editionPoster }),
+    // 海报行（#46）同一口径；`null` 是「查过、没有行」这个事实，也算带——别用真值判断把它丢掉。
+    ...(incoming.editionPosterRow === undefined ? {} : { editionPosterRow: incoming.editionPosterRow }),
     // 标题与动作取第一次：读者靠标题认人，动作一变等于换了一条通知。
     bodyKey: incoming.bodyKey ?? existing.bodyKey,
     bodyParams: incoming.bodyKey !== undefined ? incoming.bodyParams : existing.bodyParams,

@@ -1,6 +1,12 @@
 import { germanTierByMetricKey } from './marketCalendarGermanSourceMappings'
+import type { UsMetricCode } from './marketCalendarCodeNames'
+
 /**
  * 发布组与主测度：**从 19 号表落成的代码常量**（164 个码 / 57 组）。
+ *
+ * 下面三张表的表体都用 `satisfies` 校过类型（裁定 2026-11-25）：键是码本体的按
+ * `Partial<Record<UsMetricCode, …>>` 校键，值是码本体的按 `Record<string, UsMetricCode>` 校值。
+ * 写一个名称表里没有的码就编译红；对外的类型不变，调用方不必跟着改。
  *
  * 为什么要有：分析侧配额「同一发布组最多进 N 条」需要用组；组内挑哪几条要用主测度。
  * **运行时不许去读 `docs-private` 的 CSV**——那是内部文档，改一个字运行时行为就跟着变，版本记录里什么都没有。
@@ -174,7 +180,7 @@ export const marketCalendarReleaseGroupByMetricKey: Readonly<Record<string, stri
   'US.VEHICLE_SALES.SA.COUNT': 'us-vehicle-sales',
   'US.WHOLESALE_INVENTORIES.SA.MOM': 'us-inventories-sales',
   'US.WHOLESALE_SALES.SA.MOM': 'us-inventories-sales',
-})
+} satisfies Readonly<Partial<Record<UsMetricCode, string>>>)
 
 /** 每个组的主测度（组内排序用；组内没有主测度就不排第一）。 */
 export const marketCalendarReleaseGroupPrimary: Readonly<Record<string, string>> = Object.freeze({
@@ -237,7 +243,7 @@ export const marketCalendarReleaseGroupPrimary: Readonly<Record<string, string>>
   'us-trade-balance': 'US.TRADE_BALANCE.NONE.DIFF',
   'us-used-car-prices': 'US.USED_CAR_PRICES.NONE.MOM',
   'us-vehicle-sales': 'US.VEHICLE_SALES.SA.COUNT',
-})
+} satisfies Readonly<Record<string, UsMetricCode>>)
 
 
 /**
@@ -299,7 +305,7 @@ export const marketCalendarTierByMetricKey: Readonly<Record<string, 1 | 2 | 3>> 
   'US.RETAIL_SALES_EX_AUTOS.SA.MOM': 2,
   'US.RETAIL_SALES_EX_GAS_AUTOS.SA.MOM': 2,
   'US.UNEMPLOYMENT_U6.SA.RATE': 2,
-})
+} satisfies Readonly<Partial<Record<UsMetricCode, 1 | 2 | 3>>>)
 
 /** 一个码的分级；没标就是「未分级」（返回 `undefined`，不返回 4）。 */
 export function tierOfMetricKey(metricKey: string): 1 | 2 | 3 | undefined {

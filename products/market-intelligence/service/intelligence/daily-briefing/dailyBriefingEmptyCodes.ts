@@ -1,5 +1,5 @@
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
-import { briefingEventInWindow } from './dailyBriefingCalendarWindow'
+import { briefingEventInNextWindow, briefingEventInWindow } from './dailyBriefingCalendarWindow'
 import { briefingMacroEmptyReason } from './dailyBriefingMacroEmptyReason'
 
 /**
@@ -74,6 +74,15 @@ export function macroEmptyHours(packet: DailyBriefingFactPacket): number | undef
 export function nextEmptyCode(packet: DailyBriefingFactPacket): string {
   if (packet.calendar.state === 'source-disabled') return 'calendar-source-disabled'
   if (packet.calendar.state === 'unavailable') return 'calendar-unavailable'
+  // 「这一周有事件」与「这一周一条已分级的都没有」是两件事，读出来的空态也必须两句（R44 §6.2）：
+  // - 周里一条事件都没有 → 仍是「未来 7 天没有高影响事件」（零事件不是「没分级」）；
+  // - 周里有事件、但**一条已分级的都没有** → 是「我们还没分级」，不能说成「没有高影响」——后者
+  //   是替来源下断言，而事实是我们还没判。
+  // 未分级＝`importance` 缺省（R44：列可空三值、`NULL` 即未分级，不引入第四档）。
+  const upcoming = packet.calendar.events
+    .filter((event) => event.lifecycleState !== 'cancelled')
+    .filter((event) => briefingEventInNextWindow(event, { end: packet.windowEnd, timeZone: packet.timeZone }))
+  if (upcoming.length > 0 && upcoming.every((event) => event.importance === undefined)) return 'next-7d-importance-unknown'
   return 'next-7d-no-high-impact-event'
 }
 

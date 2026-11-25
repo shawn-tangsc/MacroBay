@@ -101,7 +101,8 @@ describe('Tabs / Segmented call sites', () => {
     )
 
     // 要页签用 `@platform/ui/components/tabs`，要一组取值用 `@platform/ui/components/segmented`。
-    expect(offenders).toEqual([])
+    // 同上：拼出来的 Choice key 要连文件一起报出来，钩子才能按路径归属。
+    expect(offenders, offenders.join('\n')).toEqual([])
   })
 
   it('shrinks the list: a migrated file must have its line deleted', () => {

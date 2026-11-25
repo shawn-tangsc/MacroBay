@@ -30,3 +30,23 @@ export function normalizeCalendarPeriodKey(value: string): string {
 export function normalizeCalendarSourceEventId(value: string): string {
   return value.replace(/\.(\d{4})-M(\d{2})$/, '.$1-$2')
 }
+
+/**
+ * **这是不是一个期次令牌**（PRD R38 §3.1 的五种形状，加现有的事件时刻写法）。
+ *
+ * 只判「像不像期次」，**不做归一、不猜**。用途只有一个：把**不是期次的段**挡在外面——
+ * 官方 GDP 的事件键是 `US.GDP.2026-Q3.SECOND`，末段是二读序号，不是期次；它曾被当成期次写进
+ * 标准表，与 BEA 的 `2026-Q3` 主键相差一期，同一次发布出现两行（0.4.5 #52）。
+ *
+ * 接受：`YYYY` / `YYYY-Qn` / `YYYY-MM` / `YYYY-MM-DD`，以及 `YYYY-MM-DDTHH:MM`
+ * （事件路线的既有写法：期次用发布时刻到分钟，`marketCalendarStandardBackfill` 的 event 分支）。
+ * 时刻形也算令牌是**故意的**：不算的话，本函数一上线就会把事件行当成「非期次」重解析，
+ * 那是一次没人审批过的行为改变，不属这笔。
+ */
+export function isCalendarPeriodToken(value: string): boolean {
+  return /^\d{4}$/.test(value) ||
+    /^\d{4}-Q[1-4]$/.test(value) ||
+    /^\d{4}-\d{2}$/.test(value) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+}

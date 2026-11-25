@@ -162,6 +162,8 @@ import {
 } from './workspace/panelWorkspaceStartupReport'
 import { createWorkspaceWindowRegistry } from './workspace/workspaceWindowRegistry'
 import { MAIN_WINDOW_PRELOAD_PATH, createSecureWindowSecurity } from '../window/createMainWindow'
+import { createBriefingPosterCapture, type BriefingPosterCapture } from './window/briefingPosterCapture'
+import { expectedProductIpcMethods, resolveBootstrapProductManifests } from './productBootstrapSelection'
 import { screen } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { safeSendToMainWindow, wireRendererSendGuard } from '../window/safeRendererSend'
@@ -449,7 +451,7 @@ const {
   channelInboundService,
   channelInboundExecutionRunner,
   channelDeliveryMaintenance,
-  deliverTaskResultToChannels, channelDeliveryService, channelImageSend,
+  deliverTaskResultToChannels, channelDeliveryService, channelImageSend, channelCapability,
   taskAutomationMaintenance,
   telegramRuntimeManager,
   slackRuntimeManager,
@@ -654,21 +656,9 @@ export type DesktopAppBootstrapOptions = {
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
     registerProductCache: ReturnType<typeof createProductCacheRegistrar>
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
+    /** 一次性隐藏窗口：入口 URL、preload 与窗口纪律在 `briefingPosterCapture`；未注入＝不出图。 */
+    captureBriefingPoster?: BriefingPosterCapture
   } & ProductAgentPlatformDeps) => void | Promise<void>
-}
-
-function resolveBootstrapProductManifests(
-  productManifests: readonly ProductManifest[],
-  taskSmokeEnabled: boolean
-): readonly ProductManifest[] {
-  if (taskSmokeEnabled) return []
-  return productManifests
-}
-
-function expectedProductIpcMethods(productManifests: readonly ProductManifest[]): readonly ProductIpcMethod[] {
-  return productManifests.flatMap((manifest) =>
-    manifest.serviceRoutes.map(({ method }) => ({ productId: manifest.id, method }))
-  )
 }
 
 function reportProductAcceptanceRegistration(input: {
@@ -873,7 +863,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
    *
    * `jobTitle` 是闭包，调用时 `jobRuntime` 早已就绪；这里只把端口交进去，不调用。
    */
-  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), jobTitle: (definitionId, language) => { const definition = jobRuntime.listSchedules().find((entry) => entry.id === definitionId); return definition === undefined ? null : resolveJobTitle(definition.title, definition.titleParams, language) } })
+  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, channelCapability, deliver: (request) => channelDeliveryService.deliver(request), jobTitle: (definitionId, language) => { const definition = jobRuntime.listSchedules().find((entry) => entry.id === definitionId); return definition === undefined ? null : resolveJobTitle(definition.title, definition.titleParams, language) } })
   /* 第一个真实通知来源：任务最终失败。拼装细节（按任务身份数、limit 200、按设置时区切天）在模块里。 */
   const taskFailureNotifier = createTaskFailureNotifier({
     submit: (request) => getNotificationRuntime().submit(request),
@@ -1073,6 +1063,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               registerProductAgentToolHandler,
               registerProductCache,
               registerProductDisposer: productServiceDisposerRegistry.register,
+              captureBriefingPoster: createBriefingPosterCapture({ entryUrl: workspaceDetachedEntryUrl, preload: join(__dirname, MAIN_WINDOW_PRELOAD_PATH) }),
               // 产品能看到的智能体会话面：形状与绑定都在 `productAgentPlatformWiring`，这里只传服务。
               ...composeProductAgentPlatformDeps({
                 agentStore,

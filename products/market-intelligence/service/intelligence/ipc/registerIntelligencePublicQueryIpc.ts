@@ -12,6 +12,11 @@ import type {
   CapitalConditionsSnapshotResult,
   FearGreedSnapshotQueryInput,
   FearGreedSnapshotResult,
+  FearGreedCardSection,
+  OptionSkewCardSection,
+  OptionSkewDirection,
+  SentimentOptionsCardQueryInput,
+  SentimentOptionsCardResult,
   MarketIntelligenceTimeBoundQueryInput
 } from '../../../contracts/intelligenceQueryContracts'
 import {
@@ -30,6 +35,7 @@ import {
   toEtfPublicSnapshot
 } from '../../../contracts/intelligenceQueryContracts'
 import { divergenceUnavailable, isCanonicalDivergenceTime, isMarketDivergenceResult } from '../../../contracts/marketDivergence'
+import { isValidTimeZone } from '../public-query/sentimentOptionsCardPolicy'
 import { isCanonicalSignalTime } from '../../../contracts/moduleSignal'
 import type { ModuleSignalRead } from '../../../contracts/moduleSignalRead'
 import {
@@ -100,6 +106,16 @@ export function registerIntelligencePublicQueryIpc(
       return snapshotResult(await publicQueryService().queryFearGreedSnapshot(input), input)
     } catch {
       return snapshotUnavailable()
+    }
+  })
+
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.querySentimentOptionsCard, async (payload) => {
+    try {
+      const input = asSentimentOptionsCardInput(payload)
+      if (!input) return sentimentOptionsCardUnavailable(payload)
+      return sentimentOptionsCardResult(await publicQueryService().querySentimentOptionsCard(input), input)
+    } catch {
+      return sentimentOptionsCardUnavailable(payload)
     }
   })
 
@@ -259,6 +275,155 @@ function isStablecoinCoreRecord(value: unknown, asOf: string): value is Record<s
   if (!(fields.length === required.length || fields.length === required.length + 1) || !isExactDataRecord(value, fields) || !required.every((field) => fields.includes(field))) return false
   if (fields.includes('dailyFlows') && !isValidCapitalConditionsDailyFlows(value.dailyFlows, asOf)) return false
   return fields.every((field) => required.includes(field) || field === 'dailyFlows')
+}
+
+const DAY_LABEL_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+function asSentimentOptionsCardInput(value: unknown): SentimentOptionsCardQueryInput | undefined {
+  if (!isExactDataRecord(value, ['asOf', 'timeZone', 'windowDays'])) return undefined
+  if (!isCanonicalFearGreedSnapshotTime(value.asOf)) return undefined
+  if (!isValidTimeZone(value.timeZone)) return undefined
+  if (value.windowDays !== 30 && value.windowDays !== 90) return undefined
+  return { asOf: value.asOf, timeZone: value.timeZone, windowDays: value.windowDays }
+}
+
+/**
+ * Rebuilds the composite answer from an untrusted service result: unknown keys, getters, wrong
+ * day labels and a section that does not match the requested input all fail closed to two
+ * `unavailable` sections. Nothing from the payload is forwarded by reference.
+ */
+function sentimentOptionsCardResult(value: unknown, input: SentimentOptionsCardQueryInput): SentimentOptionsCardResult {
+  const fallback = sentimentOptionsCardUnavailable(input)
+  if (!isExactDataRecord(value, ['asOf', 'windowDays', 'timeZone', 'fearGreed', 'optionSkew'])) return fallback
+  if (value.asOf !== input.asOf || value.timeZone !== input.timeZone || value.windowDays !== input.windowDays) return fallback
+  const fearGreed = fearGreedSection(value.fearGreed, input)
+  const optionSkew = optionSkewSection(value.optionSkew, input)
+  if (!fearGreed || !optionSkew) return fallback
+  return { asOf: input.asOf, windowDays: input.windowDays, timeZone: input.timeZone, fearGreed, optionSkew }
+}
+
+function fearGreedSection(value: unknown, input: SentimentOptionsCardQueryInput): FearGreedCardSection | undefined {
+  if (isExactDataRecord(value, ['state', 'failureCode'])) {
+    return value.state === 'unavailable' && value.failureCode === snapshotPolicy.unavailableFailureCode
+      ? { state: 'unavailable', failureCode: snapshotPolicy.unavailableFailureCode }
+      : undefined
+  }
+  if (isExactDataRecord(value, ['state']) && value.state === 'empty') return { state: 'empty' }
+  const required = ['state', 'score', 'bucket', 'observedAt', 'latestDay', 'daysAgo', 'stale', 'seriesStart', 'points']
+  const withPercentile = isExactDataRecord(value, [...required, 'percentile'])
+  if (!withPercentile && !isExactDataRecord(value, required)) return undefined
+  if (value.state !== 'available' || !isFearGreedSnapshotScore(value.score)) return undefined
+  const bucket = resolveFearGreedSnapshotBucket(value.score)
+  if (!bucket || value.bucket !== bucket) return undefined
+  if (!isCanonicalFearGreedSnapshotTime(value.observedAt) || value.observedAt > input.asOf) return undefined
+  if (typeof value.latestDay !== 'string' || !DAY_LABEL_PATTERN.test(value.latestDay)) return undefined
+  if (!Number.isSafeInteger(value.daysAgo) || (value.daysAgo as number) < 0) return undefined
+  if (typeof value.stale !== 'boolean') return undefined
+  if (typeof value.seriesStart !== 'string' || !DAY_LABEL_PATTERN.test(value.seriesStart)) return undefined
+  if (!Array.isArray(value.points)) return undefined
+  const points: Array<{ day: string; observedAt: string; score: number; bucket: typeof bucket }> = []
+  for (const point of value.points) {
+    if (!isExactDataRecord(point, ['day', 'observedAt', 'score', 'bucket'])) return undefined
+    if (typeof point.day !== 'string' || !DAY_LABEL_PATTERN.test(point.day)) return undefined
+    if (!isCanonicalFearGreedSnapshotTime(point.observedAt) || point.observedAt > input.asOf) return undefined
+    if (!isFearGreedSnapshotScore(point.score)) return undefined
+    const pointBucket = resolveFearGreedSnapshotBucket(point.score)
+    if (!pointBucket || point.bucket !== pointBucket) return undefined
+    points.push({ day: point.day, observedAt: point.observedAt, score: point.score, bucket: pointBucket })
+  }
+  let percentile: { value: number; basisDays: number; from: string; to: string } | undefined
+  if (withPercentile) {
+    const candidate = value.percentile
+    if (!isExactDataRecord(candidate, ['value', 'basisDays', 'from', 'to'])) return undefined
+    if (!Number.isSafeInteger(candidate.value) || (candidate.value as number) < 0 || (candidate.value as number) > 100) return undefined
+    if (!Number.isSafeInteger(candidate.basisDays) || (candidate.basisDays as number) < 300) return undefined
+    if (typeof candidate.from !== 'string' || !DAY_LABEL_PATTERN.test(candidate.from)) return undefined
+    if (typeof candidate.to !== 'string' || !DAY_LABEL_PATTERN.test(candidate.to)) return undefined
+    percentile = { value: candidate.value as number, basisDays: candidate.basisDays as number, from: candidate.from, to: candidate.to }
+  }
+  return {
+    state: 'available', score: value.score, bucket, observedAt: value.observedAt,
+    latestDay: value.latestDay, daysAgo: value.daysAgo as number, stale: value.stale,
+    seriesStart: value.seriesStart, points, ...(percentile === undefined ? {} : { percentile })
+  }
+}
+
+function optionSkewSection(value: unknown, input: SentimentOptionsCardQueryInput): OptionSkewCardSection | undefined {
+  if (isExactDataRecord(value, ['state', 'failureCode', 'cause'])) {
+    if (value.state !== 'unavailable') return undefined
+    if (value.failureCode !== 'option-skew-collect-unavailable') return undefined
+    if (value.cause !== 'connection-unavailable' && value.cause !== 'upstream-http-error') return undefined
+    return { state: 'unavailable', failureCode: 'option-skew-collect-unavailable', cause: value.cause }
+  }
+  if (isExactDataRecord(value, ['state', 'failureCode'])) {
+    return value.state === 'unavailable' && value.failureCode === 'option-skew-query-unavailable'
+      ? { state: 'unavailable', failureCode: 'option-skew-query-unavailable' }
+      : undefined
+  }
+  if (isExactDataRecord(value, ['state']) && value.state === 'empty') return { state: 'empty' }
+  // 源还没接入（readiness planned/pending）是第三种「没有读数」，不是坏数据：漏了这一支，
+  // 整卡会被判成回退两段 unavailable，读者看到的是「读取失败」。
+  if (isExactDataRecord(value, ['state']) && value.state === 'not-connected') return { state: 'not-connected' }
+  if (!isExactDataRecord(value, ['state', 'latest', 'direction', 'observedAt', 'latestDay', 'daysAgo', 'stale', 'seriesStart', 'points'])) return undefined
+  if (value.state !== 'available') return undefined
+  if (!isExactDataRecord(value.latest, ['riskReversal', 'observedAt', 'tenorDays', 'putIv25', 'callIv25', 'expiries'])) return undefined
+  const latest = value.latest
+  if (typeof latest.riskReversal !== 'number' || !Number.isFinite(latest.riskReversal)) return undefined
+  if (typeof latest.putIv25 !== 'number' || !Number.isFinite(latest.putIv25)) return undefined
+  if (typeof latest.callIv25 !== 'number' || !Number.isFinite(latest.callIv25)) return undefined
+  if (latest.tenorDays !== 30) return undefined
+  if (!Array.isArray(latest.expiries) || latest.expiries.length !== 2 || !latest.expiries.every((entry) => typeof entry === 'string')) return undefined
+  if (!isCanonicalFearGreedSnapshotTime(latest.observedAt) || latest.observedAt > input.asOf) return undefined
+  const direction = skewDirection(value.direction)
+  if (!direction) return undefined
+  if (!isCanonicalFearGreedSnapshotTime(value.observedAt) || value.observedAt > input.asOf) return undefined
+  if (typeof value.latestDay !== 'string' || !DAY_LABEL_PATTERN.test(value.latestDay)) return undefined
+  if (!Number.isSafeInteger(value.daysAgo) || (value.daysAgo as number) < 0) return undefined
+  if (typeof value.stale !== 'boolean') return undefined
+  if (typeof value.seriesStart !== 'string' || !DAY_LABEL_PATTERN.test(value.seriesStart)) return undefined
+  if (!Array.isArray(value.points)) return undefined
+  const points: Array<{ day: string; observedAt: string; riskReversal: number }> = []
+  for (const point of value.points) {
+    if (!isExactDataRecord(point, ['day', 'observedAt', 'riskReversal'])) return undefined
+    if (typeof point.day !== 'string' || !DAY_LABEL_PATTERN.test(point.day)) return undefined
+    if (!isCanonicalFearGreedSnapshotTime(point.observedAt) || point.observedAt > input.asOf) return undefined
+    if (typeof point.riskReversal !== 'number' || !Number.isFinite(point.riskReversal)) return undefined
+    points.push({ day: point.day, observedAt: point.observedAt, riskReversal: point.riskReversal })
+  }
+  return {
+    state: 'available',
+    latest: {
+      riskReversal: latest.riskReversal, observedAt: latest.observedAt, tenorDays: 30,
+      putIv25: latest.putIv25, callIv25: latest.callIv25, expiries: [latest.expiries[0] as string, latest.expiries[1] as string]
+    },
+    direction, observedAt: value.observedAt, latestDay: value.latestDay, daysAgo: value.daysAgo as number,
+    stale: value.stale, seriesStart: value.seriesStart, points
+  }
+}
+
+function skewDirection(value: unknown): OptionSkewDirection | undefined {
+  if (isExactDataRecord(value, ['kind'])) {
+    return value.kind === 'steeper' || value.kind === 'flatter' || value.kind === 'flat' ? { kind: value.kind } : undefined
+  }
+  if (isExactDataRecord(value, ['kind', 'reason'])) {
+    if (value.kind !== 'unknown') return undefined
+    return value.reason === 'insufficient' || value.reason === 'stale' || value.reason === 'discontinuous'
+      ? { kind: 'unknown', reason: value.reason }
+      : undefined
+  }
+  return undefined
+}
+
+function sentimentOptionsCardUnavailable(input: unknown): SentimentOptionsCardResult {
+  const record = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  const windowDays = record.windowDays === 90 ? 90 : 30
+  return {
+    asOf: typeof record.asOf === 'string' ? record.asOf : '1970-01-01T00:00:00.000Z',
+    windowDays,
+    timeZone: typeof record.timeZone === 'string' ? record.timeZone : 'UTC',
+    fearGreed: { state: 'unavailable', failureCode: snapshotPolicy.unavailableFailureCode },
+    optionSkew: { state: 'unavailable', failureCode: 'option-skew-query-unavailable' }
+  }
 }
 
 function isExactDataRecord(value: unknown, fields: readonly string[]): value is Record<string, unknown> {

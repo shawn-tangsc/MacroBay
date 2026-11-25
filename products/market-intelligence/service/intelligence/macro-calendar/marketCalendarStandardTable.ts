@@ -6,6 +6,7 @@ import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalen
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
 import { isCalendarNumericJson, numericJsonWithoutParse } from './marketCalendarNumericParse'
 import { sourceIdOnWrite, sourceIdOverwritePayload, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
+import { calendarImportanceGradeForRow } from './calendarEventImportance'
 import { normalizeValuesJsonForWrite } from './marketCalendarValueEncoding'
 import { resolveSameSourceIdentityTarget, sourceLabelsForWrite } from './marketCalendarSameIdentityWrite'
 
@@ -132,6 +133,14 @@ export type CalendarStandardRow = Readonly<{
   /** 第一次看到这一期时来源给的 actual / previous；之后修订**不覆盖**，没有就不写。 */
   firstPublishedActual?: string
   firstPublishedPrevious?: string
+  /**
+   * **行已存在时保留来源两列**（`source_provider_id` / `source_event_id`），只有历史回放传。
+   *
+   * 回放写的是别的来源已经写下的同一行（BEA/BLS 的官方行）：upsert 的 `do update` 默认把来源换成
+   * 调用方自己，等于把「这条是谁说的」改掉。补值是对的，改来源不是——所以补值走这一行时保留来源。
+   * **只在 update 分支生效**：行不存在时它就是本行自己的来源，没有「保留」可言。
+   */
+  preserveProvenance?: boolean
 }>
 
 
@@ -241,6 +250,12 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
    * 第一段相同。只删不堵的话，下一次采集就把刚合掉的那行插回来——所以写入端在这里改指到
    * 已存在的那一行，并把英文原文名存进 `source_label_en`（显示名仍用中文）。
    */
+  /**
+   * **档由写入口自己算，忽略调用方传的任何档**（R44 S1）：`row.importance` 是**源给的**，
+   * 只作为证据写进旧 `importance` 列；我们的档一律按身份查表。这样「某条采集路径忘了判」
+   * 在结构上不可能发生——没有第二个入口能写这一列。
+   */
+  const importanceGrade = calendarImportanceGradeForRow({ countryCode, metricKey: row.metricKey }) ?? null
   const sameIdentity = resolveSameSourceIdentityTarget(database, {
     countryCode, sourceProviderId: row.sourceProviderId, metricKey: row.metricKey, periodKey: row.periodKey
   })
@@ -270,8 +285,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      status, identity_kind, source_label, source_label_en, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
-     first_published_actual, first_published_previous, data_observed_at, event_type, source_release_id, numeric_json)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     first_published_actual, first_published_previous, data_observed_at, event_type, source_release_id, numeric_json,
+     importance_grade)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -305,6 +321,10 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       source_label = coalesce(excluded.source_label, source_label),
       source_label_en = coalesce(excluded.source_label_en, source_label_en),
       event_type = coalesce(excluded.event_type, event_type),
+      -- **档每次重写都按当前表重判**（Chief 2026-11-24）：旧档是源给的、已被证明是错的，
+      -- 任何 coalesce 都会把错档固化。判不出就写 NULL——那是「没有」，不是「低」。
+      -- 只在 insert 里写这一列的话，S1 之后没重启过的老行永远是未分级（提醒会全静音）。
+      importance_grade = excluded.importance_grade,
       -- 数值列**逐字段合并**（与 values_json 同一语义：后到的只带 previous 时不许把 actual 抹掉）；
       -- 有值的写进来就把状态拉回 available，没值的那次不清掉已有数值。
       numeric_json = case
@@ -324,8 +344,10 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
               coalesce(json_extract(excluded.numeric_json, '$.decimals'), '{}')),
             '$.parserVersion', json_extract(numeric_json, '$.parserVersion'))
         else numeric_json end,
-      source_provider_id = excluded.source_provider_id,
-      source_event_id = excluded.source_event_id,
+      -- **回放补值不改来源**（preserveProvenance）：行已存在时保留原来的两列；没有这个开关的调用方
+      -- 行为不变（source_provider_id 仍是 upsert 的 last-write-wins）。这两个 ? 是开关，不是值。
+      source_provider_id = case when ? = 1 then source_provider_id else excluded.source_provider_id end,
+      source_event_id = case when ? = 1 then source_event_id else excluded.source_event_id end,
       parser_version = excluded.parser_version,
       observed_at = excluded.observed_at`)
     .run(countryCode, metricKey, periodKey, row.scheduledDate,
@@ -348,7 +370,10 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.eventType ?? null,
       // 补写：旧行该列为 NULL 时填上（同一发布按原日期重发的那一次），已有一律不覆盖。
       row.sourceReleaseId ?? null,
-      numericJson)
+      numericJson,
+      importanceGrade,
+      row.preserveProvenance === true ? 1 : 0,
+      row.preserveProvenance === true ? 1 : 0)
   // 真正写进去的身份（可能是认回的那一行，不是这一笔带来的 id）：调用方记台账要用它，
   // 否则台账会指向一行不存在的身份，`孤儿` 判据当场变红。
   return { countryCode, metricKey, periodKey, firstScheduledDate,

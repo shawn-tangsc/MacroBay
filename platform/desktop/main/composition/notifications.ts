@@ -11,7 +11,10 @@ import type {
   NotificationRuntimeSettings
 } from '@platform/notifications/contracts/notificationContracts'
 import { configureNotificationRuntime } from '@platform/notifications/ipc/registerNotificationIpc'
+import type { PosterChannelCapability } from '@platform/notifications/runtime/notificationPosterEvidence'
 import { createChannelPushPort, type ChannelPushPortDeps } from '@platform/notifications/delivery/channelPushPort'
+import { createChannelPosterPushPort, type ChannelPosterPushPortDeps } from '@platform/notifications/delivery/channelPosterPushPort'
+import { getChannelPosterPushSource } from '@platform/ai/agent-platform/channels/channelPosterPushRegistry'
 import { resolvePushChannels, type PushChannelsResolution } from '@platform/notifications/delivery/pushChannelResolution'
 import { createNotificationProducerOwnership } from '@platform/notifications/contracts/notificationProducerOwnership'
 import type { DeliveryHooks } from '@platform/notifications/runtime/notificationRouting'
@@ -41,6 +44,8 @@ export type NotificationCompositionPorts = Readonly<{
   resolvePushChannels?: () => Promise<PushChannelsResolution>
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
+  /** 简报海报端口（方案 §12.1）：不装＝这一版只发正文，`delivery.pushImage` 不出现。 */
+  pushImage?: DeliveryHooks['pushImage']
   /** 通道侧「最近一次真实投递」（通道页/通知屏给读者核对用）；缺省时界面只说「没有记录」。 */
   lastDelivery?: (channelId: string) => {
     status: 'delivered' | 'failed' | 'unknown-after-send'
@@ -59,6 +64,11 @@ export type NotificationCompositionPorts = Readonly<{
    * **不另建文案表**。不传就一律解析不到——那会整条降级成兜底句，不会印出 `definitionId`。
    */
   jobTitle?: JobTitleResolver
+  /**
+   * 通道的显示名与图片能力（#46 海报行）：由 app 组合根注入（它才有通道注册表）。
+   * 不传时详情页那一行按「查不到能力」算——不猜，也不把不支持的通道算进分母。
+   */
+  channelCapability?: PosterChannelCapability
 }>
 
 export function composeNotificationRuntime(ports: NotificationCompositionPorts): void {
@@ -98,9 +108,14 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
     diagnostics: ports.diagnostics,
     ...(ports.push === undefined ? {} : { push: ports.push }),
+    // 海报钩子必须**在这里也转发一次**（2026-11-23 事故）：`composeNotificationRuntimeForApp` 把它算出来
+    // 传进来，这一层以前只转发 `push`，于是自动推送每期都只发正文、一条 `pushImage` 都没有，
+    // 而任何单测都不会红——存进端口不等于接上运行时。
+    ...(ports.pushImage === undefined ? {} : { pushImage: ports.pushImage }),
     ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets }),
     ...(ports.lastDelivery === undefined ? {} : { lastDelivery: ports.lastDelivery }),
     ...(ports.resolvePushChannels === undefined ? {} : { resolvePushChannels: ports.resolvePushChannels }),
+    ...(ports.channelCapability === undefined ? {} : { channelCapability: ports.channelCapability }),
   })
 }
 
@@ -114,6 +129,14 @@ export type AppNotificationCompositionPorts = Omit<NotificationCompositionPorts,
   /** 通道侧的只读投影 + 投递入口；只有 app 组合根有这两样。 */
   channels: ChannelPushPortDeps['channels']
   deliver: ChannelPushPortDeps['deliver']
+  /**
+   * 简报海报这一路的三样（方案 §12.1）：按记录里的 hash 取图 + 图片投递。
+   * 不传 = 只发正文（回退点就在这里）；传了才写 `delivery.pushImage`。
+   */
+  poster?: {
+    resolve: ChannelPosterPushPortDeps['resolvePoster']
+    deliverImage: ChannelPosterPushPortDeps['deliverImage']
+  }
   settingsStore: {
     get: () => Promise<AppSettings>
     update: (patch: Partial<AppSettings>) => Promise<unknown>
@@ -163,12 +186,24 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
       ports.log.log('warn', `notification.${code}`, { ...detail })
     }
   })
+  // 海报端口与正文端口**各自一个**：形态与幂等键都不同，失败也只写各自那一格。
+  // 取图与投递由通道装配注册（`configureChannelPosterPushSource`）；没人注册＝这一版只发正文。
+  const posterSource = ports.poster ?? getChannelPosterPushSource()
+  const pushImage = posterSource === null || posterSource === undefined
+    ? undefined
+    : createChannelPosterPushPort({
+      channels: ports.channels,
+      resolvePoster: posterSource.resolve,
+      deliverImage: posterSource.deliverImage
+    })
   composeNotificationRuntime({
     getSettings: ports.getSettings,
     timeZone: ports.timeZone,
     manifests: ports.manifests,
     push,
+    ...(pushImage === undefined ? {} : { pushImage }),
     resolvePushChannels: pushTarget,
+    ...(ports.channelCapability === undefined ? {} : { channelCapability: ports.channelCapability }),
     getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
     // 读者核对的事实：这条通道最近一次真实投递的结局（不是「有没有配好」）。
     lastDelivery: (channelId: string) => ports.channels.lastDelivery?.(channelId) ?? null,

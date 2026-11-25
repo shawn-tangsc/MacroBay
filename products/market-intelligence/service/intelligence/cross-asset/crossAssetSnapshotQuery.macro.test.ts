@@ -108,7 +108,12 @@ describe('the cross-market reading in the snapshot', () => {
 
   it('takes the macro legs from the curves, and names the first leg that has no value', () => {
     expect(snapshot({ range: '24h', macroSeries: fullMacro }).reading)
-      .toEqual({ state: 'undetermined', reason: 'legs-missing', leg: 'index', refuted: [] })
+      // 纳指缺，但美元与黄金都读到了：黄金走平，要求黄金涨/跌的两个剧本不成立；美元在动，
+      // 要求美元走平的「加密独立」也不成立。能排除的都列出来，判不了的那一档照样明说。
+      .toEqual({ state: 'undetermined', reason: 'legs-missing', leg: 'index', refuted: [
+        { scenario: 'risk-off', leg: 'gold' }, { scenario: 'discount-rate', leg: 'gold' },
+        { scenario: 'crypto-specific', leg: 'dxy' }
+      ] })
   })
 
   it('refuses when the macro reader is absent, starting with the dollar', () => {

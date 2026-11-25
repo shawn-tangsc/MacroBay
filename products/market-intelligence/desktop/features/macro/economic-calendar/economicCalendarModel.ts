@@ -10,7 +10,7 @@ export type EconomicCalendarSourceKey = 'federalReserve' | 'bea' | 'blsManualIcs
 
 export type EconomicCalendarEventView = Pick<
   EconomicCalendarPublicEvent,
-  'eventKey' | 'eventFamily' | 'titleKey' | 'importance' | 'periodKey' | 'lifecycleState' | 'coverage' | 'scheduledDate' |
+  'eventKey' | 'eventFamily' | 'titleKey' | 'countryCode' | 'importance' | 'periodKey' | 'lifecycleState' | 'coverage' | 'scheduledDate' |
   'scheduledAt' | 'releaseTimeSource' | 'publishedAt' | 'detectedAt' | 'createdAt' | 'actualDetectedAt' | 'actual' | 'previous' | 'caveats'
 > & {
   category: EconomicCalendarCategory
@@ -255,7 +255,9 @@ function toEventView(event: EconomicCalendarPublicEvent): EconomicCalendarEventV
     const sources = mapEconomicCalendarProviderIds(event.providerIds, event.caveats)
     if (!category || !sources || !isDate(event.scheduledDate)) return undefined
     return {
-      eventKey: event.eventKey, eventFamily: event.eventFamily, titleKey: event.titleKey, periodKey: event.periodKey,
+      eventKey: event.eventKey, eventFamily: event.eventFamily, titleKey: event.titleKey,
+      // 辖区进视图是为了「说明文案只对 (titleKey, US) 生效」：标题键本身不分国家。
+      countryCode: event.countryCode, periodKey: event.periodKey,
       // 官方记录自己带的重要性；记录里没有就不出这个字段，详情那行写「未提供」，不假定某一档。
       ...(event.importance === undefined ? {} : { importance: event.importance }),
       lifecycleState: event.lifecycleState, coverage: event.coverage, scheduledDate: event.scheduledDate,

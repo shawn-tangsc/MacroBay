@@ -8,8 +8,15 @@
  * 数据出处与红线照旧（下段原文），**只增不改**：改一条就要重跑身份守卫。
  */
 
-/** Narwhal 的 `values[].measure` → 规范指标键（132 条，来自 16 号表；`measure ↔ metric_key` 双射）。
- * 这 132 条是**已见过的**，不是全量：以后每批冒出新的 measure 是正常的，落 `unknown-measure` 就该补。 */
+import type { UsMetricCode } from './marketCalendarCodeNames'
+
+/**
+ * Narwhal 的 `values[].measure` → 规范指标键（132 条，来自 16 号表；`measure ↔ metric_key` 双射）。
+ * 这 132 条是**已见过的**，不是全量：以后每批冒出新的 measure 是正常的，落 `unknown-measure` 就该补。
+ *
+ * 表体用 `satisfies Record<string, UsMetricCode>` 校值：**码本体只认名称表**（裁定 2026-11-25），
+ * 写一个名称表里没有的码就编译红。对外的类型仍是 `string`，调用方不必跟着改。
+ */
 export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object.freeze({
   adp_employment_change: 'US.ADP.SA.CHANGE',  // usa-employment-statistics
   average_hourly_earnings_mom: 'US.AHE.SA.MOM',  // usa-wages-and-earnings
@@ -143,4 +150,4 @@ export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object
   vehicle_sales_total: 'US.VEHICLE_SALES.SA.COUNT',  // usa-vehicle-sales
   wholesale_inventories_mom: 'US.WHOLESALE_INVENTORIES.SA.MOM',  // usa-business-inventories
   wholesale_sales_mom: 'US.WHOLESALE_SALES.SA.MOM',  // usa-wholesale-trade
-})
+} satisfies Readonly<Record<string, UsMetricCode>>)

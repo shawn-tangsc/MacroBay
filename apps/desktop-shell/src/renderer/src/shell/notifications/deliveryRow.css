@@ -1,0 +1,42 @@
+/*
+ * 「送达」组里的一行（#46）：「文字」与「海报」同一尺度。
+ *
+ * 两条让「不折成两行」成立的声明：标签列固定 40（两字），值 `nowrap` + `min-width: 0`。
+ * 行内上下 6px 是间距主档（行高 34，带 ⓘ 时 35），标签与值之间 10、值内 6。
+ * 真机若折行，先核原因文案有没有超过 8 个汉字，**不要**改这两个数或压字号。
+ */
+.notification-delivery-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  padding: 6px 0;
+}
+
+.notification-delivery-row > dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-meta);
+}
+
+.notification-delivery-row > dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* 数字弱化：扫一眼先看状态，再看数量。 */
+.notification-delivery-row__counts,
+.notification-delivery-row__separator {
+  color: var(--muted);
+  font-size: var(--font-meta);
+}
+
+/* 原因用正文色：它是「为什么」，比数字更要紧。 */
+.notification-delivery-row__reason {
+  color: var(--text);
+  font-size: var(--font-section);
+}

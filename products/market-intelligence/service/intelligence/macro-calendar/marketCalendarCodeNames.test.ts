@@ -1,3 +1,6 @@
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, relative, sep } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { eventTypeNameByCode, nameByMetricKey, nameForMetricKey, registeredSourceIdentityName,
@@ -115,5 +118,170 @@ describe('码名', () => {
     const uncovered = [...inUse].filter((key) => nameForMetricKey(key) === undefined)
     expect(uncovered, `这些在用码没有名字：\n${uncovered.join('\n')}`).toEqual([])
     expect(inUse.size).toBe(163)
+  })
+})
+
+/**
+ * 码本体只认名称表（裁定 `0.4.5-指标码单源`，2026-11-25）。
+ *
+ * 这一组替代了原来那条「散落在别处的码必须在 catalog 里」：catalog 的键集就是这些表的**并集**，
+ * 等于自己判自己；而且它只扫 8 个文件，36 个带码文件里漏了 28 个（覆盖 572/1849 处字面量）。
+ * 现在判据是「在 `nameByMetricKey` 里」，扫描面是整个模块，白名单外的文件一个漏网的码都不许有。
+ */
+const MODULE_ROOT = join(process.cwd(), 'products/market-intelligence')
+
+/** 指标码的形状：`US.<测度>.<口径>.<量纲>`，四段起。两段的 `US.CPI` 是发布前缀，不是码。 */
+const CODE_LITERAL = /'([A-Z]{2,4})\.[A-Z0-9_]+(?:\.[A-Z0-9_]+){2,}'/g
+
+function walkSourceFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules') continue
+    const full = join(dir, entry)
+    if (statSync(full).isDirectory()) {
+      walkSourceFiles(full, out)
+      continue
+    }
+    if (!/\.tsx?$/.test(entry) || /\.test\.tsx?$/.test(entry)) continue
+    out.push(full)
+  }
+  return out
+}
+
+function modulePathOf(file: string): string {
+  return relative(MODULE_ROOT, file).split(sep).join('/')
+}
+
+function codesIn(text: string): string[] {
+  return [...text.matchAll(CODE_LITERAL)].map((match) => match[0].slice(1, -1))
+}
+
+/**
+ * 白名单：码**不属于 US 标准码**的那个命名空间。每条必须写清为什么，且只收「整文件」；
+ * 唯一的目录例外是 0xRouter 的 20 个国家分片——一个国家一文件，逐个列 20 行只是噪音。
+ */
+const SOURCE_STYLE_DIRECTORY = {
+  path: 'service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry',
+  reason: '0xRouter 按国家分片：值是产品码表那套风格（`US.REAL_GDP.NONE.ANNUALIZED_QOQ`），'
+    + '与标准码是两套身份，本版不合并（裁定 §3.2）。'
+} as const
+
+const SOURCE_STYLE_FILES = [
+  {
+    path: 'service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts',
+    reason: '德源映射：键是德语原文串，值是德源那套码（`DE.…`），不是 US 标准码。'
+  },
+  {
+    path: 'service/intelligence/macro-calendar/marketCalendarPendingProductCodePairs.ts',
+    optional: true,
+    reason: 'R45 的「一指标两码」挂起清单：picked / deferred 两个码都取自产品码表那套，'
+      + '本版不并（裁定 §3.2）。文件 2026-11-25 才落地，所以标 optional：还没出现时不要求它在。'
+  }
+] as const
+
+/** 这些文件必须被扫到（每个都带着 US 标准码）：守卫把遍历改窄就红，而不是悄悄变绿。 */
+const FILES_THAT_MUST_BE_SCANNED = [
+  'contracts/metricKeyConcept.ts',
+  'service/intelligence/macro-calendar/macroCalendarReleaseValueMappingPolicy.ts',
+  'service/intelligence/macro-calendar/marketCalendarCodeNames.ts',
+  'service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts',
+  'service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts',
+  'service/intelligence/macro-calendar/marketCalendarNarwhalMeasureKeys.ts',
+  'service/intelligence/macro-calendar/marketCalendarReleaseGroups.ts',
+  'service/intelligence/macro-calendar/marketCalendarZeroXRouterSourceMappings.ts',
+  'service/intelligence/macro-calendar/fredIndicatorYoY.ts',
+  'service/intelligence/macro-calendar/narwhal-calendar/narwhalSeriesPrimaryMetric.ts'
+] as const
+
+function isWhitelisted(modulePath: string): boolean {
+  return modulePath.startsWith(`${SOURCE_STYLE_DIRECTORY.path}/`)
+    || SOURCE_STYLE_FILES.some((entry) => entry.path === modulePath)
+}
+
+describe('码本体：散落各处的码必须在名称表里', () => {
+  it('每个码字面量都在 nameByMetricKey 里（白名单外一个都不许有）', () => {
+    const violations: string[] = []
+    let scannedFiles = 0
+    let scannedLiterals = 0
+    for (const file of walkSourceFiles(MODULE_ROOT)) {
+      const modulePath = modulePathOf(file)
+      if (isWhitelisted(modulePath)) continue
+      const codes = codesIn(readFileSync(file, 'utf8'))
+      if (codes.length === 0) continue
+      scannedFiles += 1
+      scannedLiterals += codes.length
+      for (const code of new Set(codes)) {
+        if (nameByMetricKey[code] === undefined) violations.push(`${modulePath}: ${code}`)
+      }
+    }
+    expect(violations.sort(), `这些码不在名称表里：\n${violations.join('\n')}`).toEqual([])
+    /* 棘轮：白名单外的文件数与字面量数只许涨（2026-11-25 实测 13 个文件 / 960 处）。
+       改窄遍历会先在这里红，而不是让上面那条悄悄变成空转。 */
+    expect(scannedFiles).toBeGreaterThanOrEqual(12)
+    expect(scannedLiterals).toBeGreaterThanOrEqual(900)
+  })
+
+  it('扫描面覆盖到每一个必须被扫的带码文件', () => {
+    const scanned = new Set(walkSourceFiles(MODULE_ROOT)
+      .filter((file) => codesIn(readFileSync(file, 'utf8')).length > 0)
+      .map(modulePathOf))
+    for (const required of FILES_THAT_MUST_BE_SCANNED) {
+      expect(scanned.has(required), `${required} 没有被扫到`).toBe(true)
+    }
+  })
+
+  it('白名单条目：必选的要真在、且确实带码；可选的在出现了也要带码（别留空挂）', () => {
+    for (const entry of SOURCE_STYLE_FILES) {
+      const full = join(MODULE_ROOT, entry.path)
+      const optional = 'optional' in entry && entry.optional === true
+      if (optional && !existsSync(full)) continue
+      expect(existsSync(full), entry.path).toBe(true)
+      expect(codesIn(readFileSync(full, 'utf8')).length, entry.path).toBeGreaterThan(0)
+    }
+    const shardDir = join(MODULE_ROOT, SOURCE_STYLE_DIRECTORY.path)
+    expect(existsSync(shardDir), SOURCE_STYLE_DIRECTORY.path).toBe(true)
+    expect(readdirSync(shardDir).filter((name) => name.endsWith('.ts')).length).toBeGreaterThanOrEqual(20)
+  })
+})
+
+/**
+ * 两套美国码（裁定 §3.2）。实测：**标准码** 189 个在名称表（`US.CPI.NSA.YOY`）；
+ * **产品目录码** 在 `marketCalendarCountryCodeTable.json`（616 条，其中 US 94 条），
+ * 例 `US.REAL_GDP.NONE.ANNUALIZED_QOQ`。两套交集 **0**，是两种身份；本版不合并（产品级重命名），
+ * 但同一个字符串同时出现在两套里必须能红。
+ *
+ * 两条实测校正（写在这里，免得下一个人照文档抄错）：
+ * 1. `marketCalendarCodeTable.json`（225 条）不是第二套——它的 189 个 US 键**就是**名称表这 189 个
+ *    标准码（DE 36 条是德源码），属同一套身份；
+ * 2. 按国家分片不是纯产品码：`byCountry/us.ts` 里多数是标准码，另有若干只在分片里的产品码。
+ *    所以产品码族只按国家码表 JSON 定义，不拿分片定义。
+ */
+function productCatalogCodes(): ReadonlySet<string> {
+  const parsed = JSON.parse(readFileSync(
+    join(MODULE_ROOT, 'service/intelligence/macro-calendar/marketCalendarCountryCodeTable.json'), 'utf8'
+  )) as Record<string, unknown>
+  return new Set(Object.keys(parsed))
+}
+
+describe('两套美国码不混用', () => {
+  it('产品目录码不许进名称表（同一个字符串只能属于一套身份）', () => {
+    const productCodes = productCatalogCodes()
+    expect(productCodes.size).toBeGreaterThan(500)
+    expect([...productCodes].filter((code) => code.startsWith('US.')).length).toBeGreaterThan(80)
+    const mixed = Object.keys(nameByMetricKey).filter((code) => productCodes.has(code))
+    expect(mixed.sort(), `这两套码混用了：\n${mixed.join('\n')}`).toEqual([])
+  })
+
+  it('产品目录码不许出现在白名单外的文件里（卡片行也一样）', () => {
+    const productCodes = productCatalogCodes()
+    const violations: string[] = []
+    for (const file of walkSourceFiles(MODULE_ROOT)) {
+      const modulePath = modulePathOf(file)
+      if (isWhitelisted(modulePath)) continue
+      for (const code of new Set(codesIn(readFileSync(file, 'utf8')))) {
+        if (productCodes.has(code)) violations.push(`${modulePath}: ${code}`)
+      }
+    }
+    expect(violations.sort(), `这些是产品目录那套码，别拿来当运行时身份：\n${violations.join('\n')}`)
+      .toEqual([])
   })
 })

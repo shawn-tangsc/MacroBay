@@ -1,3 +1,5 @@
+import type { UsMetricCode } from './marketCalendarCodeNames'
+
 export type MacroCalendarReleaseValueMapping = {
   event: string
   eventKeyPrefix: string
@@ -12,8 +14,11 @@ export type MacroCalendarReleaseValueMapping = {
    * 这一列**不是手工拍的**：`metricKeyForReleaseValue()` 由 `unit` + `adjustment` 机械推出，
    * 用例逐行比对（`unit`/`adjustment` 与码的测度段/口径段不符 → 红），防止「码写 YOY、
    * 单位写 monthly」这种照抄错。
+   *
+   * 类型是 `UsMetricCode`（裁定 2026-11-25）：码本体只认名称表，**写一个不存在的码就编译红**。
+   * 这一列不是派生品——事件键前缀是发布身份、码是指标身份，两套命名的段本来就不同。
    */
-  metricKey: string
+  metricKey: UsMetricCode
 }
 
 /**

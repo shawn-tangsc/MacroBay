@@ -1,4 +1,5 @@
 import { resolveCountryCode } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { correctSourceCountryCode } from '../marketCalendarSourceCountryCorrection'
 // Internal parser output only. These drafts do not establish stable event identity.
 export type ZeroXRouterCalendarLocale = 'zh' | 'en'
 export type ZeroXRouterCalendarDescriptor =
@@ -162,9 +163,17 @@ export function calendarEventDraft(
   const rawCountryCode = typeof row.countryCode === 'string' ? row.countryCode.trim().toUpperCase() : ''
   // 三态谓词：`code` 落地、`none` 当作没有国家（行保留）、`invalid` 交给上层判非法，不在这里静默丢。
   const verdict = resolveCountryCode(rawCountryCode)
-  const countryCode = verdict.state !== 'code' ? undefined
+  const mappedCountryCode = verdict.state !== 'code' ? undefined
     : Object.hasOwn(policy.countryCodes, verdict.code)
       ? policy.countryCodes[verdict.code as keyof typeof policy.countryCodes] : verdict.code
+  /**
+   * **源自相矛盾时以名为准**（2026-11-25）：南非回购利率那两条源给 `SA` + `南非`，码是沙特的、
+   * 名是南非的——按码落库会让它们以沙特身份进库。只在 0xrouter 作用域内改（见
+   * `marketCalendarSourceCountryCorrection`）：沙特阿美那行 `SA` + `沙特` 仍然留 `SA`。
+   */
+  const countryCode = mappedCountryCode === undefined ? undefined : correctSourceCountryCode({
+    providerId: '0xrouter', countryCode: mappedCountryCode, ...(countryName === undefined ? {} : { countryName })
+  })
   // Candidate row identity only: never use this unverified key for revision chains or locale merge.
   const sourceEventId = JSON.stringify([calendarId, row.id])
   return {

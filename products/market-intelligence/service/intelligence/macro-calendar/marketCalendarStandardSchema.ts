@@ -28,7 +28,10 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       -- 搜索命中列，不覆盖显示名（与读取层英文全称槽位同一语义）。
       source_label_en text,
       series_id text,
+      -- 源给的档（不可采用，只作源侧证据：官方源一律写 high）。
       importance text check(importance in ('high', 'medium', 'low')),
+      -- 我们判的档（R44 S1）：按 辖区 × 族 查表得出，可空；NULL 就是未分级（不是低）。
+      importance_grade text check(importance_grade in ('high', 'medium', 'low')),
       value_state text check(value_state in ('present', 'missing')),
       row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
       -- **这一行是什么**（经济数据 / 金融事件 / 央行活动）。写入时知道，以前没存，读侧只能靠
@@ -137,7 +140,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
     ['missing_basis', 'text'],
     ['missing_review_at', 'text'],
     // 数值列（架构师方案 §4）：只加列、不回填；旧行 NULL 由读侧表达成「数值未记录」。
-    ['numeric_json', 'text']
+    ['numeric_json', 'text'],
+    // 我们判的档（R44 S1）：只加列、不回填；旧行 NULL＝未分级，下一次采集重写时自然补上。
+    ['importance_grade', "text check(importance_grade in ('high', 'medium', 'low'))"]
   ]
   const existingColumns = new Set((database.prepare(`pragma table_info(${eventsTable})`)
     .all() as { name: string }[]).map((column) => column.name))

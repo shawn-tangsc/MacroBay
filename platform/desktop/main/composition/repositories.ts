@@ -5,6 +5,8 @@ import { ChannelInboundRepository, ChannelDeliveryRepository, ChannelAdapterAcce
 import { createElectronChannelCredentialVault } from '../../../secrets/channels'
 import { createAssistantImageMessageService } from '../../../ai/assistant-platform/images/assistantImageMessageService'
 import { createGeneratedImageStorage } from '../../../storage/generatedImageStorage'
+import { createContentAddressedBlobStore } from '../../../storage/contentAddressedBlobs'
+import { setChannelAttachmentBlobStore } from './slots'
 import { configureChannelPosterOutbox, createChannelPosterOutbox } from '../../../storage/channelPosterOutbox'
 import { registerGeneratedImageScheme } from '../generatedImageProtocol'
 import { createAgentPlatformServices } from '../../../ai/agent-platform/services'
@@ -62,6 +64,14 @@ const generatedImageStorage = createGeneratedImageStorage({ directory: generated
  * 日报海报的暂存区（`userData/channel-outbox/`）：与生成图**分目录**——来源不同，不能靠目录混用。
  * 这里建一次并登记到进程内单例，产品侧的 `publishToPhone` 取同一个实例（两处各建就会有两套记录）。
  */
+/**
+ * 入站附件的字节（0.4.5）：`userData/platform/channel-attachments/`，内容寻址（全 64 位 sha256）。
+ * 与生成图**分目录**：读者发来的与模型生成的来源不同，保留期也不同，共目录就会把两件事绑死。
+ */
+const channelAttachmentBlobStore = createContentAddressedBlobStore({
+  directory: join(userDataPath, 'platform', 'channel-attachments')
+})
+setChannelAttachmentBlobStore(channelAttachmentBlobStore)
 const channelPosterOutbox = createChannelPosterOutbox({
   directory: join(userDataPath, 'channel-outbox'),
   now: () => new Date().toISOString()

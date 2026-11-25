@@ -4,6 +4,18 @@ import {
 } from './officialCalendarAvailability'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 import type { MarketCalendarWriteFailureView } from '../../../contracts/macro/marketCalendarQueryContracts'
+import type { SourceStaleMeasurements } from './pipelineHealth'
+import type { SourceStaleReason } from './sourceStaleness'
+import type {
+  AgentView,
+  PanelView,
+  ProjectionState,
+  ProviderView,
+  SettingsView,
+  SourceHealthMarker,
+  SourceHealthState,
+  SourceView
+} from './sourceViewTypes'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import {
   agentRegistry,
@@ -30,6 +42,23 @@ import {
  */
 export const SOURCE_REPEATED_FAILURE_THRESHOLD = 3
 
+/*
+ * 视图与状态的类型搬到 `sourceViewTypes.ts`（只搬类型，判据一条没动），这里原样再导出：
+ * 调用方仍从 `sourceProjection` 拿全部类型，不因为搬家改 import。
+ */
+export type {
+  AgentGroupView,
+  AgentView,
+  CategoryGroupView,
+  PanelView,
+  ProjectionState,
+  ProviderView,
+  SettingsView,
+  SourceHealthMarker,
+  SourceHealthState,
+  SourceView
+} from './sourceViewTypes'
+
 /**
  * 一个源此刻的健康读数（管线投影出来的那几项）。**只作为派生五态的输入**，不直接上界面：
  * 界面读 `SourceView.healthState`，不要再自己拿 `runtimeStatus`/`consecutiveFailures` 判一遍。
@@ -39,20 +68,6 @@ export type SourceHealthFact = Readonly<{
   consecutiveFailures: number
 }>
 
-/**
- * 一个源对读者呈现的五态（C6，2026-11-10）：**全仓只在这里判一次**。
- *
- * - `healthy`：启用、可用、健康读数说 healthy → 绿；
- * - `repeated-failures`：降级且连续失败到阈值 → 红（「多次失败」，不是「数据偏旧」）；
- * - `stale`：降级但没到阈值 → 黄（「数据偏旧」）；
- * - `failed`：健康读数说 failed → 红；
- * - `off`：**不亮的那一档**——没启用，或已启用但现在取不到（`unavailable`，如 BLS 403），
- *   或根本没有健康读数。「没有数据不等于健康」，所以它也落这一档，而不是绿。
- *
- * `off` 只说**颜色上不亮**，不等于「读者关掉了」：不可用的读者用词由各自那句给（源行「不可用」），
- * 这一层不给词。
- */
-export type SourceHealthState = 'healthy' | 'repeated-failures' | 'stale' | 'failed' | 'off'
 
 export function sourceHealthState(input: Readonly<{
   enabled: boolean
@@ -88,16 +103,6 @@ export function providerHealthState(sources: readonly Readonly<{ enabled: boolea
   return worst ?? 'off'
 }
 
-/**
- * 目录标记档：**第二个通道（形状），但和五态出自同一处派生**（架构师 2026-11-10）。
- *
- * 消费者只拿这个值，不再自己看 `enabled && unavailable`——判据只有这里一份：
- * - `bad` / `warn` 直接来自五态（红/黄实心）；
- * - `ring` = **已启用且这个源判定不可用**。`off` 同时盖着「未启用 / 取不到 / 没有读数」，
- *   所以不能只按状态画环：未启用、没数据都落 `none`；
- * - `none` = 不画。
- */
-export type SourceHealthMarker = 'none' | 'ring' | 'warn' | 'bad'
 
 export function sourceHealthMarker(input: Readonly<{
   enabled: boolean
@@ -125,109 +130,6 @@ export function isFailingHealthState(state: SourceHealthState): state is 'failed
   return state === 'failed' || state === 'repeated-failures'
 }
 
-export type ProjectionState = {
-  enabledById?: Readonly<Record<string, boolean>>
-  healthById?: Readonly<Record<string, SourceHealthFact>>
-  jobRegisteredById?: Readonly<Record<string, boolean>>
-  /** Sources that already have a profile, including disabled ones. */
-  knownSourceIds?: ReadonlySet<string>
-  /** 源 id → 标准表写库失败（与 `healthById` 平行，不参与五态派生）。 */
-  writeFailureById?: Readonly<Record<string, MarketCalendarWriteFailureView>>
-  /** 源 id → 「还没写过」/「读不到」两态（与失败态互斥）。 */
-  writeFailureStateById?: Readonly<Record<string, 'never-written' | 'unreadable'>>
-}
-
-export type SourceView = SourceDefinition & {
-  /**
-   * 采集由谁负责（来自 catalog）：`product` = 产品自己的作业决定节奏，通用采集器不按预设跑。
-   * UI 据此决定频率那一行显示文字还是下拉（用户 2026-11-12）。
-   */
-  collectionOwner?: 'adapter' | 'product'
-  enabled: boolean
-  jobRegistered?: boolean
-  /** 五态结论，与其他面读的是同一个字段（见 `sourceHealthState`）。 */
-  healthState: SourceHealthState
-  /** 目录标记档，与五态同一处派生（见 `sourceHealthMarker`）；消费者不再自己判。 */
-  healthMarker: SourceHealthMarker
-  /**
-   * 标准表**写库**失败（`f817070` / 架构师契约）：形状取自 `MarketCalendarWriteFailureView`，
-   * **没有失败就不带这个键**。
-   *
-   * 与 `healthState` **并列**、绝不并进去：写库失败不是来源失败——把 `healthState` 拉成 `failed`，
-   * 读者会去查网络与凭据，而真相是我们的库写不进去（用户 2026-11-19 定）。
-   */
-  writeFailure?: MarketCalendarWriteFailureView
-  /**
-   * 写库这一列另两态的**并列**陈述（用户 2026-11-19）：
-   * `never-written` = 该写入方还没有任何写入记录（**空态**，不是「没失败」）；
-   * `unreadable` = 读写入层失败（**错误态 + 重试**）。
-   * 「有记录、没失败」不出现这个字段——这一列只有「失败」与「没失败」，没有「健康」评价。
-   */
-  writeFailureState?: 'never-written' | 'unreadable'
-}
-
-/** ProviderView 的目录标记：由它的源聚合，仍是同一份派生，组件不再二次判断。 */
-
-export type ProviderView = {
-  providerId: string
-  displayName: string
-  category: SourceCategory
-  credential: ProviderDefinition['credential']
-  /**
-   * The source that owns the provider's credential and probe, taken from the provider registry so
-   * it survives a panel that does not list that source (for example the calendar pane, where the
-   * dashboard-only aggregate source is absent).
-   */
-  credentialSourceId?: string
-  website?: string
-  signupUrl?: string
-  invite?: boolean
-  /** 页头说明横幅的类别（见 `ProviderDefinition.notice`）。 */
-  notice?: ProviderDefinition['notice']
-  /**
-   * 密钥块里那条四态常显行（未配置 / 已保存待验证 / 连接失败：原因 / 连接正常）。
-   *
-   * 与横幅分开：以前由 `notice: 'verification-only'` 兼任，副作用是「只验证密钥」的源连采集开关
-   * 也被锁住——源一旦真能采集就错了。现在它是独立字段，注册表说显示就显示，和开关无关。
-   */
-  credentialStateLine?: ProviderDefinition['credentialStateLine']
-  sources: SourceView[]
-  /** 目录标记档（provider 级，源里最差的一档）。 */
-  healthMarker: SourceHealthMarker
-}
-
-export type CategoryGroupView = {
-  category: SourceCategory
-  providers: ProviderView[]
-}
-
-export type SettingsView = {
-  groups: CategoryGroupView[]
-  counts: { total: number; enabled: number; pending: number; failed: number }
-}
-
-export type AgentGroupView = {
-  groupId: string
-  tier: AgentDefinition['groups'][number]['tier']
-  sources: SourceView[]
-}
-
-export type AgentView = {
-  agent: AgentDefinition
-  groups: AgentGroupView[]
-  counts: { groups: number; sources: number; enabled: number }
-}
-
-export type PanelView = {
-  panel: PanelDefinition
-  providers: ProviderView[]
-  counts: { sources: number; enabled: number }
-  /**
-   * 官方日历腿的三态（只在经济日历这个面板上出现）。日历页据此把「来源全关 / 本月确实没有 /
-   * 取不到」拆开；一处算、一处读——页面不再自己遍历注册表。
-   */
-  calendarOfficialFeeds?: CalendarOfficialFeedsAvailability
-}
 
 const categoryOrder: SourceCategory[] = ['macro', 'crypto', 'aggregate', 'system']
 
@@ -241,6 +143,7 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
   })
   const writeFailure = state.writeFailureById?.[source.sourceId]
   const writeFailureState = state.writeFailureStateById?.[source.sourceId]
+  const stale = state.staleById?.[source.sourceId]
   /* 采集节奏归谁：**目录和注册表两条都要读**。
      - 目录声明 `collectionOwner: 'product'` → 产品自己的作业采；
      - 注册表的 `collection` 是运行时事实：`'job'` = 产品作业采（0xRouter 那三条日历 feed）、
@@ -262,6 +165,8 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     healthState,
     ...(writeFailure === undefined ? {} : { writeFailure }),
     ...(writeFailureState === undefined ? {} : { writeFailureState }),
+    ...(stale?.staleReasons === undefined ? {} : { staleReasons: stale.staleReasons }),
+    ...(stale?.staleMeasurements === undefined ? {} : { staleMeasurements: stale.staleMeasurements }),
     healthMarker: sourceHealthMarker({ enabled, ...(source.unavailable === undefined ? {} : { unavailable: true }), state: healthState }),
     ...(state.jobRegisteredById?.[source.sourceId] !== undefined ? { jobRegistered: state.jobRegisteredById[source.sourceId] } : {})
   }
@@ -306,6 +211,8 @@ export function sourceConfigSurface(input: {
   /** 源 id → 标准表写库失败；不给就不出现这个字段（见 `SourceView.writeFailure`）。 */
   writeFailureById?: Readonly<Record<string, MarketCalendarWriteFailureView>>
   writeFailureStateById?: Readonly<Record<string, 'never-written' | 'unreadable'>>
+  /** 源 id → 采集产出状态；不给就不出现这两个字段（见 `SourceView.staleReasons`）。 */
+  staleById?: ProjectionState['staleById']
   panelId?: PanelId
   sourceId?: string
 }): SourceConfigSurface {
@@ -356,7 +263,8 @@ export function sourceConfigSurface(input: {
       jobRegisteredById: input.jobRegisteredById,
       knownSourceIds: new Set(Object.keys(input.profileById)),
       ...(input.writeFailureById === undefined ? {} : { writeFailureById: input.writeFailureById }),
-      ...(input.writeFailureStateById === undefined ? {} : { writeFailureStateById: input.writeFailureStateById })
+      ...(input.writeFailureStateById === undefined ? {} : { writeFailureStateById: input.writeFailureStateById }),
+      ...(input.staleById === undefined ? {} : { staleById: input.staleById })
     }
   }
 }

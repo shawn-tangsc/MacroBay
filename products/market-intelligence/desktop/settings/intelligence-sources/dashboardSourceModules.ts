@@ -66,6 +66,7 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
   利率: 'probability',
   美联储日程: 'fed',
   恐惧与贪婪: 'index',
+  期权偏斜: 'skew',
   稳定币: 'stablecoin',
   ETF: 'etf',
   'ETF（备用）': 'etf-fallback',
@@ -100,7 +101,13 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
     ['利率', 'policy-path-market'],
     ['美联储日程', 'macro-calendar-fed']
   ]),
-  moduleOf('fear-greed', 'pages.intelligence.portal.dashboard.fearGreed.title', [['恐惧与贪婪', 'alternative-fear-greed']]),
+  /* 这张卡 2026-11-22 起是「恐惧与跌溢价」合并卡：卡名走合并卡的标题键（同一个键，不写第二句），
+     两行源各一格——恐惧贪婪指数与 Deribit 期权偏斜。偏斜采集归产品自有作业（一小时一轮），
+     这一格只回答「数从哪来、多久采一次」；格开关管看板读不读，源开关才管采不采。 */
+  moduleOf('fear-greed', 'pages.intelligence.portal.dashboard.defensivePremium.title', [
+    ['恐惧与贪婪', 'alternative-fear-greed'],
+    ['期权偏斜', 'deribit-options']
+  ]),
   moduleOf('capital', 'pages.intelligence.portal.analysisWorkspace.readableNames.domain.capital', [
     ['稳定币', 'defillama-stablecoins'],
     ['ETF', 'cryptoetf-etf-flows', false, undefined, 'etf-net-flow'],

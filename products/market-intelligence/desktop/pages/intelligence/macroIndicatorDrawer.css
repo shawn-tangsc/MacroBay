@@ -32,12 +32,13 @@
  * 代价与前提，下一个人要知道：
  * - `container-type: inline-size` 只对**宽度来自外部**的盒子安全。哪天有人把它挪到
  *   `inline-block` / `fit-content` / `max-content` 的盒子上，宽度会静默塌成 0（如何做都量到 0 的探针实测）；
- * - 这个容器挂的是 antd 的 `.ant-drawer-body`。平台 `Drawer` 目前没有给正文单独起类的入口，
- *   所以这里依赖 antd 的那个类名：它哪天被改名，容器就消失，收放**永久失效而用例仍然全绿**
- *   （守卫读的是我们自己的样式表文本）。要根治得给平台 `Drawer` 加一个正文类（走 `classNames.body`），
- *   那是共享组件线的文件，不在这条线里顺手改。
+ * - 这个容器挂的是**我们自己的类** `.mk-drawer-body`（平台 `Drawer` 的 `bodyClassName`，`0766aa18d`
+ *   起可用）。以前挂的是 antd 的 `.ant-drawer-body`：它哪天被改名，容器就消失、收放永久失效而用例
+ *   仍然全绿（守卫读的是我们自己的样式表文本）。现在锚点归我们，平台只负责把它挂上去。
  */
-.mk-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; container-type: inline-size; container-name: mk-drawer; }
+/* 正文：`contentPadding="flush"` + 我们自己的类，内距归这一格（16 是间距主档；原来那个 14 不在
+   4/6/8/10/12/16 档上，直接消失，差的 2px 并进 16）。容器查询也挂这个类，锚点不再依赖 antd 的类名。 */
+.mk-drawer .mk-drawer__body { padding: 16px; display: flex; min-height: 0; container-type: inline-size; container-name: mk-drawer; }
 .mk-drawer .ant-drawer-footer { padding: 6px 16px; }
   border: 0;
   background: transparent;
@@ -428,7 +429,7 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 /*
  * 事件目录弹框：**给高度、内部纵向三段**（筛选固定 / 表格滚动 / 分页固定）。
  *
- * 只放宽宽度不给高度时，antd 弹框按内容自适应，表格被压到只剩表头——用户看到的就是「几乎没行」。
+ * 只把宽度定到 `full` 档、不给高度时，antd 弹框按内容自适应，表格被压到只剩表头——用户看到的就是「几乎没行」。
  * 高度取 `min(80vh, 760px)`：1280×800 下是 640，1440×900 下是 720；两者都放得下 10 行以上。
  */
 .mi-catalog-dialog .ant-modal-body { max-height: none; }
@@ -443,12 +444,11 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--font-meta); }
 
 /*
- * 映射规则弹框的宽度：**产品侧临时覆盖**。
+ * 映射规则弹框的宽度：**只从 `Modal` 的档位来，本文件不写宽度**。
  *
- * 平台 Modal 只有四档（420/520/720/860），这张表要塞下长指标码 + 整条 URL，860 怎么分都挤。
- * 这里按 92vw / 上限 1400 临时放大；正解是平台加一档宽表宽度（已登记 #48，归前端组件线）。
+ * 九列的宽度预算由各列宽决定，判据在 `MappingRulesDialog.columns.test.ts`，这里不写第二份。
+ * 窗口窄到放不下时，横向滚动发生在 `.mi-catalog__table` 里（`overflow: auto`），弹框本身不撑破。
  */
-.ant-modal.mi-catalog-dialog { width: min(1400px, 92vw) !important; max-width: 92vw; }
 /* 底部固定栏：两段各自的分页 + 导出。分页不再跟着表格滚。 */
 .mi-catalog__footer { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   border-top: 1px solid var(--border); padding-top: 8px; }

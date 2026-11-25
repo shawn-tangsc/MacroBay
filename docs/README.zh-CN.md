@@ -128,6 +128,7 @@ Windows x64 安装器可构建、可发布，未做真机安装验收（缺 Wind
 - [结构化文本](./development/structured-text.zh-CN.md)
 - [禁用控件与它的原因](./development/disabled-hint.zh-CN.md)
 - [关闭一个装着未保存输入的容器](./development/unsaved-changes.zh-CN.md)
+- [图表](./development/charts.zh-CN.md)
 
 ## 许可证
 

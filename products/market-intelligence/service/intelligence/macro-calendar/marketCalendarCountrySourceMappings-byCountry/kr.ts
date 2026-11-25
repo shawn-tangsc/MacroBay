@@ -40,4 +40,26 @@ export const mapping_KR: Readonly<Record<string, Readonly<{ metricKey: string; p
   '214715': { metricKey: 'KR.EXPORTS.NONE.YOY', periodRule: 'month' },
   '214917': { metricKey: 'KR.PRODUCER_PRICE.NONE.YOY', periodRule: 'month' },
   '214918': { metricKey: 'KR.PRODUCER_PRICE.NONE.MOM', periodRule: 'month' },
+  '10207': { metricKey: 'KR.REAL_GDP.NONE.QOQ', periodRule: 'quarter' },  // 1 行 · 第三季度实际GDP初值(季率)
+  '10210': { metricKey: 'KR.REAL_GDP.NONE.YOY', periodRule: 'quarter' },  // 1 行 · 第三季度实际GDP初值(年率)
+  '10284': { metricKey: 'KR.TRADE_ACCOUNT.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 9月贸易帐(百万美元)（初值） | 10月贸易帐(百万美元)（初值）
+  '4177': { metricKey: 'KR.CURRENT_ACCOUNT.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 8月经常帐(百万美元) | 9月经常帐(百万美元)
+  '4180': { metricKey: 'KR.UNEMPLOYMENT.SA.MOM', periodRule: 'month' },  // 2 行 · 9月季调后失业率(月率) | 10月季调后失业率(月率)
+  '9670': { metricKey: 'KR.PRODUCER_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月生产者物价指数(月率) | 10月生产者物价指数(月率)
+  '9671': { metricKey: 'KR.PRODUCER_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月生产者物价指数(年率) | 10月生产者物价指数(年率)
+  '9672': { metricKey: 'KR.CONSUMER_PRICE.NONE.MOM', periodRule: 'month' },  // 2 行 · 9月消费者物价指数(月率) | 10月消费者物价指数(月率)
+  '9673': { metricKey: 'KR.CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月消费者物价指数(年率) | 10月消费者物价指数(年率)
+  '9674': { metricKey: 'KR.INDUSTRIAL_OUTPUT.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月工业产出(年率) | 10月工业产出(年率)
+  '9675': { metricKey: 'KR.INDUSTRIAL_OUTPUT.SA.MOM', periodRule: 'month' },  // 2 行 · 9月季调后工业产出(月率) | 10月季调后工业产出(月率)
+  '9677': { metricKey: 'KR.IMPORTS_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月进口物价指数(年率) | 10月进口物价指数(年率)
+  '9678': { metricKey: 'KR.EXPORTS_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月出口物价指数(年率) | 10月出口物价指数(年率)
+  '9679': { metricKey: 'KR.EXPORTS.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月出口(年率) | 10月出口(年率)
+  '9680': { metricKey: 'KR.IMPORTS.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月进口(年率) | 10月进口(年率)
+  '9682': { metricKey: 'KR.CONSUMER_CONFIDENCE.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 10月消费者信心指数 | 11月消费者信心指数
+  '9683': { metricKey: 'KR.L_MONEY_SUPPLY.NONE.YOY', periodRule: 'month' },  // 2 行 · 8月L货币供应(年率) | 9月L货币供应(年率)
+  '9841': { metricKey: 'KR.CORE_CONSUMER_PRICE.NONE.YOY', periodRule: 'month' },  // 2 行 · 9月核心消费者物价指数(年率) | 10月核心消费者物价指数(年率)
+  '9866': { metricKey: 'KR.L_MONEY_SUPPLY.NONE.MOM', periodRule: 'month' },  // 2 行 · 8月L货币供应(月率) | 9月L货币供应(月率)
+  '9869': { metricKey: 'KR.MONEY_SUPPLY_M2.NONE.MOM', periodRule: 'month' },  // 2 行 · 8月货币供应M2(月率) | 9月货币供应M2(月率)
+  '9880': { metricKey: 'KR.SP_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'current_month' },  // 2 行 · 9月制造业采购经理人指数 | 10月制造业采购经理人指数
+  '9882': { metricKey: 'KR.FOREIGN_EXCHANGE_RESERVES.NONE.AMOUNT', periodRule: 'month' },  // 2 行 · 9月外汇储备(十亿美元) | 10月外汇储备(十亿美元)
 })

@@ -107,6 +107,15 @@ export type IntelligenceModulePlatformHooks = WebSearchProductHooks & {
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   /** 平台「把一条已有记录再推一次手机」的入口（契约 §16.3.4）；只给读者点击的发布按钮用。 */
   redeliverPush?: import('./daily-briefing/dailyBriefingPublishToPhone').BriefingRedeliver
+  /**
+   * 用隐藏窗口把一版简报画成图（自动推送带图）。**由组合根注入**：入口 URL、preload、窗口纪律
+   * 都在主进程那一侧，产品不认识窗口；缺省＝不出图，行为回到只发正文。
+   */
+  captureBriefingPoster?: (input: Readonly<{
+    product: string
+    entry: string
+    params: Readonly<Record<string, string>>
+  }>) => Promise<import('@platform/desktop/main/window/offscreenCaptureWindow').OffscreenCaptureOutcome>
 }
 
 /* 对外名字仍从这里出：`bootstrap.ts` / 两个 IPC 模块 / `handlerRegistry` 的 import 路径一个字没变。 */

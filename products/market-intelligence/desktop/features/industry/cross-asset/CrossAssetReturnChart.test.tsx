@@ -118,8 +118,11 @@ describe('cross-asset return chart', () => {
       const buttons = [...host.querySelectorAll<HTMLButtonElement>('[aria-pressed]')]
       await act(async () => { buttons[0].click(); buttons[1].click() })
       expect(buttons[2].disabled).toBe(true)
-      expect(host.textContent).toContain('2026-09-14')
-      expect(host.textContent).toContain('GMT')
+      // 轴刻度是紧凑口径（同日 HH:mm、跨日 MM-DD HH:mm），时区不再每个刻度印一遍（用户 2026-11-25）。
+      const tickText = [...host.querySelectorAll('.mi-cross-asset__ticks time')].map((tick) => tick.textContent ?? '')
+      expect(tickText.length).toBeGreaterThan(0)
+      expect(tickText.every((label) => !label.includes('GMT') && !label.includes('2026-'))).toBe(true)
+      expect(tickText[0]).toContain('12:00')
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
@@ -138,6 +141,31 @@ describe('cross-asset return chart', () => {
       expect(tooltip.textContent).toContain('12:10')
       await act(async () => plot.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
       expect(host.querySelector('[role="tooltip"]')?.textContent).toContain('12:05')
+    } finally { await act(async () => root.unmount()); host.remove() }
+  })
+
+  it('measures the tooltip against the chart column, not against the plot area', async () => {
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () => root.render(createElement(ScopedCrossAssetReturnChart, { text, curves: { index: points, btc: points, eth: points } })))
+      const plot = host.querySelector<HTMLElement>('[data-cross-asset-plot]')!
+      const area = host.querySelector<HTMLElement>('.mi-cross-asset__chart-area')!
+      // 行高 44 之后绘图区只有 104–171，而那一栏（图框 + 刻度）比它多一行刻度：
+      // 浮层按绘图区算会被裁掉 25–27 像素（用户 2026-11-23 真机）。
+      plot.getBoundingClientRect = () => ({ left: 0, top: 10, width: 400, height: 200 } as DOMRect)
+      area.getBoundingClientRect = () => ({ left: -30, top: 0, width: 460, height: 300 } as DOMRect)
+      await act(async () => plot.dispatchEvent(new MouseEvent('mousemove', { clientX: 400, clientY: 209, bubbles: true })))
+      const tooltip = host.querySelector<HTMLElement>('[role="tooltip"]')!
+      // 结构：浮层挂在那一栏里，不在绘图区里（挂绘图区就会被绘图区裁掉）。
+      expect(tooltip.parentElement).toBe(area)
+      expect(plot.querySelector('[role="tooltip"]')).toBeNull()
+      expect(area.querySelector('.mi-cross-asset__chart-frame')).not.toBeNull()
+      expect(area.querySelector('.mi-cross-asset__ticks')).not.toBeNull()
+      // 纵向按 300 的栏算：min(10 + 199 + 12, 300 − 128 − 8) = 164；按绘图区算会是 64。
+      expect(parseFloat(tooltip.style.top)).toBe(164)
+      // 横向仍按绘图区算，再加上绘图区在栏里的左偏移（30）：178 + 30 = 208。
+      expect(parseFloat(tooltip.style.left)).toBe(208)
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 

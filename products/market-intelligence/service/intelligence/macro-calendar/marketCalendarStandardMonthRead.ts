@@ -58,9 +58,11 @@ export type StandardMonthRow = Readonly<{
   /** 值：键是 `actual` / `previous` / `consensus`；空对象＝没有值。 */
   values: Readonly<Record<string, string>>
   /**
-   * 源给的重要性；**没有就是没有**（不出现在这个对象里）。标准表这一列本来可空——
-   * 早先读侧拿不到它，就在适配器里写了 `medium` 顶，结果官方那 51 行 high 全被压成 medium，
-   * 读者看到的「没有高影响事件」一半是这个压出来的。
+   * **我们判的档**（`importance_grade`）；没有就是没有（字段不出现＝未分级）。
+   *
+   * 不读标准表旧列 `importance`——那是**源给的**档，只作源侧证据留在库里（R44 技术方案 §2.2）。
+   * 两个方向的错误都钉着用例：源写 low/我们判高 → 读到高；我们没判 → 字段不出现，
+   * 不拿源写的 high 顶上、也不降成 low。
    */
   importance?: 'high' | 'medium' | 'low'
 }>
@@ -83,7 +85,7 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ? calendarStandardTablePolicy.eventsTable
     : calendarStandardTablePolicy.releasesView
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date,
-    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, source_label_en, series_id, importance, event_type, release_count, release_dates_json,
+    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, source_label_en, series_id, importance_grade, event_type, release_count, release_dates_json,
     source_provider_id, source_event_id, observed_at, values_json
     from ${source}
     where scheduled_date >= ? and scheduled_date < ?
@@ -114,9 +116,9 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     sourceProviderId: String(row.source_provider_id), sourceEventId: String(row.source_event_id),
     observedAt: String(row.observed_at),
     values: JSON.parse(String(row.values_json)) as Record<string, string>,
-    // 源给的重要性；**没有就不出这个字段**（不拿 medium 顶，那等于替源下判断）。
-    ...(row.importance === null || row.importance === undefined ? {}
-      : { importance: String(row.importance) as 'high' | 'medium' | 'low' })
+    // 我们判的档；**没有就不出这个字段**（未分级 ≠ 低，也不拿源给的档顶）。
+    ...(row.importance_grade === null || row.importance_grade === undefined ? {}
+      : { importance: String(row.importance_grade) as 'high' | 'medium' | 'low' })
   }))
 }
 

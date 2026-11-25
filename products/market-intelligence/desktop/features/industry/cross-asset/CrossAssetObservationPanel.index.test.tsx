@@ -51,7 +51,7 @@ async function render(input: Readonly<{
   nowMs: number; bySymbol: Record<string, readonly unknown[]>; feed: CrossAssetIndexFeedState
   liveState?: CrossAssetLiveState; range?: '1h' | '24h'
   /** 读者在设置里关掉的格（行 id）；不给就是全都没关。 */
-  hideStatusRows?: readonly ('index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate')[]
+  hideStatusRows?: readonly ('index' | 'btc' | 'eth' | 'dxy' | 'gold')[]
   /** 每行的三态；配合 `cellStateLabels` 才生效。 */
   rowStates?: Partial<Record<'index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate', 'disabled' | 'unreadable'>>
   /** 源状态表沿用了上一次成功的读数时的短标注。 */
@@ -180,6 +180,20 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       // …but 7d is not an hour-of-day question. This snapshot was taken on the 24h range, whose curve
       // covers twenty-four hours, so no curve reaches back seven days and the column stays 无数据.
       expect(cell(page.host, '7d').textContent).toBe(text.windowNoData)
+    } finally {
+      await page.unmount()
+    }
+  })
+
+  it('keeps the last-closed time on the Nasdaq row itself, not as a table-wide footnote', async () => {
+    // 用户 2026-11-24：表下那句「已闭合涨跌 · 最后一根已收盘 K 线 …」是废话，而且那个时刻是**纳指那一行**
+    // 自己的收盘点，挂在整张表下面说不清是谁的。事实留在那一行（`data-last-closed-at`，不换行、不占高度），
+    // 表下不再有那句脚注。
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs) })
+    try {
+      const price = page.host.querySelector('[data-asset-price="index"]')
+      expect(price?.getAttribute('data-last-closed-at')).toMatch(/^2026-/)
+      expect(page.host.querySelector('.mi-cross-asset__quote > small')).toBeNull()
     } finally { await page.unmount() }
   })
 
@@ -290,10 +304,10 @@ describe('cross-asset chart with only some lines usable', () => {
 describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
   const allUnreadable = {
     index: 'unreadable' as const, btc: 'unreadable' as const, eth: 'unreadable' as const,
-    dxy: 'unreadable' as const, gold: 'unreadable' as const, us10y: 'unreadable' as const, realRate: 'unreadable' as const
+    dxy: 'unreadable' as const, gold: 'unreadable' as const
   }
 
-  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold', 'us10y', 'realRate'] as const
+  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold'] as const
   /** 标题右边那颗「补数据」按钮（同屏只许有一处）。 */
   const titleAction = (host: HTMLElement): HTMLButtonElement | undefined =>
     [...host.querySelectorAll<HTMLButtonElement>('.mi-cross-asset__quote-heading button')]
@@ -306,7 +320,7 @@ describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
   it('whole table unreadable: the table keeps its rows and headers, one retry in the title, no state block', async () => {
     const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: allUnreadable })
     try {
-      // 不再是「一整块提示吃掉半张卡」：七行行位都在，每个行自己说自己的状态。
+      // 不再是「一整块提示吃掉半张卡」：五行行位都在，每个行自己说自己的状态。
       expect(page.host.querySelectorAll('tr[data-status-row]')).toHaveLength(ALL_ROWS.length)
       for (const id of ALL_ROWS) {
         expect(page.host.querySelector(`tr[data-status-row="${id}"] .mi-source-state[data-state="unreadable"]`)).not.toBeNull()
@@ -348,7 +362,7 @@ describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
 })
 
 describe('标题右边那颗按钮：这一张卡唯一的「补数据」入口（用户 2026-11-11）', () => {
-  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold', 'us10y', 'realRate'] as const
+  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold'] as const
   const allActions = (host: HTMLElement): string[] =>
     [...host.querySelectorAll('button')]
       .map(button => button.textContent ?? '')
@@ -516,14 +530,12 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
       macroReading: { atMs: refusedAt, sourceFailure: 'symbol-not-supported' }
     })
     try {
-      // 默认开：这一行根本不出现（用户 2026-11-16 第二版口径）。
-      expect(page.host.querySelector('[data-status-row="dxy"]')).toBeNull()
+      // 隐藏开关撤了（用户 2026-11-25）：这一行照实遮住，不再默认消失。
+      expect(page.host.querySelector('[role="switch"]')).toBeNull()
       // 图例里这条线也不出现。
       expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="dxy"]')).toBeNull()
       expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
-      // 关掉开关：整行遮住，只剩一句状态，没有数字、窗口、日期句。
-      const toggle = page.host.querySelector<HTMLElement>('[role="switch"]')!
-      await act(async () => toggle.click())
+      // 整行遮住，只剩一句状态，没有数字、窗口、日期句。
       const row = page.host.querySelector('[data-status-row="dxy"]')!
       expect(row.getAttribute('data-source-state')).toBe('unreadable')
       expect(row.textContent).toContain(text.sourceRefused)
@@ -577,8 +589,8 @@ describe('通道不可用时结构要留（用户 2026-11-11）', () => {
       expect(Number(stateCell.getAttribute('colspan'))).toBe(1 + 1 + 4)
       expect(stateCell.querySelector('.mi-source-state[data-state="unreadable"]')).not.toBeNull()
       // 行位仍在（每一行都画得出名字）。
-      expect(table.querySelectorAll('tr[data-status-row]')).toHaveLength(7)
-      // 表里不再有**动作**按钮（日频表头那颗 ⓘ 是说明，不算动作）：这一张卡的动作只剩标题行那一颗。
+      expect(table.querySelectorAll('tr[data-status-row]')).toHaveLength(5)
+      // 表里不再有**动作**按钮：这一张卡的动作只剩标题行那一颗。
       const tableActions = [...table.querySelectorAll('button')]
         .map(button => button.textContent ?? '')
         .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
@@ -624,7 +636,7 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
 
     const allUnreadable = {
       index: 'unreadable' as const, btc: 'unreadable' as const, eth: 'unreadable' as const,
-      dxy: 'unreadable' as const, gold: 'unreadable' as const, us10y: 'unreadable' as const, realRate: 'unreadable' as const
+      dxy: 'unreadable' as const, gold: 'unreadable' as const
     }
     const empty = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: allUnreadable })
     const none = structure(empty.host)
@@ -666,9 +678,10 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     } finally { await page.unmount() }
   })
 
-  it('lets the status table grow into the column and share the slack across its rows', () => {
-    // 用户 2026-11-18：「这个表格可以高一点，把现在的高度撑满」「就是每一行」。
-    // happy-dom 没有布局，只钉结构规则：左栏是列向 flex、表吃余量、单元格垂直居中。
+  it('keeps the rows at their natural height and leaves the slack above the footnote', () => {
+    // 2026-11-18 那版是「表吃余量、把高度撑满」；2026-11-23 用户看到四行被拉成每行 80 上下之后反过来了：
+    // **行按自然高度排，余量留在脚注上方**。happy-dom 没有布局，这里钉结构规则：
+    // 左栏仍是列向 flex（右栏那条分隔线要到底）、表不再吃余量、脚注被压到栏底、单元格垂直居中。
     const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
     const quoteAt = css.indexOf('.mi-cross-asset__quote {')
     const quoteRule = css.slice(quoteAt, css.indexOf('}', quoteAt))
@@ -676,8 +689,10 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     expect(quoteRule).toContain('flex-direction: column')
     // 并进既有那条表规则（`flex` 与 `table-layout` 同一处，且表规则里仍然不许出现 display）。
     const tableRule = css.match(/\.mi-cross-asset__status-table\s*\{([^}]*)\}/)
-    expect(tableRule?.[1] ?? '').toContain('flex: 1 1 auto')
+    expect(tableRule?.[1] ?? '').toContain('flex: none')
     expect(tableRule?.[1] ?? '').not.toMatch(/display\s*:/)
+    // 表下那句脚注删了，压它到底的规则也一起删（用户 2026-11-24）。
+    expect(css).not.toMatch(/\.mi-cross-asset__quote > small/)
     expect(css).toContain('.mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }')
   })
 

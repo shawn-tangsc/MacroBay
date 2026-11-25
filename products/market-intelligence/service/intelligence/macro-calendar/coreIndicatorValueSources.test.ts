@@ -15,7 +15,7 @@ import {
 } from './coreIndicatorValueSources'
 import { fredIndicatorYoYPolicy } from './fredIndicatorYoY'
 import { macroCalendarReleaseValueMappings } from './macroCalendarReleaseValueMappingPolicy'
-import { MACRO_INDICATOR_GROUP_METRIC_KEYS } from './macroIndicatorCardGroups'
+import { MACRO_INDICATOR_CARD_KEYS } from './macroIndicatorCardGroups'
 
 /**
  * 「指标 → 取值源」只有一处派生（Chief 2026-11-14）。
@@ -74,7 +74,7 @@ describe('core indicator value sources', () => {
     }
     // 例外单子里的码**必须在 12 行之外**：在 12 行里却没有官方腿，是漏了腿而不是记例外。
     for (const exception of coreIndicatorOfficialLegExceptions) {
-      expect(MACRO_INDICATOR_GROUP_METRIC_KEYS as readonly string[], exception.metricKey).not.toContain(exception.metricKey)
+      expect(MACRO_INDICATOR_CARD_KEYS as readonly string[], exception.metricKey).not.toContain(exception.metricKey)
     }
   })
 
@@ -105,7 +105,7 @@ describe('core indicator value sources', () => {
 
   /** 每条 BLS 腿都必须落在 12 个核心指标码里：策略表加了别的码，页面也不该凭空多一行。 */
   it('keeps every BLS leg inside the twelve core indicator codes', () => {
-    const extras = blsCoveredMetricKeys.filter((key) => !(MACRO_INDICATOR_GROUP_METRIC_KEYS as readonly string[]).includes(key))
+    const extras = blsCoveredMetricKeys.filter((key) => !(MACRO_INDICATOR_CARD_KEYS as readonly string[]).includes(key))
     expect(extras).toEqual([])
   })
 

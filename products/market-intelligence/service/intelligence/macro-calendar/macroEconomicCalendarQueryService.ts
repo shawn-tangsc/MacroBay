@@ -321,7 +321,9 @@ function toPublicEvent(revision: MacroCalendarRevision, asOf: string, overrides:
   })
   return {
     eventKey: revision.eventKey, releaseGroupKey: revision.releaseGroupKey, eventFamily: revision.eventFamily,
-    titleKey: revision.eventNameKey, countryCode: revision.countryCode, ...(revision.importance === undefined ? {} : { importance: revision.importance }),
+    titleKey: revision.eventNameKey, countryCode: revision.countryCode,
+    // **我们判的档**（`importanceGrade`），不是源给的 `importance`：后者只作源侧证据留在库里。
+    ...(revision.importanceGrade === undefined ? {} : { importance: revision.importanceGrade }),
     periodKey: revision.periodKey, lifecycleState: revision.lifecycleState, coverage: 'available',
     // An edit carries its own date: if the reader moved the release to another day, the row says so.
     scheduledDate: edited?.scheduledDate ?? revision.scheduledDate,

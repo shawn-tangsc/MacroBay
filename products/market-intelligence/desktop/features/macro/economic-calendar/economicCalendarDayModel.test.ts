@@ -268,3 +268,27 @@ it('stands a month on the reader\'s own day when it belongs to that month, and o
   expect(calendarDayForMonth('2026-10', '2026-09-10')).toBe('2026-10-01')
   expect(calendarDayForMonth('2026-09', '2026-08-31')).toBe('2026-09-01')
 })
+
+/**
+ * linked 对取档（R44 技术方案 §4.1 末条）：官方条目配上一条市场行时，两处读的是同一个优先级——
+ * 标准行有码、判据更硬，它的档先；标准行未分级才回退官方；都没有 → 未分级。
+ * 各读各的就会出现「同一次发布在日历上是高、在简报上是未分级」。
+ */
+it('官方条目配上市场行时，档取 standard 优先的那一个；都未分级就是未分级', async () => {
+  const { unifiedCalendarDay, calendarItemImportance } = await model()
+  const officialUngraded = { ...official(1), importance: undefined } as EconomicCalendarEventView
+  const link = { officialEventKey: 'official-1', officialPeriodKey: '2026-09', officialScheduledDate: '2026-09-10',
+    officialScheduledAt: '2026-09-10T01:00:00.000Z', officialDetectedAt: '2026-09-01T00:00:00.000Z',
+    timeDisplaySource: 'official-scheduled' as const, displayScheduledAt: '2026-09-10T01:00:00.000Z' }
+  const linkedHigh = { ...market(9), eventKey: 'market-9', importance: 'high' as const, officialLink: link } as MarketCalendarEvent
+  const paired = unifiedCalendarDay('2026-09-10', [officialUngraded], [linkedHigh], 'complete',
+    'Asia/Shanghai', new Set(['market-9']))
+  expect(paired.items).toHaveLength(1)
+  expect(calendarItemImportance(paired.items[0]!)).toBe('high')
+
+  // 两边都没判 → 未分级：不兜低、不兜高。
+  const linkedUngraded = { ...linkedHigh, importance: undefined } as MarketCalendarEvent
+  const neither = unifiedCalendarDay('2026-09-10', [officialUngraded], [linkedUngraded], 'complete',
+    'Asia/Shanghai', new Set(['market-9']))
+  expect(calendarItemImportance(neither.items[0]!)).toBeUndefined()
+})

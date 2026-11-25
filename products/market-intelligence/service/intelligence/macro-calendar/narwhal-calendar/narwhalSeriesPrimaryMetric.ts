@@ -15,6 +15,14 @@
  *
  * 表是数据：由 16/19 号 CSV 生成，运行时**不读** `docs-private`。改表要重新生成并跑守卫用例。
  */
+
+import type { UsMetricCode } from '../marketCalendarCodeNames'
+
+/**
+ * 表体用 `satisfies Record<string, UsMetricCode>` 校值：**码本体只认名称表**（裁定 2026-11-25），
+ * 写错码编译红；对外仍是 `string`，调用方不必跟着改。
+ * 键是 Narwhal 的 series_id（另一个命名空间），不要求是码。
+ */
 export const narwhalPrimaryMetricBySeriesId: Readonly<Record<string, string>> = Object.freeze({
   'usa-balance-of-payments': 'US.CURRENT_ACCOUNT.NONE.DIFF',
   'usa-building-permits': 'US.HOUSING_STARTS.SA.COUNT',
@@ -68,7 +76,7 @@ export const narwhalPrimaryMetricBySeriesId: Readonly<Record<string, string>> = 
   'usa-vehicle-sales': 'US.VEHICLE_SALES.SA.COUNT',
   'usa-wages-and-earnings': 'US.NONFARM.SA.CHANGE',
   'usa-wholesale-trade': 'US.BUSINESS_INVENTORIES.SA.MOM',
-})
+} satisfies Readonly<Record<string, UsMetricCode>>)
 
 /** 故意不收的多组 series：按名字猜组会把两个组混成一行。 */
 export const narwhalAmbiguousSeriesIds: readonly string[] = Object.freeze([

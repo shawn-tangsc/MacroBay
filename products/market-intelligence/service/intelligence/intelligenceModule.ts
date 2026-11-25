@@ -24,7 +24,7 @@ import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSenti
 import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
-import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
+import { createBriefingPosterRuntime } from './daily-briefing/briefingPosterRuntime'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
@@ -188,6 +188,7 @@ export type IntelligenceModule = {
   bindCalendarStandardWriteLayer: (read: CalendarStandardWriteLayerReader) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
+  structuredModelInvocation: ReturnType<typeof createStructuredModelInvocationService>
 }
 
 let intelligenceModule: IntelligenceModule | null = null
@@ -344,8 +345,6 @@ export function getIntelligenceModule(
     // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
     // settings surface, but it no longer decides when an edition runs.
     const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
-    // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
-    // settings surface, but it no longer decides when an edition runs.
     const briefingPeriodsSource = createBriefingPeriodsSource({
       filePath: join(dataDir, 'daily-briefing-periods.json'),
       locale: getAppLanguage,
@@ -391,7 +390,7 @@ export function getIntelligenceModule(
       })
       : undefined
     const dailyBriefAgentRunner = dailyBriefSessionPort ? createDailyBriefAgentRunner({ port: dailyBriefSessionPort, agentId: 'daily-brief-editor' }) : undefined
-    const dailyBriefingStore = createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite'))
+    const { store: dailyBriefingStore, renderPoster: briefingRenderPoster } = createBriefingPosterRuntime({ databasePath: join(dataDir, 'daily-briefings.sqlite'), posterDirectory: join(dataDir, 'briefing-posters'), ...(hooks.captureBriefingPoster === undefined ? {} : { capture: hooks.captureBriefingPoster }) }) // 海报：文件、海报表、取图口、出图生产者一处装好
     const isSourceEnabled = async (sourceId: string): Promise<boolean | undefined> => {
       try {
         return (await profileStore.resolveProfile(sourceId)).enabled
@@ -508,7 +507,7 @@ export function getIntelligenceModule(
         macroWebRead: macroWebReadFromHooks(hooks, () => dailyBriefingAiSettings.getView()),
       }),
       store: dailyBriefingStore,
-      ...briefingNotificationPorts(hooks),
+      ...briefingNotificationPorts(hooks), ...(briefingRenderPoster === undefined ? {} : { renderPoster: briefingRenderPoster }),
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
@@ -592,8 +591,7 @@ export function getIntelligenceModule(
         const credential = profile.credentialRef ? await credentialStore.getByRef(profile.credentialRef as never) : null
         return { enabled: profile.enabled === true, hasCredential: Boolean(credential?.apiKey) }
       },
-      macroMarketLive,
-      dashboardFeedStatus,
+      macroMarketLive, structuredModelInvocation, dashboardFeedStatus,
       setPolicyPathQuery: (query: PolicyPathQueryService) => {
         briefingPolicyPathQuery = query
         // The analysis reads through the public query service, not the briefing's direct handle.

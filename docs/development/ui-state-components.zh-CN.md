@@ -248,8 +248,9 @@ useEffect(() => {
 
 - **`QueryOutcome` 只留在数据层。** 类型在 `platform/contracts/queryOutcome.ts`，把一次读取适配成它
   的唯一位置是 `platform/ui/async/asyncState.ts`。消息内容沿用同一套词（`unreadable`，将来还有
-  `record-corrupt`），但**不把 part 包成 `QueryOutcome`**：part 不是一次查询——`loading` 不成立
-  （本版不取字节），`empty` 不成立（没有附件就不画）。动作表与 `stateViewCallSiteGuard` 只约束查询层
+  `record-corrupt`），但**不把 part 包成 `QueryOutcome`**：part 不是一次查询——它说的是这条消息带了
+  什么，不是某次读取的结果，所以 `loading` 不成立（字节存没存下是采集侧的事，不是这一行的状态），
+  `empty` 不成立（没有附件就不画）。动作表与 `stateViewCallSiteGuard` 只约束查询层
   的码；守卫看不见消息内容，**这是对的，不是漏洞**。
 - **消息里新增一种内容，必须是有名字的 part，并在渲染处显式分支。** 落到通用兜底
   （`text.messages.nonTextContent`）等于没做：读者只会拿到一句占位，几种不同处境全被它吃掉。

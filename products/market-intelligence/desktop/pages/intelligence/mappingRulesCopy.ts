@@ -24,6 +24,7 @@ export function mappingRulesTextFrom(
     countryFilter: mk.mappingCountryFilter,
     countryNote: mk.mappingCodeCountryNote,
     officialOpen: mk.mappingOfficialOpen, officialPending: mk.mappingOfficialPending,
+    officialPendingReasons: mk.mappingOfficialPendingReasons,
     officialNone: mk.mappingOfficialNone, codeEmpty: mk.mappingCodeEmpty,
     unmappedColumns: mk.mappingUnmappedColumns, unmappedEmpty: mk.mappingUnmappedEmpty,
     unmappedReasons: mk.mappingUnmappedReasons, reasonFilter: mk.mappingReasonFilter,

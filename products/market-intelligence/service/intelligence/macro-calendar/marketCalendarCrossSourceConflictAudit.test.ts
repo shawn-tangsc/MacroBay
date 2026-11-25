@@ -5,6 +5,7 @@ import { ensureCalendarValueRevisionTable, readCalendarValueRevisions } from './
 import {
   crossSourceConflictCounts, listCrossSourceConflicts, markCrossSourceConflicts, recordCrossSourceConflict
 } from './marketCalendarCrossSourceConflictAudit'
+import { calendarPeriodProvenance } from './marketCalendarPeriodProvenance'
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from './marketCalendarStandardTable'
 
 const KEY = { countryCode: 'USA', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodKey: '2026-09' }
@@ -141,11 +142,11 @@ describe('扫描标准表里的真实冲突形状', () => {
     ensureCalendarStandardTables(database)
     ensureCalendarValueRevisionTable(database)
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
-    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
+    seed(database, 'macro-calendar-bls', '2026-10-04', '4.2', numeric(4.2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 0 })
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 1, recorded: 0, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
+      .toEqual({ groups: 1, recorded: 0, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 0 })
     expect(listCrossSourceConflicts(database)).toHaveLength(1)
   })
 
@@ -156,7 +157,7 @@ describe('扫描标准表里的真实冲突形状', () => {
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
     seed(database, 'narwhal', '2026-10-09', '4.2', numeric(4.2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 0 })
     expect(listCrossSourceConflicts(database)).toEqual([])
   })
 })
@@ -195,27 +196,27 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
   it('4.1 与 4.10 是同一个数：不记冲突，计入「同值不同写法」', () => {
     const database = open()
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1, 1))
-    seed(database, '0xrouter', '2026-10-04', '4.10', numeric(4.1, 2))
+    seed(database, 'macro-calendar-bls', '2026-10-04', '4.10', numeric(4.1, 2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1, displayCompared: 0 })
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1, displayCompared: 0, periodIncomparable: 0 })
     expect(listCrossSourceConflicts(database)).toEqual([])
     // 再扫一次：幂等，不因为「没记」而反复计数（计数是这一轮的事实，不是累积值）。
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1, displayCompared: 0 })
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1, displayCompared: 0, periodIncomparable: 0 })
   })
 
   it('真不同（4.1 vs 4.2）照旧记冲突，记录的 value_before 就是两个原始展示串', () => {
     const database = open()
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
-    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
+    seed(database, 'macro-calendar-bls', '2026-10-04', '4.2', numeric(4.2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 0 })
     expect(listCrossSourceConflicts(database).map((conflict) => conflict.basis)).toEqual(['numeric'])
     const recorded = database.prepare(`select provider_id, value_before from mi_calendar_value_revisions
       where decision = 'conflict:cross-source' order by provider_id`).all() as
       Array<{ provider_id: string; value_before: string }>
     expect(recorded).toEqual([
-      { provider_id: '0xrouter', value_before: '4.2' },
+      { provider_id: 'macro-calendar-bls', value_before: '4.2' },
       { provider_id: 'narwhal', value_before: '4.1' }
     ])
   })
@@ -223,15 +224,15 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
   it('一边没有数值列（旧行）→ 按展示串原样比，记冲突并标注「按展示串·未经数值校验」', () => {
     const database = open()
     seed(database, 'narwhal', '2026-10-03', '4.1')   // numeric_json 缺 → unparsed
-    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
+    seed(database, 'macro-calendar-bls', '2026-10-04', '4.2', numeric(4.2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 1 })
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 1, periodIncomparable: 0 })
     const rows = database.prepare(`select provider_id, parser_version from mi_calendar_value_revisions
       where decision = 'conflict:cross-source' order by provider_id`).all() as
       Array<{ provider_id: string; parser_version: string }>
     // 标注落在记录的出处里：这两个值是**按展示串**判出来的，没经过数值校验。
     expect(rows).toEqual([
-      { provider_id: '0xrouter', parser_version: 'cross-source-conflict-v2-display-unverified' },
+      { provider_id: 'macro-calendar-bls', parser_version: 'cross-source-conflict-v2-display-unverified' },
       { provider_id: 'narwhal', parser_version: 'cross-source-conflict-v2-display-unverified' }
     ])
     expect(listCrossSourceConflicts(database).map((conflict) => conflict.basis)).toEqual(['display-unverified'])
@@ -240,9 +241,9 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
   it('单位不同 → 数值不可比，退回展示串比较并标注（不拿「都推不出」当同单位）', () => {
     const database = open()
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1, 1, 'percent'))
-    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2, 1, 'thousands'))
+    seed(database, 'macro-calendar-bls', '2026-10-04', '4.2', numeric(4.2, 1, 'thousands'))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 1 })
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 1, periodIncomparable: 0 })
     expect(listCrossSourceConflicts(database)[0]?.basis).toBe('display-unverified')
   })
 
@@ -254,11 +255,11 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
       countryCode: 'USA', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodKey: '2026-09',
       scheduledDate: '2026-10-03', firstScheduledDate: '2026-10-04', timePrecision: 'date',
       valuesJson: JSON.stringify({}), valueState: 'missing',
-      sourceProviderId: '0xrouter', sourceEventId: 'x-2026-10-04',
+      sourceProviderId: 'macro-calendar-bls', sourceEventId: 'x-2026-10-04',
       parserVersion: 'v1', observedAt: '2026-10-03T12:31:00.000Z', firstSeenAt: '2026-10-03T12:31:00.000Z'
     })
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 1, sameValueDifferentText: 0, displayCompared: 0 })
+      .toEqual({ groups: 0, recorded: 0, incomparable: 1, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 0 })
     expect(listCrossSourceConflicts(database)).toEqual([])
   })
 
@@ -266,16 +267,94 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
     const database = open()
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
     seed(database, 'macro-calendar-bls', '2026-10-03', '4.10', numeric(4.1, 2))
-    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
+    seed(database, 'macro-calendar-bea', '2026-10-04', '4.2', numeric(4.2))
     const result = markCrossSourceConflicts(database)
-    expect(result).toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
+    expect(result).toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 0 })
     const recorded = database.prepare(`select provider_id, value_before, conflict_with_provider_id
       from mi_calendar_value_revisions where decision = 'conflict:cross-source' order by provider_id`).all() as
       Array<{ provider_id: string; value_before: string; conflict_with_provider_id: string }>
     // 代表取该数值里最新的一条（bls 那条 4.10 与 narwhal 4.1 同一侧），对面一定是另一个数值。
     expect(recorded).toEqual([
-      { provider_id: '0xrouter', value_before: '4.2', conflict_with_provider_id: 'macro-calendar-bls' },
-      { provider_id: 'macro-calendar-bls', value_before: '4.10', conflict_with_provider_id: '0xrouter' }
+      { provider_id: 'macro-calendar-bea', value_before: '4.2', conflict_with_provider_id: 'macro-calendar-bls' },
+      { provider_id: 'macro-calendar-bls', value_before: '4.10', conflict_with_provider_id: 'macro-calendar-bea' }
     ])
+  })
+})
+
+/**
+ * 期次跨源（Chief 2026-11-24 拍板）：**不新造 `periodDerivation` 列，按来源判**。
+ *
+ * 0xrouter 的行只有发布时刻，统计期是「发布时刻 + 规则 + 标题」推出来的；narwhal 与官方源
+ * 是源自己给的期次。两边的「同一期」不是同一件事，拿它们比「两家数不一样」等于替源断言
+ * 「这两行说的是同一期」——所以这种组**不比、不记冲突**，但要单独计数。
+ *
+ * 两者必须分开、不许互相冒充：
+ * - `periodIncomparable`：来源没有给统计期（任一行来自 0xrouter，或来源根本没登记）；
+ * - `incomparable`：期次都比得，但某一家这一格没给值。
+ */
+describe('期次跨源：来源没有统计期 → 不比、不记，单独计数', () => {
+  const numeric = (value: number, decimals = 1, unit = 'percent') => JSON.stringify({
+    v: 1, state: 'available', unit, values: { actual: value }, decimals: { actual: decimals },
+    parserVersion: 'calendar-numeric-v1'
+  })
+  const seed = (database: DatabaseSync, providerId: string, firstScheduledDate: string, actual: string) => {
+    upsertCalendarStandardRow(database, {
+      countryCode: 'USA', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodKey: '2026-09',
+      scheduledDate: '2026-10-03', firstScheduledDate, timePrecision: 'date',
+      valuesJson: JSON.stringify({ actual }), valueState: 'present',
+      sourceProviderId: providerId, sourceEventId: `${providerId}-${firstScheduledDate}`,
+      parserVersion: 'v1', observedAt: '2026-10-03T12:31:00.000Z', firstSeenAt: '2026-10-03T12:31:00.000Z',
+      numericJson: numeric(Number.parseFloat(actual))
+    })
+  }
+  const open = () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    ensureCalendarValueRevisionTable(database)
+    return database
+  }
+
+  it('任一行来自 0xrouter → 标「不可比（来源没有给统计期）」，一条冲突都不记', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1')
+    seed(database, '0xrouter', '2026-10-04', '4.2')
+    expect(markCrossSourceConflicts(database)).toEqual({
+      groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 1
+    })
+    expect(listCrossSourceConflicts(database)).toEqual([])
+    // 「不可比」不是「没冲突」：这一组既不进冲突清单，也不进「同值不同写法」。
+    expect(crossSourceConflictCounts(database)).toEqual([])
+  })
+
+  it('两边都是「期次由源给出」的来源 → 照今天判冲突（narwhal × 官方正是最该比的一对）', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1')
+    seed(database, 'macro-calendar-bls', '2026-10-04', '4.2')
+    expect(markCrossSourceConflicts(database)).toEqual({
+      groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 0
+    })
+    expect(listCrossSourceConflicts(database)).toHaveLength(1)
+  })
+
+  it('来源没登记过 → 按「不知道它给不给期次」处理，不判冲突（fail-closed）', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1')
+    seed(database, 'some-unregistered-feed', '2026-10-04', '4.2')
+    expect(markCrossSourceConflicts(database)).toEqual({
+      groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0, periodIncomparable: 1
+    })
+    expect(listCrossSourceConflicts(database)).toEqual([])
+  })
+
+  it('「期次由源给出」是一张数据表：每个源一行，带依据；0xrouter 明确是推出来的', () => {
+    expect(calendarPeriodProvenance.map((row) => [row.providerId, row.period])).toEqual([
+      ['0xrouter', 'derived'],
+      ['macro-calendar-bea', 'source'],
+      ['macro-calendar-bls', 'source'],
+      ['macro-calendar-fed', 'source'],
+      ['macro-calendar-official-replay', 'source'],
+      ['narwhal', 'source']
+    ])
+    expect(calendarPeriodProvenance.every((row) => row.basis.trim().length > 0)).toBe(true)
   })
 })

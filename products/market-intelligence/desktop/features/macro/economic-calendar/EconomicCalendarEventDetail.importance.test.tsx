@@ -23,6 +23,7 @@ function event(overrides: Partial<EconomicCalendarEventView> = {}): EconomicCale
     eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10',
     eventFamily: 'employment-situation',
     titleKey: 'nonfarm-payrolls',
+    countryCode: 'US',
     periodKey: '2026-M10',
     lifecycleState: 'released',
     coverage: 'available',
@@ -69,9 +70,13 @@ async function renderImportance(target: EconomicCalendarEventView): Promise<stri
   return rows.find((dt) => dt.textContent === text.details.importance)?.nextElementSibling?.textContent ?? ''
 }
 
-it('says 未提供 when the record carries no importance, and never 高', async () => {
+it('未分级时写「未分级（这类事件我们还没有分级）」，不写「暂无」、也不冒充高', async () => {
   const shown = await renderImportance(event({ importance: undefined }))
-  expect(shown).toBe(text.market.missingValue)
+  expect(shown).toBe(text.market.importanceUnratedDetail)
+  expect(shown).toContain('未分级')
+  expect(shown).toContain('还没有分级')
+  // 「暂无」是「没有」，这里是「我们还没定」——同一个概念不许两种说法。
+  expect(shown).not.toBe(text.market.missingValue)
   expect(shown).not.toBe(text.market.importance.high)
 })
 

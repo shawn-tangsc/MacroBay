@@ -5,6 +5,7 @@ import { flowAccessibleName, type FlowAccessibleText } from './capitalFlowAccess
 import { formatFlowUsd } from './capitalFlowFormat'
 import { pickFlowLabelIndexes, placeFlowLabels, type FlowLabelAnchor, type FlowLabelBox } from './capitalFlowLabels'
 import { FLOW_SERIES, shortFlowDate, type FlowChartRow } from './capitalFlowRows'
+import { placeFlowTooltip } from './capitalFlowTooltip'
 
 import './capitalFlowChart.css'
 
@@ -23,8 +24,6 @@ type ChartGeometry = { labelHeight: number; gap: number; inset: number; maxLanes
 
 /** Pixels only: measured boxes are compared against measured bars, never against a fixed offset. */
 const labelGeometry: ChartGeometry = { labelHeight: 14, gap: 2, inset: 4, maxLanes: 3, axisBand: 22 }
-
-const tooltipPlacement = { offset: 14, inset: 4, estimatedWidth: 176, estimatedHeight: 86 } as const
 
 /**
  * The flow chart. Three readings are labelled on the stablecoin series (largest inflow,
@@ -87,7 +86,7 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
     if (!rect) return
     const x = clamp(event.clientX - rect.left, 0, rect.width)
     const y = clamp(event.clientY - rect.top, 0, rect.height)
-    setHoveredFlow({ row, x, y, ...placeTooltip(x, y, rect.width, rect.height) })
+    setHoveredFlow({ row, x, y, ...placeFlowTooltip({ x, y, boxWidth: rect.width, boxHeight: rect.height }) })
   }
 
   return <>
@@ -158,16 +157,6 @@ function Bar({ series, value, maximumMagnitude, dayIndex }: {
 
 function directionOf(value: number): 'inflow' | 'outflow' | 'zero' {
   return value > 0 ? 'inflow' : value < 0 ? 'outflow' : 'zero'
-}
-
-function placeTooltip(x: number, y: number, width: number, height: number): Pick<HoveredFlow, 'tooltipLeft' | 'tooltipTop'> {
-  const maxLeft = Math.max(tooltipPlacement.inset, width - tooltipPlacement.estimatedWidth - tooltipPlacement.inset)
-  const maxTop = Math.max(tooltipPlacement.inset, height - tooltipPlacement.estimatedHeight - tooltipPlacement.inset)
-  const left = clamp(x + tooltipPlacement.offset, tooltipPlacement.inset, maxLeft)
-  const above = y - tooltipPlacement.estimatedHeight - tooltipPlacement.offset
-  const below = y + tooltipPlacement.offset
-  const top = clamp(above >= tooltipPlacement.inset ? above : below, tooltipPlacement.inset, maxTop)
-  return { tooltipLeft: left, tooltipTop: top }
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

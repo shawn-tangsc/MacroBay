@@ -113,3 +113,35 @@ describe('下一期排期：读不到就说没有，不许编期次', () => {
       asOf: '2026-11-14T00:00:00.000Z' })).toBeUndefined()
   })
 })
+
+/**
+ * **读侧只读我们判的档**（R44 技术方案 §4.2）：`importance_grade` 映射进既有 `importance` 字段，
+ * 旧列 `importance`（源给的档）一律不读。
+ *
+ * 两个方向都要红：
+ * - 源写 `low`、我们判「高」→ 读出来必须是高（把源档当真就是错）；
+ * - 我们没判出来（`NULL`）→ 读出来**没有这个字段**，不许拿源写的 `high` 顶上，
+ *   也不许降成 `low`（那是把「没定档」当成「定过低」）。
+ */
+describe('读侧只读 importance_grade，源给的档不采用', () => {
+  it('源那一列写 low、我们判高 → 读出来是高', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, { ...base, importance: 'low' })
+    const [row] = readStandardCalendarMonth(database, { month: '2026-11' })
+    expect(row!.importance).toBe('high')
+  })
+
+  it('我们没判出来（NULL）→ 读出来没有这个字段，不拿源给的 high 顶上', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, {
+      ...base, metricKey: 'US.UNREGISTERED_FAMILY.SA.LEVEL', importance: 'high',
+      sourceEventId: 'US.UNREGISTERED.2026-M10'
+    })
+    const [row] = readStandardCalendarMonth(database, { month: '2026-11' })
+    // 行在、值在，档这一格是「没有」——不是低，也不是源说的高。
+    expect(row!.metricKey).toBe('US.UNREGISTERED_FAMILY.SA.LEVEL')
+    expect(Object.hasOwn(row!, 'importance')).toBe(false)
+  })
+})

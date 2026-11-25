@@ -45,6 +45,17 @@ describe('应用内投递的接线', () => {
     expect(composition).toContain('...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets })')
   })
 
+  it('海报推送钩子一路转发到运行时，不许在两段装配之间被吞掉', () => {
+    // 2026-11-23 事故：`composeNotificationRuntimeForApp` 算出了 `pushImage` 并传进来，
+    // 但这一层只转发 `push`。结果自动推送每期都只发正文，**一条 `pushImage` 都没有**，
+    // 而所有单测都绿——「存进端口不等于接上运行时」第二次发生。
+    // 所以这里钉的是两处**转发点**，不是「出现过这个字段」。
+    expect(composition).toContain('...(ports.pushImage === undefined ? {} : { pushImage: ports.pushImage }),')
+    expect(runtime).toContain('...(notificationPosterPushHook === null ? {} : { pushImage: notificationPosterPushHook })')
+    // 钩子缺席时整条链路退回「只发正文」，这是回退点，不是错误：所以它必须是**可选**的。
+    expect(runtime).toContain("let notificationPosterPushHook: DeliveryHooks['pushImage'] | null = null")
+  })
+
   it('preload 暴露订阅并返回退订函数', () => {
     expect(preload).toContain('onDelivered:')
     expect(preload).toContain('IpcChannels.notificationsDelivered')

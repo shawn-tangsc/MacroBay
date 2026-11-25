@@ -39,6 +39,8 @@ export class TelegramRuntimeManager {
     reportConnectionLost?: (input: {
       channelId: string; generation: number; cause: ChannelConnectionCause; disconnectedAt: string
     }) => void
+    /** 入站附件的字节落盘（0.4.5）：由组合根注入 store 与策略，宿主只管问一次。 */
+    captureAttachment?: (attachment: import('../ChannelInboundContracts').ChannelVerifiedInboundAttachment, api: TelegramApiClient, signal: AbortSignal) => Promise<import('../ChannelInboundContracts').ChannelInboundAttachmentCaptureState>
   }) {}
 
   async start(channelId: string, generation: number, ownerToken: string): Promise<TelegramRuntimeStartResult> {
@@ -89,7 +91,8 @@ export class TelegramRuntimeManager {
           // 只有「失去资格」要单独记一笔：用户停用/重启那一路已经有「连接已停止」了。
           if (reason === 'not-current') this.deps.recordExit?.(channelId, generation, 'channel-stale-generation')
         },
-        onConnectionLost: (lost) => this.deps.reportConnectionLost?.({ channelId, generation, ...lost })
+        onConnectionLost: (lost) => this.deps.reportConnectionLost?.({ channelId, generation, ...lost }),
+        ...(this.deps.captureAttachment === undefined ? {} : { captureAttachment: this.deps.captureAttachment })
       })
       this.hosts.set(channelId, host)
       this.hostGenerations.set(channelId, generation)

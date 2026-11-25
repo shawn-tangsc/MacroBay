@@ -180,14 +180,21 @@ function toRow(event: CalendarCardEvent, kind: CalendarCardRow['kind'], asOf: st
 }
 
 /**
- * Picks the upcoming rows by the hour they land in, as the product owner specified: hour groups
- * are atomic, so a busy hour is never cut in half, and a quiet nearest hour is topped up with the
- * next-nearest hours until the card has at least `target` rows. The target is therefore a floor
- * the busy case raises, not a hard cut.
+ * **一二级指标档**（用户 2026-11-19 的筛法，2026-11-24 又被复用为排序分档）：
+ * 指标行按分级判（一级/二级），不看来源重要性；官方发布行没有码可判（`tier === undefined`）
+ * 时退回来源重要性 `high`。「有码但没定级」（`tier === null`）不算这一档。
  *
- * Grouping uses the stored instant, so it does not shift with the reader's display zone.
+ * 筛与排序**共用这一个判据**：两处各写一遍，短名单的排序档和「谁准进名单」就会各说各的。
  */
-function selectUpcomingRows(rows: readonly CalendarCardEvent[], target: number): readonly CalendarCardEvent[] {
+function isIndicatorTier(event: CalendarCardEvent): boolean {
+  if (event.category !== 'economic-indicator') return false
+  if (event.tier === 1 || event.tier === 2) return true
+  if (event.tier === undefined) return event.importance === 'high'
+  return false
+}
+
+/** 按小时分桶，桶内保持传入顺序（调用方已按时间排好）。 */
+function hourBuckets(rows: readonly CalendarCardEvent[]): readonly (readonly CalendarCardEvent[])[] {
   const byHour = new Map<string, CalendarCardEvent[]>()
   for (const row of rows) {
     const hour = instantOf(row).slice(0, 13)
@@ -195,10 +202,31 @@ function selectUpcomingRows(rows: readonly CalendarCardEvent[], target: number):
     if (bucket) bucket.push(row)
     else byHour.set(hour, [row])
   }
+  return [...byHour.values()]
+}
+
+/**
+ * Picks the upcoming rows by the hour they land in, as the product owner specified: hour groups
+ * are atomic, so a busy hour is never cut in half, and a quiet nearest hour is topped up with the
+ * next-nearest hours until the card has at least `target` rows. The target is therefore a floor
+ * the busy case raises, not a hard cut.
+ *
+ * **分档取用（用户 2026-11-24）**：先把候选分成「一二级指标」与「事件」两档，指标档整档先取，
+ * 名额不满才用事件档补位；档内仍按时间。原因是一次讲话把 PCE 挤出 4 行短名单——规则本来说
+ * 一二级指标都进，但只按时间排序时，讲话会把它顶掉。
+ *
+ * 分档与分桶的顺序是：**每档内部各自按小时分桶**，所以同一小时的同一档事件不会被切开；
+ * 指标档取完才轮到事件档，事件不会插到指标前面。
+ *
+ * Grouping uses the stored instant, so it does not shift with the reader's display zone.
+ */
+function selectUpcomingRows(rows: readonly CalendarCardEvent[], target: number): readonly CalendarCardEvent[] {
   const selected: CalendarCardEvent[] = []
-  for (const bucket of byHour.values()) {
-    selected.push(...bucket)
-    if (selected.length >= target) break
+  for (const tierRows of [rows.filter(isIndicatorTier), rows.filter(row => !isIndicatorTier(row))]) {
+    for (const bucket of hourBuckets(tierRows)) {
+      selected.push(...bucket)
+      if (selected.length >= target) return selected
+    }
   }
   return selected
 }
@@ -216,16 +244,8 @@ export function projectUpcomingCalendarCard(
    * 其余一律不列。旧规则「importance 为高就进」会把三级指标和未分级指标一起放进来，
    * 也会把高重要性的未分级指标放进来；新规则下这两条都不成立。
    */
-  const topImportance = events.filter(event => {
-    if (event.category !== 'economic-indicator') return event.importance === 'high'
-    if (event.tier === 1 || event.tier === 2) return true
-    /**
-     * 指标行**没有分级可判**（`tier` 是 `undefined`：官方发布行没有指标码）时，退回来源重要性。
-     * 这与「未分级」（`null`：有码但没定级）不是一回事——后者按用户规则不列。
-     */
-    if (event.tier === undefined) return event.importance === 'high'
-    return false
-  })
+  const topImportance = events.filter(event => isIndicatorTier(event)
+    || (event.category !== 'economic-indicator' && event.importance === 'high'))
   const candidates = topImportance
     .filter(event => event.lifecycleState === 'scheduled' && withinWindow(event, asOf, policy))
     .sort((left, right) => instantOf(left).localeCompare(instantOf(right)) || left.eventKey.localeCompare(right.eventKey))

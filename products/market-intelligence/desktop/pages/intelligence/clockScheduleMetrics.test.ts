@@ -1,7 +1,14 @@
 import { expect, it } from 'vitest'
 
 import { buildClockCardModel } from './clockCardModel'
+import { clockCardText } from './clockCardText'
 import { clockScheduleMetrics, type ClockCardFact, type ClockScheduleEvent } from './clockScheduleMetrics'
+
+/** 名字盒宽度只能按文字算，所以每处都带上文案表里的指标名与四类名。 */
+const build = (input: Omit<Parameters<typeof buildClockCardModel>[0], 'names' | 'categoryNames'>):
+ReturnType<typeof buildClockCardModel> => buildClockCardModel({
+  names: clockCardText['zh-CN'].names, categoryNames: clockCardText['zh-CN'].categories, ...input
+})
 
 /**
  * 挂点输入：**日程给日期与周期 P，卡片读数给值**。
@@ -29,9 +36,10 @@ it('takes dates and the period from the schedule, values from the same read as t
   const metrics = clockScheduleMetrics({ today: '2026-11-15', events, facts })
   const cpi = metrics.find((metric) => metric.metricKey === 'US.CPI.YOY')!
   // 本期 CPI 没有实际值 → 牌的数值位用上一期的结果，不编一个「本期」的。
-  expect(cpi.lastRelease).toEqual({ date: '2026-11-10', value: '3.74%' })
-  // 下一期来自读数里的 next（日程那边只读到过去两个月）。
-  expect(cpi.nextRelease).toEqual({ date: '2026-12-10' })
+  // `at` 是发布时刻：中央的 ±24 小时窗口按它算，不许在读取层丢掉。
+  expect(cpi.lastRelease).toEqual({ date: '2026-11-10', at: '2026-11-10T13:30:00.000Z', value: '3.74%' })
+  // 下一期来自读数里的 next（日程那边只读到过去两个月）；时刻同样保留给中央窗口用。
+  expect(cpi.nextRelease).toEqual({ date: '2026-12-10', at: '2026-12-10T13:30:00.000Z' })
   expect(cpi.periodDays).toBe(31)
 })
 
@@ -40,8 +48,6 @@ it('keeps the expectation absent when the read has none, so the card writes 预�
   const payrolls = metrics.find((metric) => metric.metricKey === 'US.NONFARM.CHANGE')!
   expect(payrolls.lastRelease?.value).toBe('+165K')
   expect(payrolls.nextRelease?.expected).toBeUndefined()
-  const model = buildClockCardModel({ today: '2026-11-15', metrics })
-  expect(model.center?.expected).toBeUndefined()
 })
 
 it('carries the policy meeting and the priced probability; no past plaque and no 挂不上 line for it', () => {
@@ -50,55 +56,69 @@ it('carries the policy meeting and the priced probability; no past plaque and no
   } })
   const policy = metrics.find((metric) => metric.metricKey === 'US.TARGET_RATE.DECISION')!
   expect(policy.nextRelease).toEqual({ date: '2026-12-09', expected: '86.8%' })
-  const unplaced = buildClockCardModel({ today: '2026-11-15', metrics }).unplaced
-  expect(unplaced.some((entry) => entry.metricKey === 'US.TARGET_RATE.DECISION')).toBe(false)
+  const model = build({ today: '2026-11-15', metrics })
+  // 政策那一支必须有箭头，且不能出现在任何「没画出来」的原因里。
+  expect(model.arrows.map((arrow) => arrow.category)).toContain('rate')
+  expect(model.notes.some((note) => note.category === 'rate')).toBe(false)
 })
 
-it('rings only the policy plaque when no indicator carries a market-implied expectation', () => {
-  const model = buildClockCardModel({ today: '2026-11-15', metrics: clockScheduleMetrics({
-    today: '2026-11-15', events, facts, policy: { meetingDate: '2026-12-09', probability: { value: 0.868 } }
+it('rings a date without a market expectation next to the adjacent policy date, not merged into it', () => {
+  const model = build({ today: '2026-11-21', metrics: clockScheduleMetrics({
+    today: '2026-11-21',
+    events: [event('2026-12-04T13:30:00.000Z', 'US.NONFARM.SA.CHANGE'), event('2026-12-10T13:30:00.000Z', 'US.CPI.NSA.YOY')],
+    facts: [], policy: { meetingDate: '2026-12-09', probability: { value: 0.868 } }
   }) })
-  // 两个指标都没有盘口预期 → 都不上环（不硬挂），主位留空；政策牌照旧单独一块。
-  expect(model.plaques.map((plaque) => plaque.metricKey)).toEqual(['US.TARGET_RATE.DECISION'])
-  expect(model.center).toBeUndefined()
-  // 没上环的原因写「没被选中」而不是「放不下」，并带上日期与天数供下沿那行列全。
-  expect(model.unplaced.filter((entry) => entry.reason === 'not-selected').map((entry) => entry.metricKey).sort())
-    .toEqual(['US.CPI.YOY', 'US.NONFARM.CHANGE'])
+  // 没有盘口预期的日期**也上环**（用户 2026-11-21）：非农那一支照样有箭头，只是浮层里没有数字。
+  const payrolls = model.arrows.find((arrow) => arrow.category === 'payrolls')!
+  expect(payrolls).toBeDefined()
+  expect(payrolls.entries[0]!.value).toBeUndefined()
+  // 政策 12-09 与 CPI 12-10 各占一支箭头（不同的类），各写自己的天数（18 / 19）。
+  const policy = model.arrows.find((arrow) => arrow.category === 'rate')!
+  const cpi = model.arrows.find((arrow) => arrow.category === 'cpi')!
+  expect(policy, '政策会议必须有自己那一支箭头').toBeDefined()
+  expect(cpi, 'CPI 不能因为挨着政策会议就被并掉').toBeDefined()
+  expect(policy.daysUntil).toBe(18)
+  expect(cpi.daysUntil).toBe(19)
+  expect(model.center?.kind).toBe('policy')
 })
 
 /**
- * 选法红证二：**只有 CPI 有盘口、PCE 没有**，且 PCE 更近（4 天）→ 环上必须是 CPI（19 天）。
- * 若选法退化成「取最近的指标」，这条立刻红——它证明的是「有盘口优先」，不是「永远挑某个指标」。
+ * 同一天有盘口的先上牌：**只有 CPI 有盘口、PCE 没有**，且 PCE 更近（4 天）。
+ * 两块牌都要在环上（每个日期一块），但只有 CPI 那块带数字——不是「有盘口才配挂」。
  */
-it('picks the indicator with a market-implied expectation even when another is nearer', () => {
+it('rings every date, and only the one with a market expectation carries a number', () => {
   const facts: readonly ClockCardFact[] = [
     { metricKey: 'US.CORE_PCE.SA.YOY', unit: 'percent' as const,
       next: { releaseAt: '2026-11-25T13:30:00.000Z' } },
     { metricKey: 'US.CPI.NSA.YOY', unit: 'percent' as const,
       next: { releaseAt: '2026-12-10T13:30:00.000Z', expected: { value: 3.2, provenance: 'market-implied' as const } } }
   ]
-  const model = buildClockCardModel({ today: '2026-11-21',
+  const model = build({ today: '2026-11-21',
     metrics: clockScheduleMetrics({ today: '2026-11-21', events: [], facts }) })
-  expect(model.center?.metricKey).toBe('US.CPI.YOY')
-  expect(model.center?.daysUntil).toBe(19)
+  expect(model.arrows.map((arrow) => arrow.category).sort()).toEqual(['cpi', 'pce'])
+  expect(model.arrows.find((arrow) => arrow.category === 'pce')!.entries[0]!.value).toBeUndefined()
+  expect(model.arrows.find((arrow) => arrow.category === 'cpi')!.entries[0]!.value).toBe('3.20%')
+  expect(model.center).toBeUndefined()
 })
 
-/** 数据商问卷值（`source-survey`）不算盘口：不能拿它当「有预期」把指标顶上环。 */
+/** 数据商问卷值（`source-survey`）不算盘口：牌上不出现它，也不拿它当「有预期」。 */
 it('does not treat a source-survey expectation as a market-implied one', () => {
   const surveyOnly: readonly ClockCardFact[] = [
     { ...facts[0]!, next: { releaseAt: '2026-12-10T13:30:00.000Z',
       expected: { value: 3.2, provenance: 'source-survey' as const } } }
   ]
-  const model = buildClockCardModel({ today: '2026-11-15',
+  const model = build({ today: '2026-11-15',
     metrics: clockScheduleMetrics({ today: '2026-11-15', events, facts: surveyOnly }) })
   expect(model.center).toBeUndefined()
+  // 问卷值照旧写进浮层那一行，但它不算盘口：不进中央的窗口判定。
+  expect(model.arrows.find((arrow) => arrow.category === 'cpi')!.entries[0]!.value).toBe('3.20%')
 })
 
 /**
- * 选法红证一（用户 2026-11-21 的口径）：今天环上/主位必须是**核心 PCE 年率 · 4 天后 · 3.12%**，
- * 不是 13 天后的非农。三条候选都有一级码，只有 PCE 与 CPI 有盘口，PCE 更近。
+ * 真库形状（2026-11-21）：核心 PCE 4 天后、非农 13 天后、CPI 19 天后——**三块牌都在环上**，
+ * 核心 PCE 那块带 3.12% 盘口。（用户「CPI 非农怎么没了」就是这一条。）
  */
-it('rings the nearest market-implied indicator: core PCE, four days out, with its odds', () => {
+it('rings core PCE, payrolls and CPI as three arrows, with the odds on PCE', () => {
   const facts: readonly ClockCardFact[] = [
     { metricKey: 'US.CORE_PCE.SA.YOY', unit: 'percent' as const,
       next: { releaseAt: '2026-11-25T13:30:00.000Z', expected: { value: 3.12, provenance: 'market-implied' as const } } },
@@ -106,12 +126,11 @@ it('rings the nearest market-implied indicator: core PCE, four days out, with it
       next: { releaseAt: '2026-12-10T13:30:00.000Z', expected: { value: 3.2, provenance: 'market-implied' as const } } },
     { metricKey: 'US.NONFARM.SA.CHANGE', next: { releaseAt: '2026-12-04T13:30:00.000Z' } }
   ]
-  const model = buildClockCardModel({ today: '2026-11-21',
+  const model = build({ today: '2026-11-21',
     metrics: clockScheduleMetrics({ today: '2026-11-21', events: [], facts }) })
-  expect(model.center?.metricKey).toBe('US.CORE_PCE.YOY')
-  expect(model.center?.daysUntil).toBe(4)
-  expect(model.center?.expected).toBe('3.12%')
-  // 环上那块与主位是同一个指标（不许主位一个、环上另一个）。
-  expect(model.plaques.filter((plaque) => plaque.zone === 'future').map((plaque) => plaque.metricKey))
-    .toEqual(['US.CORE_PCE.YOY'])
+  expect(model.arrows.map((arrow) => arrow.category).sort()).toEqual(['cpi', 'payrolls', 'pce'])
+  const pce = model.arrows.find((arrow) => arrow.category === 'pce')!
+  expect(pce.daysUntil).toBe(4)
+  expect(pce.entries[0]!.value).toBe('3.12%')
+  expect(model.center).toBeUndefined()
 })
