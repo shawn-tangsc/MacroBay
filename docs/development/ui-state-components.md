@@ -321,8 +321,9 @@ they must not share the type.
 - **`QueryOutcome` stays in the data layer.** Its type lives in `platform/contracts/queryOutcome.ts`,
   and the only place that adapts a read into it is `platform/ui/async/asyncState.ts`. Message content
   reuses the same words (`unreadable`, and later `record-corrupt`) but never wraps a part in
-  `QueryOutcome`: a part is not a query — `loading` does not apply (no bytes are fetched) and `empty`
-  does not apply (nothing is drawn when there is no attachment). The action table and
+  `QueryOutcome`: a part is not a query — it says what this message carries, not the outcome of a read,
+  so `loading` does not apply (whether bytes are stored elsewhere is a capture concern, not this row's
+  state) and `empty` does not apply (nothing is drawn when there is no attachment). The action table and
   `stateViewCallSiteGuard` govern query codes only; the guard does not see message content, and that is
   correct rather than a hole.
 - **New content in a message is a named part with an explicit render branch.** Falling through to the
