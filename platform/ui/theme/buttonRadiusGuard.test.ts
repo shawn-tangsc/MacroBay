@@ -101,7 +101,9 @@ function hoverOnlyDanger(): string[] {
 
 describe('button geometry and the danger colour', () => {
   it('keeps 999px radius on registered capsules only', () => {
-    expect(newCapsules()).toEqual([])
+    // 同上：offenders 要进失败信息，否则钩子认不出是谁的文件。
+    const capsules = newCapsules()
+    expect(capsules, capsules.join('\n')).toEqual([])
   })
 
   it('never adds a rule where the danger colour only appears on hover', () => {

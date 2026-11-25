@@ -24,12 +24,27 @@ import { performance } from 'node:perf_hooks'
 
 const BUDGET_MS = Number(process.env.PRE_COMMIT_BUDGET_MS ?? 58_000)
 const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/
-/** 四条按目录扫的守卫：各自只扫自己那一块，不扫别人的业务代码。 */
+/**
+ * 按目录扫的守卫：四条组件守卫 + 五条**全仓**守卫。
+ *
+ * 全仓那五条是 2026-11-25 补的（一轮全量里 7 条红全出自它们）：它们不在任何一条线的定向目录里，
+ * 平时各线只跑自己那几个文件，于是「新增一个 IPC / 一个作业 / 一个胶囊」要等七分钟的全量才现形。
+ * 成本实测：五条一起约 16s（单独跑组件四条约 5.5s），合计仍在预算内。
+ *
+ * 它们红在谁头上仍按下面同一套归属走（失败行里有没有本次提交的文件）。为此那三条平台守卫
+ * 把 offenders 打进断言信息（`expect(list, list.join('\n'))`）：只写 `expected [] to equal []`
+ * 的话钩子归不了责，只能放行。
+ */
 const GUARDS = [
   'platform/ui/components/icon-button/iconButtonKeyGuard.test.ts',
   'platform/ui/components/modal/modalCallSiteGuard.test.ts',
   'platform/ui/components/state/stateViewCallSiteGuard.test.ts',
-  'platform/ui/components/state/textResolverGuard.test.ts'
+  'platform/ui/components/state/textResolverGuard.test.ts',
+  'platform/network/platformFetchBoundary.test.ts',
+  'platform/ui/components/choice/choiceCallSiteGuard.test.ts',
+  'platform/ui/theme/buttonRadiusGuard.test.ts',
+  'products/market-intelligence/service/bootstrap.test.ts',
+  'products/market-intelligence/service/bootstrap.jobHandlers.test.ts'
 ]
 
 const started = performance.now()
@@ -113,14 +128,14 @@ if (drifted.length > 0) {
   if (drifted.length > 10) say(`      …还有 ${drifted.length - 10} 个`)
 }
 
-// ── 1. 四条按目录扫的守卫（很便宜，先跑）：红了也要看是谁的文件 ──────────────────────
+// ── 1. 按目录扫的守卫（组件四条 + 全仓五条）：红了也要看是谁的文件 ──────────────────────
 const guard = spawnSync('node_modules/.bin/vitest', ['run', ...GUARDS], {
   cwd: root,
   encoding: 'utf8',
   timeout: remaining()
 })
 if (guard.error !== undefined && guard.error !== null && (guard.error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
-  say('预检超时（守卫未跑完），**未拦截**，请手动跑这四条守卫。')
+  say('预检超时（守卫未跑完），**未拦截**，请手动跑这九条守卫。')
   process.exit(0)
 }
 
@@ -139,12 +154,12 @@ if (guard.status !== 0) {
     .join('\n')
   const blamesStaged = codeStaged.some((path) => failureText.includes(path))
   if (blamesStaged) {
-    console.error('[pre-commit] ✗ 四条守卫有红，且命中了本次提交的文件：')
+    console.error('[pre-commit] ✗ 守卫有红，且命中了本次提交的文件：')
     console.error(guardOutput.split('\n').filter((line) => line.includes('FAIL') || line.includes('×')).slice(0, 20).join('\n'))
     console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …')
     process.exit(1)
   }
-  say('四条守卫有红，但都不在本次提交的文件里（别人的在途改动），本次不拦截。')
+  say('守卫有红，但都不在本次提交的文件里（别人的在途改动），本次不拦截。')
 }
 
 // ── 2. 查「将要提交的那棵树」，不查工作区 ────────────────────────────────────────────────
