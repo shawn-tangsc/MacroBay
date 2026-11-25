@@ -123,6 +123,11 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.macro.economicCalendar.importManualBlsIcs': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.previewManualBlsIcs': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.queryMonth': exposed('query_macro_calendar'),
+  // 事件解读的只读口只给详情抽屉渲染（正文 / 生成时刻 / 依据范围），不回答 agent 问题。
+  'intelligence.macro.economicCalendar.readEventInterpretation': excluded('internal-view'),
+  // 按条生成会花一次模型调用，与 `marketAnalysis.requestNewsInterpretation` 同类：
+  // 只由读者打开抽屉触发，不交给 agent 直接调。
+  'intelligence.macro.economicCalendar.requestEventInterpretation': excluded('destructive'),
   // The policy row is a dashboard read; the Agent reaches the same facts through the calendar tool.
   'intelligence.macro.policyPath.read': exposed('get_policy_path'),
   // Declared by 2d16872 without its coverage row; the panel reads it, no agent tool exists yet.

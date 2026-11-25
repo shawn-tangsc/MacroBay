@@ -58,6 +58,9 @@ export const syncRunHandlerCatalog: Readonly<Record<string, CatalogEntry>> = {
   'market-intelligence.refreshMacroCalendar.manual.macro-calendar-fed': { taskLabel: '官方日历排期（手动）', action: 'refresh', sourceId: 'macro-calendar-fed', sourceLabel: '美联储官方日历' },
   'market-intelligence.refreshMacroCalendar.manual.macro-calendar-bea': { taskLabel: '官方日历排期（手动）', action: 'refresh', sourceId: 'macro-calendar-bea', sourceLabel: 'BEA 官方发布' },
   'market-intelligence.refreshBeaOfficialReleases': { taskLabel: 'BEA 官方发布值', action: 'collect', sourceId: 'macro-calendar-bea', sourceLabel: 'BEA 官方发布' },
+  /* 日历高档事件的 AI 解读补生成（R36 #34）：模型写字，不是分析、也不是采集；
+     不登记的话运行日志这一格会直接显示裸 handler id。 */
+  'market-intelligence.calendar-event-interpretation': { taskLabel: '日历高档事件解读补生成', action: 'other' },
   'market-intelligence.syncBlsScheduleAndValues': { taskLabel: 'BLS 日程与数值', action: 'collect', sourceId: 'macro-calendar-bls', sourceLabel: 'BLS 官方日历' },
   'market-intelligence.refreshMarketCalendar.economic-data': { taskLabel: '市场日历 · 经济数据', action: 'collect', sourceId: 'macro-calendar-0xrouter-economic-data', sourceLabel: '市场日历 · 经济数据' },
   'market-intelligence.refreshMarketCalendar.financial-events': { taskLabel: '市场日历 · 金融事件', action: 'collect', sourceId: 'macro-calendar-0xrouter-financial-events', sourceLabel: '市场日历 · 金融事件' },

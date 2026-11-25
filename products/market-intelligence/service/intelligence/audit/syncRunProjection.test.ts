@@ -21,6 +21,17 @@ describe('sync run projection', () => {  it('reads the failure code and the dura
     })
   })
 
+  /**
+   * 新登记的作业必须在任务表里有一行（R36 #34 的补生成作业）：没登记的会**回退成裸 handler id**，
+   * 读者在运行日志里看到 `market-intelligence.calendar-event-interpretation` 这种机器名。
+   */
+  it('gives the calendar interpretation backfill a reader-facing task label, not the raw handler id', () => {
+    const row = projectSyncRun(run({ handlerId: 'market-intelligence.calendar-event-interpretation', status: 'completed' }))
+    expect(row.taskLabel).toBe('日历高档事件解读补生成')
+    expect(row.taskLabel).not.toBe('market-intelligence.calendar-event-interpretation')
+    expect(row.action).toBe('other')
+  })
+
   it('reads the batch tally, its failure split and its languages off the record', () => {
     // 三样来自两处：计数与分布是这一批的**结论**（`result`），语言是**任务参数**（payload）。
     // 语言不进结论（平台明确过），所以它只能从 payload 的快照读——再存一份就有两处要同步。
