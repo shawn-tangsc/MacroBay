@@ -548,6 +548,31 @@ describe('crypto intelligence dashboard', () => {
     expect(ladder).toContain('--mi-dashboard-page-inline: 20px; --mi-dashboard-page-block: 20px;')
   })
 
+  /**
+   * 纵向滚动**只有一个**容器：看板自己的 `.mi-crypto-dashboard__scroll`（用户 2026-11-25 真机截图：
+   * 1080 宽窄档上下滚时右边出现两条竖滚动条）。
+   *
+   * 两层 `auto` 就一定是两条：布局层 `.mi-analysis-dashboard-layout__dashboard` 也写着 `overflow: auto`。
+   * 判据三条：① 布局层不外溢；② 滚动区仍是唯一那个 `overflow-y: auto`；③ 窄档那 56px 底部留白
+   * 挂在滚动区的内容末尾（跟着滚，滚到底时最后一张卡完整可见、不被胶囊压住），不再挂在布局层——
+   * 挂在不该滚的外层，它加的高度正好把外层顶出溢出。
+   */
+  it('leaves vertical scrolling to the dashboard scroll region alone', () => {
+    const layoutStyles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css'), 'utf8')
+    const layerRule = cssBlock(layoutStyles, '.mi-analysis-dashboard-layout__dashboard {')
+    expect(layerRule).toContain('overflow: hidden')
+    expect(layerRule).not.toContain('overflow: auto')
+    // 滚动区自己那一层不变：它才是唯一能滚的东西。
+    expect(cssBlock(styles, '.mi-crypto-dashboard__scroll {')).toContain('overflow-y: auto')
+
+    // 56px 占位搬进滚动内容末尾；老位置（布局层 `::after`）不许留。
+    expect(layoutStyles).not.toContain('.mi-analysis-dashboard-layout[data-compact] .mi-analysis-dashboard-layout__dashboard::after')
+    const spacer = cssBlock(layoutStyles, '.mi-analysis-dashboard-layout[data-compact] .mi-crypto-dashboard__scroll::after {')
+    expect(spacer).toContain('height: 56px')
+    // 占位**没有背景**：有背景就是滚动容器里第二条色带。
+    expect(spacer).not.toContain('background')
+  })
+
   it('gives each band one owner: single-column money band, card band, positioning band', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const rowRule = cssBlock(styles, '.mi-crypto-dashboard__capital-positioning-row {')

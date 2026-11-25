@@ -153,10 +153,12 @@ it('窄档底部是一颗居中胶囊，不是右下圆形钮', async () => {
   expect(rule).toContain('z-index: 990')
   // 底部留白是**滚动内容末尾的透明占位**，不是容器 padding：padding 会跟着滚动容器的背景
   // 一起画，和卡片画布色不同时就是一条横贯色带（用户 2026-11-24 的截图）。
+  // 占位挂在**看板自己的滚动区**上：挂在布局层会把那层顶出溢出，多出第二条滚动条
+  // （用户 2026-11-25 的截图），滚到底时留白也不在内容里。
   expect(css).not.toContain('.mi-analysis-dashboard-layout__dashboard { padding-bottom: 56px; }')
   const spacer = css.slice(
-    css.indexOf('.mi-analysis-dashboard-layout[data-compact] .mi-analysis-dashboard-layout__dashboard::after'),
-    css.indexOf('\n}', css.indexOf('.mi-analysis-dashboard-layout[data-compact] .mi-analysis-dashboard-layout__dashboard::after')) + 2
+    css.indexOf('.mi-analysis-dashboard-layout[data-compact] .mi-crypto-dashboard__scroll::after'),
+    css.indexOf('\n}', css.indexOf('.mi-analysis-dashboard-layout[data-compact] .mi-crypto-dashboard__scroll::after')) + 2
   )
   expect(spacer).toContain('height: 56px')
   // 占位**没有背景**：有背景就是第二条色带。
