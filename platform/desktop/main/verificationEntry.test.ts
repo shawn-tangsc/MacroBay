@@ -163,7 +163,8 @@ describe('verification entry', () => {
   })
 
 describe('verify sampling', () => {
-  const sample = (head: string, dirty: number, at = '2026-11-02T00:00:00.000Z'): TreeSample => ({ head, dirty, at })
+  // `tree` 才是内容身份：默认让它跟着 head 走，只有明确要「空提交」才两个参数分开传。
+  const sample = (head: string, dirty: number, at = '2026-11-02T00:00:00.000Z', tree = `t-${head}`): TreeSample => ({ head, tree, dirty, at })
 
   it('accepts a run only when both samples describe the same tree', () => {
     const clean = compareSamples(sample('abc1234', 0), sample('abc1234', 0))
@@ -179,8 +180,20 @@ describe('verify sampling', () => {
     // 这两种就是今晚实际发生的：起跑后有人提交（head 变）或有人在写（dirty 变）。
     expect(compareSamples(sample('abc1234', 0), sample('def5678', 0))).toMatchObject({ verdict: 'invalid', attributable: false })
     expect(compareSamples(sample('abc1234', 0), sample('abc1234', 4))).toMatchObject({ verdict: 'invalid' })
-    // 两个都变，仍然是 invalid，而且理由先报 head——那是更好定位的那个。
-    expect(compareSamples(sample('abc1234', 0), sample('def5678', 2)).reason).toMatch(/HEAD moved/)
+    // 两个都变，仍然是 invalid，理由先报**内容**变了（tree），head 只作附注。
+    expect(compareSamples(sample('abc1234', 0), sample('def5678', 2)).reason).toMatch(/tree/)
+  })
+
+  /**
+   * 2026-11-20 的现场：跑中落了一笔**空提交**（只改认领/说明），`HEAD` 前进、树一个字节没变，
+   * 于是那次真正有效的运行被判成 `invalid`，重跑八分钟纯属白等。
+   * 判据换成 tree 之后，这种情形仍然是 `valid`，而理由里点名「HEAD 只是被一笔空提交推动」。
+   */
+  it('keeps a run valid when HEAD moves but the content does not', () => {
+    const moved = compareSamples(sample('abc1234', 0, undefined, 'same-tree'), sample('def5678', 0, undefined, 'same-tree'))
+    expect(moved).toMatchObject({ verdict: 'valid', attributable: true })
+    expect(moved.reason).toMatch(/same tree/)
+    expect(moved.reason).toMatch(/HEAD moved/)
   })
 
   it('refuses to attest a tree it cannot see, instead of guessing', () => {
@@ -205,7 +218,7 @@ describe('verify sampling', () => {
     expect(countDirty(folded)).toBe(1)
     expect(countDirty(expanded)).toBe(2)
     // 反向：折叠下的 1 与展开后的 2 是两个不同的 dirty，`compareSamples` 因此会判 invalid。
-    const at = (dirty: number): TreeSample => ({ head: 'abc1234', dirty, at: '2026-11-02T00:00:00.000Z' })
+    const at = (dirty: number): TreeSample => ({ head: 'abc1234', tree: 't-abc1234', dirty, at: '2026-11-02T00:00:00.000Z' })
     expect(compareSamples(at(1), at(2))).toMatchObject({ verdict: 'invalid' })
     // 守卫同时钉住命令本身：谁把 `-uall` 去掉，这条红。
     const source = readFileSync(`${ROOT}scripts/verify-sample.ts`, 'utf8')
@@ -231,7 +244,7 @@ describe('verify sampling', () => {
   it('refuses to call a run valid when tracked files were written and the count came back to zero', () => {
     // 这是计数当指纹的那个洞：跑中改一个文件、跑完 `git checkout` 撤掉，两端都是 `dirty=0`、
     // HEAD 没动，于是旧比较判 valid——可链路中间那几个检查读的可能是被改过的那份。
-    const clean: TreeSample = { head: 'abc1234', dirty: 0, at: '2026-11-03T00:00:00.000Z' }
+    const clean: TreeSample = { head: 'abc1234', tree: 't-abc1234', dirty: 0, at: '2026-11-03T00:00:00.000Z' }
 
     // 没有文件被写过：仍然 valid。
     expect(compareSamples(clean, clean, 0)).toMatchObject({ verdict: 'valid', attributable: true })

@@ -22,13 +22,13 @@ type Verdict = 'clean' | 'polluted'
 
 const strict = process.argv.includes('--strict')
 
-const { head, dirty, at: startedAt } = sampleTree()
+const { head, tree, dirty, at: startedAt } = sampleTree()
 
 const verdict: Verdict = dirty === 0 ? 'clean' : 'polluted'
 
 // 把起点采样留给链尾的 `verify:postflight`：没有它，收尾就无从比较。
 try {
-  writeFileSync(samplePath(), JSON.stringify({ head, dirty, at: startedAt }))
+  writeFileSync(samplePath(), JSON.stringify({ head, tree, dirty, at: startedAt }))
 } catch (error) {
   // 写不进去（只读临时目录之类）：不阻断验证，但明确说出「这次没有收尾见证」。
   console.log(`verify-preflight: could not record the start sample (${String(error)}); this run cannot be attested at the end.`)
@@ -36,7 +36,7 @@ try {
 
 // 一行，字段顺序固定：谁想解析都不必读第二行。
 console.log(
-  `verify-preflight head=${head} dirty=${dirty < 0 ? 'unknown' : dirty} started_at=${startedAt} verdict=${verdict}`
+  `verify-preflight head=${head} tree=${tree} dirty=${dirty < 0 ? 'unknown' : dirty} started_at=${startedAt} verdict=${verdict}`
 )
 
 if (verdict === 'polluted') {
