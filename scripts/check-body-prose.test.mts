@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { captureOnlySurfaces, isCaptureOnlySurface, mergeBaseline } from './check-body-prose.mts'
+import { captureOnlySurfaces, isCaptureOnlySurface, keysBoundOnlyToFloatingEntries, mergeBaseline } from './check-body-prose.mts'
 
 /**
  * `--write-baseline` 的唯一判断抽成纯函数（原来埋在 argv 分支里，测不了）。
@@ -44,5 +44,46 @@ describe('capture-only surfaces', () => {
   it('names only files that still exist', () => {
     const missing = captureOnlySurfaces().filter((file) => !existsSync(join(process.cwd(), file)))
     expect(missing).toEqual([])
+  })
+})
+
+/**
+ * 「先把键赋给变量、再交给 ⓘ」不是正文（2026-11-25 的误报：`liveHint` 先 `resolveText` 再进 `lines`）。
+ *
+ * 四条互相咬住，缺一条这条豁免就会变成旁路：
+ * - 只进 `lines` / `content` / `labelKey` 的变量，定义行不算正文；
+ * - **同一个变量还在正文里用过一次就不豁免**——这是反向判据，把这句话挪出 ⓘ 必须当场红；
+ * - 用了但用在水口之外（普通段落 `{liveHint}`）同样不豁免；
+ * - 键根本没赋给变量（正文里直接写 `.liveHint`）照旧算正文，一个都不放过。
+ */
+describe('keys bound only to floating entries', () => {
+  const intoLines = [
+    "const liveHint = resolveText('pages.x.crossAsset.liveHint')",
+    'return <Popover lines={[liveHint]} />'
+  ].join('\n')
+
+  it('exempts the definition line when every use sits inside lines={…}', () => {
+    expect([...keysBoundOnlyToFloatingEntries(intoLines)]).toEqual([1])
+  })
+
+  it('still reports it when the same variable is also rendered in the body', () => {
+    const source = [
+      "const liveHint = resolveText('pages.x.crossAsset.liveHint')",
+      'return <><p>{liveHint}</p><Popover lines={[liveHint]} /></>'
+    ].join('\n')
+    expect([...keysBoundOnlyToFloatingEntries(source)]).toEqual([])
+  })
+
+  it('exempts a key handed to a component that shows it on a trigger', () => {
+    const source = [
+      "const freshnessNote = t('settings.x.freshnessNote')",
+      'return <SettingInfoPopover hintKey={freshnessNote} />'
+    ].join('\n')
+    expect([...keysBoundOnlyToFloatingEntries(source)]).toEqual([1])
+  })
+
+  it('does not exempt a bare key used in body position', () => {
+    const source = 'return <p>{labels.x.liveHint}</p>'
+    expect([...keysBoundOnlyToFloatingEntries(source)]).toEqual([])
   })
 })

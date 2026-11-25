@@ -128,23 +128,91 @@ export function mergeBaseline(
  */
 export function stripFloatingBlocks(text: string): string {
   let out = ''
+  let cursor = 0
+  for (const [start, end] of floatingBlockSpans(text)) {
+    out += text.slice(cursor, start)
+    // 用等量空白替换，保持行号不变（行号仍要指得准）。
+    out += text.slice(start, end).replace(/[^\n]/gu, ' ')
+    cursor = end
+  }
+  return out + text.slice(cursor)
+}
+
+/** 浮层表达式的字符区间：`lines={…}` / `content={…}`，按花括号配平，跨行也算。 */
+export function floatingBlockSpans(text: string): ReadonlyArray<readonly [number, number]> {
+  const spans: Array<readonly [number, number]> = []
   let index = 0
   while (index < text.length) {
     const match = /(?:lines|content)=\{/u.exec(text.slice(index))
-    if (match === null) { out += text.slice(index); break }
+    if (match === null) break
     const start = index + match.index
-    out += text.slice(index, start)
     let depth = 0
     let cursor = start + match[0].length - 1
     for (; cursor < text.length; cursor += 1) {
       if (text[cursor] === '{') depth += 1
       else if (text[cursor] === '}') { depth -= 1; if (depth === 0) { cursor += 1; break } }
     }
-    // 用等量空白替换，保持行号不变（行号仍要指得准）。
-    out += text.slice(start, cursor).replace(/[^\n]/gu, ' ')
+    spans.push([start, cursor])
     index = cursor
   }
-  return out
+  return spans
+}
+
+/**
+ * 「先把键赋给变量、再交给 ⓘ」的写法：`const liveHint = t('…liveHint')` → `lines={[liveHint]}`。
+ *
+ * 判据是**所有使用点都在浮层水口里**，不是「变量名出现过一次就算」：只要这个变量还有一处出现在正文
+ * （普通 JSX 位置），它就不豁免——否则把同一句话再渲染一次就绕过了门禁。
+ * 水口只认这四种：`lines={…}` / `content={…}` 块内、`title=` / `aria-*` / `helpTrigger(` / `Popover` 那行、
+ * 以及 `hintKey={X}` / `labelKey={X}` / `ariaLabelKey={X}` 这三类把键原样交给组件的属性。
+ *
+ * 返回 1 起算的行号集合：这些**定义行**不算正文命中（真正要盯的是使用点）。
+ */
+export function keysBoundOnlyToFloatingEntries(source: string): ReadonlySet<number> {
+  const spans = floatingBlockSpans(source)
+  const lines = source.split('\n')
+  const lineStarts: number[] = []
+  let offset = 0
+  for (const line of lines) { lineStarts.push(offset); offset += line.length + 1 }
+  const lineOf = (index: number): number => {
+    let low = 0
+    let high = lineStarts.length - 1
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2)
+      if (lineStarts[mid]! <= index) low = mid
+      else high = mid - 1
+    }
+    return low
+  }
+  const inSpans = (index: number): boolean => spans.some(([start, end]) => index >= start && index < end)
+
+  const exempt = new Set<number>()
+  lines.forEach((line, index) => {
+    const definition = /^\s*(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(.+)$/u.exec(line)
+    if (definition === null) return
+    const name = definition[1]!
+    const carriesHint = /\.\w*(?:Hint|Note)\b|['"`][^'"`]*(?:Hint|Note)['"`]/u.test(definition[2]!)
+    if (!carriesHint) return
+
+    const uses: number[] = []
+    for (const match of source.matchAll(new RegExp(`\\b${name}\\b`, 'gu'))) {
+      const at = match.index ?? 0
+      if (lineOf(at) === index) continue
+      uses.push(at)
+    }
+    if (uses.length === 0) return
+    const allInSinks = uses.every((at) => {
+      if (inSpans(at)) return true
+      // **按位置判，不按整行判**：同一行里既可能有 `{liveHint}` 的正文，也可能有 `lines={[liveHint]}`。
+      // 用整行 `ALLOWED_CONTEXT` 判断，等于给这一行的每个使用点都发通行证（反向判据当场失效）。
+      const prefix = source.slice(lineStarts[lineOf(at)] ?? 0, at)
+      return /(?:hintKey|labelKey|ariaLabelKey)=\{[^}]*$/u.test(prefix)
+        || /\b(?:title|aria-[a-z-]+)=\{[^}]*$/u.test(prefix)
+        || /\bhelpTrigger\([^)]*$/u.test(prefix)
+    })
+    if (allInSinks) exempt.add(index + 1)
+  })
+  return exempt
 }
 
 const invokedDirectly = process.argv[1]?.endsWith('check-body-prose.mts') === true
@@ -157,9 +225,13 @@ function main(): void {
     for (const file of walk(absolute)) {
       const id = relative(ROOT, file).split(sep).join('/')
       if (isCaptureOnlySurface(id)) continue
-      const text = stripFloatingBlocks(readFileSync(file, 'utf8'))
+      const source = readFileSync(file, 'utf8')
+      const text = stripFloatingBlocks(source)
+      const boundToFloating = keysBoundOnlyToFloatingEntries(source)
       text.split('\n').forEach((line, index) => {
         if (ALLOWED_CONTEXT.test(line)) return
+        // 先把键赋给变量、再交给 ⓘ 的写法：定义行不算正文，前提是它的**每一处**使用都在水口里。
+        if (boundToFloating.has(index + 1)) return
         // 键**定义**不是用法：`const X_KEY = '…Hint'` 只是给这段文案起名字，真正渲染在别处。
         // 把定义行算成正文，会让每个把键抽成常量的文件都假红一次。
         if (/^\s*const\s+[A-Z][A-Z0-9_]*\s*=/.test(line)) return
