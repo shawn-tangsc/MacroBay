@@ -80,12 +80,24 @@ describe('market calendar independent observations', () => {
     // 2 GiB, so this footprint must be *accepted*: it is what must not be refused any more.
     const measurementBytes = 256 * 1024 ** 2
     const context = { ...scope, detectedAt, evidence }
-    const probe = () => {
-      const volume = statfsSync(directory)
-      return { marketBytes: Number(database.prepare('pragma page_count').get()?.page_count) * Number(database.prepare('pragma page_size').get()?.page_size),
-        walBytes: (() => { try { return statSync(path + '-wal').size } catch { return 0 } })(),
-        freeBytes: volume.bavail * volume.bsize, archiveAvailable: true }
-    }
+    /**
+     * **可用盘预算由用例给，不由宿主机器给**（Chief 2026-11-25）。
+     *
+     * 这条用例量的是「256MiB 逻辑足迹能不能被接受」，不是「这台机器此刻还剩多少盘」。
+     * 以前 `freeBytes` 走 `statfsSync`：别的活把盘占到 2GiB 以下，循环里随便一批就撞
+     * `minimumFreeBytes` → `storage-pressure` → 用例红（单跑绿、并行红，不可复现）。
+     * 门槛判断本身用下面那条「预算说压力就拒绝」的用例确定地钉住，这里把「盘够用」当固定假设。
+     */
+    const diskBudgetBytes = 10 * 1024 ** 3
+    const probe = () => ({
+      marketBytes: Number(database.prepare('pragma page_count').get()?.page_count) * Number(database.prepare('pragma page_size').get()?.page_size),
+      walBytes: (() => { try { return statSync(path + '-wal').size } catch { return 0 } })(),
+      freeBytes: diskBudgetBytes, archiveAvailable: true })
+    /**
+     * 同一份预算换个值就变成「压力已到」：门槛由注入的读数决定，不由宿主内存/磁盘决定。
+     * 循环里用的是上面那份固定预算，所以它测的是足迹，不是别人的负载。
+     */
+    expect(diskBudgetBytes).toBeGreaterThan(policy.minimumFreeBytes)
     const openRepository = () => createMarketCalendarEventRepository({ database, manualCapacityAdmission: true,
       resolveCollectionContext: () => context, readCapacity: probe, now: () => detectedAt, cursorKey: Buffer.alloc(32, 7) })
     let repository = openRepository()
@@ -204,6 +216,28 @@ describe('market calendar independent observations', () => {
     database.exec('insert into official_pressure values (zeroblob(1))')
     expect(database.prepare('select count(*) as count from official_pressure').get()?.count).toBe(occupied + 1)
   }, 120_000)
+
+  /**
+   * **门槛由注入的读数决定，不由宿主机器决定**（Chief 2026-11-25）。
+   *
+   * 同一条库、同一种读数形状，只把 `freeBytes` 从「够」改成「不够」：前者接受，后者
+   * `storage-pressure`。这样「撞上限」由用例自己指定，不再靠「这台机器此刻恰好有 2GiB 余量」
+   * ——测量用例原来就是被那件事弄红的（别的活占着盘，循环中间那一批直接拒绝）。
+   */
+  it('takes the admission decision from the injected capacity reading, not from the host volume', () => {
+    const { database, context, capacity } = setup()
+    let freeBytes = 10 * 1024 ** 3
+    const repository = createMarketCalendarEventRepository({ database, manualCapacityAdmission: true,
+      resolveCollectionContext: () => context, now: () => detectedAt,
+      readCapacity: () => ({ ...capacity, freeBytes }) })
+    expect(repository.appendCollection(batch('budget-room'))).toMatchObject({ state: 'succeeded' })
+    // 正好等于 `minimumFreeBytes`：加上这一笔的 reserve 就低于门槛，必须拒绝。
+    freeBytes = policy.minimumFreeBytes
+    expect(repository.appendCollection(batch('budget-pressure'))).toEqual(
+      { state: 'unavailable', failureCode: 'storage-pressure' })
+    expect(database.prepare('select count(*) as n from mi_macro_calendar_market_event_collections').get()?.n).toBe(1)
+    expect(database.isTransaction).toBe(false)
+  })
 
   it('rechecks manual capacity before commit and rolls back if the volume becomes constrained', () => {
     const { database, context, capacity } = setup()
