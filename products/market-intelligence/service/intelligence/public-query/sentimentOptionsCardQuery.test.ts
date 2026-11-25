@@ -77,8 +77,10 @@ describe('querySentimentOptionsCard', () => {
   })
 
   it('reads "not connected" for the skew half while the source is planned, without touching a store', () => {
+    // 就绪度**由用例给**，不读注册表：源从 planned 走到 live 是数据事实，注册表一改这条路就不红了。
+    // 这条守的是「planned/pending → not-connected 且不碰 store」，与源今天是什么档无关。
     const readOptionSkew = vi.fn(() => ({ points: [] }))
-    const result = querySentimentOptionsCard({ asOf, timeZone: 'UTC', windowDays: 30, pipeline: pipeline(history(30, () => 40)), readOptionSkew })
+    const result = querySentimentOptionsCard({ asOf, timeZone: 'UTC', windowDays: 30, pipeline: pipeline(history(30, () => 40)), readOptionSkew, readSkewReadiness: () => 'planned' })
 
     expect(result.optionSkew).toEqual({ state: 'not-connected' })
     expect(readOptionSkew).not.toHaveBeenCalled()

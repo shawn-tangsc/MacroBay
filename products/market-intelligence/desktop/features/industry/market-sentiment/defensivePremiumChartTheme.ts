@@ -45,10 +45,25 @@ const BAND_VARS = [
   '--mi-dashboard-sentiment-extreme-greed'
 ] as const
 
-/** 从宿主元素上读字号（token → 数字）；读不到就用默认两档。 */
+/**
+ * 读宿主元素的计算样式。浏览器与 happy-dom 都提供它。
+ *
+ * 两件事同时要成立，所以不能在模块加载时把全局函数取成常量：
+ * - **不在代码里问「全局有没有这个 API」**（`typeof X === 'function'` 那类探测被守卫挡，判的是「调用方给了什么」）；
+ * - **调用时才取**：宿主注入或测试替身（`vi.stubGlobal`）都在模块加载之后生效，加载期绑死会让替身不生效。
+ *
+ * 这一个函数就是那两件事的交点：取不到就退回兜底（纯 node 环境）。
+ */
+function computedStyleOf(element: Element): CSSStyleDeclaration | undefined {
+  const readStyle = globalThis.getComputedStyle
+  return readStyle === undefined ? undefined : readStyle.call(globalThis, element)
+}
+
+/** 从宿主元素上读字号（token → 数字）；读不到就用默认三档。 */
 export function readChartFonts(element: Element | null): ChartFonts {
-  if (!element || typeof getComputedStyle !== 'function') return CHART_FONTS_FALLBACK
-  const style = getComputedStyle(element)
+  if (!element) return CHART_FONTS_FALLBACK
+  const style = computedStyleOf(element)
+  if (style === undefined) return CHART_FONTS_FALLBACK
   const read = (name: string, fallback: number): number => {
     const parsed = Number.parseFloat(style.getPropertyValue(name))
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
@@ -62,7 +77,7 @@ export function readChartFonts(element: Element | null): ChartFonts {
 
 /** 从宿主元素上读色板；读不到就退回深色那组。 */
 export function readChartPalette(element: Element | null): ChartPalette {
-  const style = element && typeof getComputedStyle === 'function' ? getComputedStyle(element) : undefined
+  const style = element === null ? undefined : computedStyleOf(element)
   const read = (name: string): string => style?.getPropertyValue(name).trim() ?? ''
   const palette = { line: '', text: '', muted: '', grid: '', axis: '', surface: '', bands: ['', '', '', '', ''] as ChartPalette['bands'] }
   for (const [key, variable] of PALETTE_VARS) palette[key] = read(variable)

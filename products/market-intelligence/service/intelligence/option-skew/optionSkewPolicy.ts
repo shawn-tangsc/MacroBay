@@ -12,7 +12,7 @@ export const optionSkewPolicy = {
   jobId: OPTION_SKEW_COLLECT_JOB_ID,
   /** One round an hour, 2 requests per round: 48 requests a day, far below the public limit. */
   intervalMs: 60 * 60_000,
-  /** The venue's public JSON API. Requests go through the platform fetch (proxy-aware), never direct. */
+  /** The venue's public JSON API. Requests go through the platform's proxy-aware adapter, never direct. */
   baseUrl: 'https://www.deribit.com/api/v2/public',
   currency: 'BTC',
   /** Fixed tenor: the reader compares one number across days, so the tenor may not drift. */
