@@ -24,7 +24,7 @@ import { marketIntelligenceSkills } from './contracts/agentSkills'
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
   name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' },
-  version: '0.4.4',
+  version: '0.4.5',
   description: 'Market intelligence collection, assessment, and workspace.',
   shellContributions: {
     menuPages: [
