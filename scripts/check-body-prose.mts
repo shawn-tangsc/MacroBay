@@ -146,71 +146,151 @@ export function floatingBlockSpans(text: string): ReadonlyArray<readonly [number
     const match = /(?:lines|content)=\{/u.exec(text.slice(index))
     if (match === null) break
     const start = index + match.index
-    let depth = 0
-    let cursor = start + match[0].length - 1
-    for (; cursor < text.length; cursor += 1) {
-      if (text[cursor] === '{') depth += 1
-      else if (text[cursor] === '}') { depth -= 1; if (depth === 0) { cursor += 1; break } }
-    }
-    spans.push([start, cursor])
-    index = cursor
+    const end = blockEnd(text, start + match[0].length - 1)
+    spans.push([start, end])
+    index = end
   }
   return spans
 }
+
+/**
+ * 从 `{` 开始配平到它的闭括号，**跳过字符串与模板字面量里的括号**。
+ *
+ * 为什么要认引号：这段区间原来只决定「剥掉哪些字符」，判错是多剥/少剥（假红，安全）；
+ * 现在它还是 `exemptHintKeySpans` 的豁免边界，判错就会把正文当成水口**放过**——
+ * `lines={['a}b']}` 里那个 `}` 不是块的结束，认错就会把后面的正文一起圈进豁免。
+ *
+ * 模板字面量按 `${…}` 进表达式、回到反引号退出递归处理；`\` 跳过下一个字符。
+ * 未闭合的字符串一直读到文末：区间更大＝剥得更多＝更容易报红，方向与「不放过正文」一致。
+ */
+function blockEnd(text: string, open: number): number {
+  const stack: string[] = ['{']
+  let index = open + 1
+  while (index < text.length) {
+    const char = text[index]
+    const top = stack[stack.length - 1]
+    if (top === '{') {
+      if (char === "'" || char === '"' || char === '`') { stack.push(char); index += 1; continue }
+      if (char === '{') { stack.push('{'); index += 1; continue }
+      if (char === '}') { stack.pop(); index += 1; if (stack.length === 0) return index; continue }
+      index += 1
+      continue
+    }
+    if (char === '\\') { index += 2; continue }
+    if (top === '`' && char === '$' && text[index + 1] === '{') { stack.push('{'); index += 2; continue }
+    if (char === top) { stack.pop(); index += 1; continue }
+    index += 1
+  }
+  return text.length
+}
+
+/** 每行的起始偏移：命中位置按**字符位置**判，不按行判（同一行里可能两种位置都有）。 */
+export function lineStartOffsets(text: string): readonly number[] {
+  const starts: number[] = []
+  let offset = 0
+  for (const line of text.split('\n')) { starts.push(offset); offset += line.length + 1 }
+  return starts
+}
+
+function lineOfOffset(starts: readonly number[], index: number): number {
+  let low = 0
+  let high = starts.length - 1
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (starts[mid]! <= index) low = mid
+    else high = mid - 1
+  }
+  return low
+}
+
+/** 一行里每个声明子各自的初始表达式区间：`const a = X, b = Y` 拆成两个，各判各的。 */
+export function declaratorsOnLine(line: string): ReadonlyArray<Readonly<{ name: string; start: number; end: number }>> {
+  const head = /\b(?:const|let)\s+/u.exec(line)
+  if (head === null) return []
+  const out: Array<Readonly<{ name: string; start: number; end: number }>> = []
+  let index = (head.index ?? 0) + head[0].length
+  while (index < line.length) {
+    const nameMatch = /^([A-Za-z_$][\w$]*)\s*=\s*/u.exec(line.slice(index))
+    if (nameMatch === null) break
+    const start = index + nameMatch[0].length
+    let depth = 0
+    let quote = ''
+    let cursor = start
+    for (; cursor < line.length; cursor += 1) {
+      const char = line[cursor]!
+      if (quote !== '') {
+        if (char === '\\') { cursor += 1; continue }
+        if (char === quote) quote = ''
+        continue
+      }
+      if (char === "'" || char === '"' || char === '`') { quote = char; continue }
+      if ('([{'.includes(char)) depth += 1
+      else if (')]}'.includes(char)) depth -= 1
+      else if (char === ',' && depth === 0) break
+    }
+    out.push({ name: nameMatch[1]!, start, end: cursor })
+    index = cursor + 1
+  }
+  return out
+}
+
+/** 说明句的键写法：成员访问（`copy.liveHint`）与键字符串（`'…liveHint'`），含它在行内的区间。 */
+const HINT_TOKEN = /\.([A-Za-z_$][\w$]*(?:Hint|Note))\b|(['"`])([\w.$-]*(?:Hint|Note))\2/gu
 
 /**
  * 「先把键赋给变量、再交给 ⓘ」的写法：`const liveHint = t('…liveHint')` → `lines={[liveHint]}`。
  *
  * 判据是**所有使用点都在浮层水口里**，不是「变量名出现过一次就算」：只要这个变量还有一处出现在正文
  * （普通 JSX 位置），它就不豁免——否则把同一句话再渲染一次就绕过了门禁。
- * 水口只认这四种：`lines={…}` / `content={…}` 块内、`title=` / `aria-*` / `helpTrigger(` / `Popover` 那行、
+ * 水口只认这几种：`lines={…}` / `content={…}` 块内、`title=` / `aria-*` / `helpTrigger(`、
  * 以及 `hintKey={X}` / `labelKey={X}` / `ariaLabelKey={X}` 这三类把键原样交给组件的属性。
  *
- * 返回 1 起算的行号集合：这些**定义行**不算正文命中（真正要盯的是使用点）。
+ * 基线里 `BriefingManualRunDialog.tsx :: nowHint` 那条**不是「过期条目」，是「原来就命中、被这条
+ * 豁免放过」**：判据与基线同一笔收是对的，但别读成「基线里写着的东西都可以顺手清」——清不清看的是
+ * 它现在还在不在正文里。
+ *
+ * 返回**键在源码里的字符区间**（不是行号）：豁免只覆盖那个定义表达式里的那一次键，
+ * 同一行别处的正文照旧算命中——整行豁免等于给这一行的每个使用点发通行证
+ * （`const a = copy.aHint, b = copy.bodyHint` 会把 b 一起放过）。
  */
-export function keysBoundOnlyToFloatingEntries(source: string): ReadonlySet<number> {
+export function exemptHintKeySpans(source: string): ReadonlyArray<readonly [number, number]> {
   const spans = floatingBlockSpans(source)
+  const starts = lineStartOffsets(source)
   const lines = source.split('\n')
-  const lineStarts: number[] = []
-  let offset = 0
-  for (const line of lines) { lineStarts.push(offset); offset += line.length + 1 }
-  const lineOf = (index: number): number => {
-    let low = 0
-    let high = lineStarts.length - 1
-    while (low < high) {
-      const mid = Math.ceil((low + high) / 2)
-      if (lineStarts[mid]! <= index) low = mid
-      else high = mid - 1
-    }
-    return low
-  }
   const inSpans = (index: number): boolean => spans.some(([start, end]) => index >= start && index < end)
+  const exempt: Array<readonly [number, number]> = []
 
-  const exempt = new Set<number>()
-  lines.forEach((line, index) => {
-    const definition = /^\s*(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(.+)$/u.exec(line)
-    if (definition === null) return
-    const name = definition[1]!
-    const carriesHint = /\.\w*(?:Hint|Note)\b|['"`][^'"`]*(?:Hint|Note)['"`]/u.test(definition[2]!)
-    if (!carriesHint) return
+  lines.forEach((line, lineIndex) => {
+    for (const declarator of declaratorsOnLine(line)) {
+      const expression = line.slice(declarator.start, declarator.end)
+      const tokens: Array<readonly [number, number]> = []
+      const lineStart = starts[lineIndex] ?? 0
+      for (const match of expression.matchAll(HINT_TOKEN)) {
+        // `declarator.start` 是**行内**偏移，豁免区间要的是**文件内**偏移：漏了这层加法，
+        // 区间会落到文件开头附近的无关代码上，等于这条豁免从来没生效（实测踩过）。
+        const at = lineStart + declarator.start + (match.index ?? 0)
+        tokens.push([at, at + match[0].length] as const)
+      }
+      if (tokens.length === 0) continue
 
-    const uses: number[] = []
-    for (const match of source.matchAll(new RegExp(`\\b${name}\\b`, 'gu'))) {
-      const at = match.index ?? 0
-      if (lineOf(at) === index) continue
-      uses.push(at)
+      const uses: number[] = []
+      for (const match of source.matchAll(new RegExp(`\\b${declarator.name}\\b`, 'gu'))) {
+        const at = match.index ?? 0
+        if (lineOfOffset(starts, at) === lineIndex) continue
+        uses.push(at)
+      }
+      if (uses.length === 0) continue
+      const allInSinks = uses.every((at) => {
+        if (inSpans(at)) return true
+        // **按位置判，不按整行判**：同一行里既可能有 `{liveHint}` 的正文，也可能有 `lines={[liveHint]}`。
+        // 用整行 `ALLOWED_CONTEXT` 判断，等于给这一行的每个使用点都发通行证（反向判据当场失效）。
+        const prefix = source.slice(starts[lineOfOffset(starts, at)] ?? 0, at)
+        return /(?:hintKey|labelKey|ariaLabelKey)=\{[^}]*$/u.test(prefix)
+          || /\b(?:title|aria-[a-z-]+)=\{[^}]*$/u.test(prefix)
+          || /\bhelpTrigger\([^)]*$/u.test(prefix)
+      })
+      if (allInSinks) exempt.push(...tokens)
     }
-    if (uses.length === 0) return
-    const allInSinks = uses.every((at) => {
-      if (inSpans(at)) return true
-      // **按位置判，不按整行判**：同一行里既可能有 `{liveHint}` 的正文，也可能有 `lines={[liveHint]}`。
-      // 用整行 `ALLOWED_CONTEXT` 判断，等于给这一行的每个使用点都发通行证（反向判据当场失效）。
-      const prefix = source.slice(lineStarts[lineOf(at)] ?? 0, at)
-      return /(?:hintKey|labelKey|ariaLabelKey)=\{[^}]*$/u.test(prefix)
-        || /\b(?:title|aria-[a-z-]+)=\{[^}]*$/u.test(prefix)
-        || /\bhelpTrigger\([^)]*$/u.test(prefix)
-    })
-    if (allInSinks) exempt.add(index + 1)
   })
   return exempt
 }
@@ -227,19 +307,25 @@ function main(): void {
       if (isCaptureOnlySurface(id)) continue
       const source = readFileSync(file, 'utf8')
       const text = stripFloatingBlocks(source)
-      const boundToFloating = keysBoundOnlyToFloatingEntries(source)
+      // 先把键赋给变量、再交给 ⓘ 的写法：**只豁免那个定义表达式里的那一次键**（按位置，不按行）。
+      // 同一行别处的正文照旧算命中——整行豁免会把 `const a = copy.aHint, b = copy.bodyHint` 一起放过。
+      const exempt = exemptHintKeySpans(source)
+      const exemptAt = (at: number): boolean => exempt.some(([start, end]) => at >= start && at < end)
+      const starts = lineStartOffsets(text)
       text.split('\n').forEach((line, index) => {
         if (ALLOWED_CONTEXT.test(line)) return
-        // 先把键赋给变量、再交给 ⓘ 的写法：定义行不算正文，前提是它的**每一处**使用都在水口里。
-        if (boundToFloating.has(index + 1)) return
         // 键**定义**不是用法：`const X_KEY = '…Hint'` 只是给这段文案起名字，真正渲染在别处。
         // 把定义行算成正文，会让每个把键抽成常量的文件都假红一次。
         if (/^\s*const\s+[A-Z][A-Z0-9_]*\s*=/.test(line)) return
         const keys: string[] = []
         // 成员访问：取最后一段（`text.hours.hoursHint` → `hoursHint`）
-        for (const match of line.matchAll(/\.([A-Za-z_$][\w$]*(?:Hint|Note))\b/gu)) keys.push(match[1]!)
+        for (const match of line.matchAll(/\.([A-Za-z_$][\w$]*(?:Hint|Note))\b/gu)) {
+          if (!exemptAt((starts[index] ?? 0) + (match.index ?? 0) + 1)) keys.push(match[1]!)
+        }
         // 键字符串：`'settings.x.hoursHint'`
-        for (const match of line.matchAll(/['"`]([\w.$-]*(?:Hint|Note))['"`]/gu)) keys.push(match[1]!)
+        for (const match of line.matchAll(/['"`]([\w.$-]*(?:Hint|Note))['"`]/gu)) {
+          if (!exemptAt((starts[index] ?? 0) + (match.index ?? 0) + 1)) keys.push(match[1]!)
+        }
         for (const key of new Set(keys)) {
           // 基线键必须归一化分隔符：Windows 上 `relative()` 给 `a\\b`，基线里是 `a/b`，两边永远对不上。
           findings.push({ file: id, line: index + 1, key })

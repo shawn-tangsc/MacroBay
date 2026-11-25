@@ -1,6 +1,6 @@
 {
   "note": "正文里出现的 *Hint / *Note 说明句，只允许出现在 ⓘ 入口（helpTrigger / Popover content / aria-* / title=）。**只降不升**：清掉一处就把这里的数字改小，否则报过期。复算：pnpm exec tsx scripts/check-body-prose.mts",
-  "total": 115,
+  "total": 114,
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/AppShellPreferencesPane.tsx :: proxyRequestHint": 1,
     "apps/desktop-shell/src/renderer/src/shell/ProviderConnectionCheckEnvironmentBlock.tsx :: customProxyFailureHint": 1,
@@ -45,7 +45,7 @@
     "apps/desktop-shell/src/renderer/src/shell/notifications/NotificationCenterDrawer.tsx :: centerEmptyHint": 1,
     "apps/desktop-shell/src/renderer/src/shell/notifications/NotificationCenterDrawer.tsx :: centerUnknownHint": 1,
     "apps/desktop-shell/src/renderer/src/shell/settings/NotificationSettingsScreen.tsx :: desktopHint": 1,
-    "apps/desktop-shell/src/renderer/src/shell/settings/NotificationSettingsScreen.tsx :: footerHint": 2,
+    "apps/desktop-shell/src/renderer/src/shell/settings/NotificationSettingsScreen.tsx :: footerHint": 1,
     "apps/desktop-shell/src/renderer/src/shell/settings/NotificationSettingsScreen.tsx :: toastHint": 1,
     "apps/desktop-shell/src/renderer/src/shell/settings/SettingsWorkspaceAdapter.tsx :: draftGateHint": 1,
     "apps/desktop-shell/src/renderer/src/shell/settings/TimeZonePreference.tsx :: timeZoneOpenTimesHint": 1,
