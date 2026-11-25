@@ -212,14 +212,6 @@ export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
   const live = reading?.live
   const resolveText = useProductTextKey()
   /**
-   * 实时价来自未闭合的流，四个窗口仍按已闭合 K 线算——这句话现在住进行名旁的 ⓘ（用户 2026-11-25：
-   * 「黄金下面那个实时 tag 给我去掉」）。停更那档仍挂 pill：那是提醒，不是噪声。
-   */
-  const liveHint = live === undefined ? undefined : fillLabelParams(
-    resolveText('pages.intelligence.portal.dashboard.crossAsset.liveHint'),
-    { time: formatTime(new Date(live.atMs).toISOString(), 'second') }
-  )
-  /**
    * 「偏旧」只认仓里那一处阈值（`staleAfterMs`），不另开一个数：两个数早晚会漂成两种说法。
    * 被供应商永久拒绝时换整句——「套餐不提供」是原因，不是另一种新鲜度（界面设计 2026-11-16）。
    */
@@ -235,7 +227,17 @@ export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
     <th scope="row">
       {/* 名字 + ⓘ 是一组、不换行；标签（合成/实时）跟在后面，窄列时它们各自换行，图标不离开名字。 */}
       <RowName name={text.assetLabels[id]} hint={<RowHint id={id} name={text.assetLabels[id]}
-        lines={[...(text.statusReads[id] ? [text.statusReads[id]] : []), ...(age === undefined ? [] : [age]), ...(liveHint === undefined ? [] : [liveHint]), ...(reading?.synthetic ? [text.syntheticCaveat] : [])]} />} />
+        lines={[
+          ...(text.statusReads[id] ? [text.statusReads[id]] : []),
+          ...(age === undefined ? [] : [age]),
+          /* 实时价来自未闭合的流，四个窗口仍按已闭合 K 线算——这句话住进行名旁的 ⓘ（用户 2026-11-25：
+             「黄金下面那个实时 tag 给我去掉」）。停更那档仍挂 pill：那是提醒，不是噪声。 */
+          ...(live === undefined ? [] : [fillLabelParams(
+            resolveText('pages.intelligence.portal.dashboard.crossAsset.liveHint'),
+            { time: formatTime(new Date(live.atMs).toISOString(), 'second') }
+          )]),
+          ...(reading?.synthetic ? [text.syntheticCaveat] : [])
+        ]} />} />
       {/* 合成这件事不再挂 pill（用户 2026-11-25）：那句话住进行名旁的 ⓘ，和这一行的其它说明同一处。 */}
       {/* 停更/不可用那两档仍挂 pill（那是提醒）；「实时」这一档不挂，原因在行名旁的 ⓘ 里。 */}
       {live && live.state !== 'live' ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
