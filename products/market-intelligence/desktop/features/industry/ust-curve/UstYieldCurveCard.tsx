@@ -110,7 +110,10 @@ export function UstYieldCurveCard({
           {/* 这里原来写着「纵轴」两个字：右边就是「收益率 / 起点归一」，已经说清这组切换的是什么，
               用户 2026-11-24 判它是废话。删的是这处渲染，文案键 `axisLabel` 先留在表里。 */}
           <Segmented
-            items={[{ value: 'level', labelKey: `${KEY}.mode.level` }, { value: 'normalized', labelKey: `${KEY}.mode.normalized` }]}
+            items={[
+              { value: 'level', labelKey: 'pages.intelligence.portal.dashboard.ustCurve.mode.level' },
+              { value: 'normalized', labelKey: 'pages.intelligence.portal.dashboard.ustCurve.mode.normalized' }
+            ]}
             value={mode}
             onChange={(value) => setMode(value === 'normalized' ? 'normalized' : 'level')}
             ariaLabelKey={`${KEY}.modeAria`}
@@ -119,7 +122,7 @@ export function UstYieldCurveCard({
         <span className="mi-ust__control">
           <span className="mi-ust__control-label">{copy('curveLabel')}</span>
           <Segmented
-            items={ustCurveRanges.map((entry) => ({ value: entry.id, labelKey: `${KEY}.periods.${entry.id}` }))}
+            items={ustCurveRanges.map((entry) => ({ value: entry.id, labelKey: entry.labelKey }))}
             value={range}
             onChange={(value) => {
               const next = ustCurveRanges.find((entry) => entry.id === value)

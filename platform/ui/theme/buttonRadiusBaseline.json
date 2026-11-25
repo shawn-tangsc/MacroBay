@@ -47,6 +47,8 @@
   ".intelligence-provider-state i",
   ".intelligence-source-avatar",
   ".intelligence-source-meta-pill",
+  ".mi-agent-capsule",
+  ".mi-agent-capsule .icon-button::after",
   ".mi-agent-card__switch-track",
   ".mi-analysis-conclusion__direction",
   ".mi-analysis-timeline__direction",

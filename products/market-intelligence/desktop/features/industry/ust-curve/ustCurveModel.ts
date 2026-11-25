@@ -41,12 +41,15 @@ export const ustChangeWindows: readonly Readonly<{ id: UstChangeWindow; back: nu
 /**
  * 曲线的四个周期档：**点数 = 回看交易日 + 1**，这样窗口第一点与表里那一列的基准是同一天，
  * 图上和表里不会差一天（v1 就栽在这上面）。
+ *
+ * `labelKey` 是**整条路径**、不是相对片段：这四个键直接交给 `Segmented`，而键形状守卫只认字面量，
+ * 在调用处拼 `${KEY}.periods.${id}` 它看不出那是键（判据是「像不像一条键」，不是「拼没拼对」）。
  */
 export const ustCurveRanges: readonly Readonly<{ id: UstCurveRange; points: number; labelKey: string }>[] = Object.freeze([
-  { id: '1w', points: 6, labelKey: 'periods.1w' },
-  { id: '1m', points: 22, labelKey: 'periods.1m' },
-  { id: '3m', points: 63, labelKey: 'periods.3m' },
-  { id: '1y', points: 253, labelKey: 'periods.1y' }
+  { id: '1w', points: 6, labelKey: 'pages.intelligence.portal.dashboard.ustCurve.periods.1w' },
+  { id: '1m', points: 22, labelKey: 'pages.intelligence.portal.dashboard.ustCurve.periods.1m' },
+  { id: '3m', points: 63, labelKey: 'pages.intelligence.portal.dashboard.ustCurve.periods.3m' },
+  { id: '1y', points: 253, labelKey: 'pages.intelligence.portal.dashboard.ustCurve.periods.1y' }
 ])
 
 export const ustSpreadRows: readonly Readonly<{ id: string; key: string; labelKey: string; long: UstTenorId; short: UstTenorId }>[] = Object.freeze([
